@@ -1,3 +1,4 @@
+import sys
 from argparse import ArgumentParser
 from typing import Any
 
@@ -7,7 +8,9 @@ from task_mom.tasks import (
     Namespace,
     ProgramTask,
     ScriptTask,
+    SerialTaskGroup,
     Task,
+    ThreadTaskGroup,
     get_task_class,
     global_namespace,
     register,
@@ -153,17 +156,33 @@ class TestProgramTask:
         task_with_dynamic_args = TaskWithDynamicArgs()
 
         task([])
-        subprocess_run.assert_called_once_with(["myprogram"], check=False)
+        subprocess_run.assert_called_once_with(
+            ["myprogram"],
+            check=False,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
         subprocess_run.reset_mock()
 
         task_with_args([])
         subprocess_run.assert_called_once_with(
-            ["myprogram", "arg1", "arg2"], check=False
+            ["myprogram", "arg1", "arg2"],
+            check=False,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
         )
         subprocess_run.reset_mock()
 
         task_with_dynamic_args(["--arg1", "value1"])
-        subprocess_run.assert_called_once_with(["myprogram", "value1"], check=False)
+        subprocess_run.assert_called_once_with(
+            ["myprogram", "value1"],
+            check=False,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
         subprocess_run.reset_mock()
 
     def test_program_required(self):
@@ -197,12 +216,24 @@ class TestScriptTask:
         dynamic_task = DynamicScript()
 
         task([])
-        subprocess_run.assert_called_once_with("myscript", check=False, shell=True)
+        subprocess_run.assert_called_once_with(
+            "myscript",
+            check=False,
+            shell=True,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
         subprocess_run.reset_mock()
 
         dynamic_task(["value1"])
         subprocess_run.assert_called_once_with(
-            "myscript value1", check=False, shell=True
+            "myscript value1",
+            check=False,
+            shell=True,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -215,3 +246,49 @@ class TestScriptTask:
             NotImplementedError, match="Either set script or override get_script()"
         ):
             task([])
+
+
+class TestSerialTaskGroup:
+    def test_run(self, mocker):
+        result = []
+
+        class Task1(Task):
+            def run(self, **kwargs):
+                result.append("First")
+
+        class Task2(Task):
+            def run(self, **kwargs):
+                result.append("Second")
+
+        class MyTask(SerialTaskGroup):
+            task_classes = [Task1, Task2]
+
+        task = MyTask()
+        task([])
+
+        assert result == ["First", "Second"]
+
+
+class TestThreadTaskGroup:
+    def test_run(self, mocker):
+        result = []
+
+        class Task1(Task):
+            def run(self, **kwargs):
+                while not result:  # Wait for Task2 to append
+                    pass
+                result.append("Second")
+
+        class Task2(Task):
+            def run(self, **kwargs):
+                result.append("First")
+                while not len(result) == 2:  # Wait for Task1 to finish
+                    pass
+                result.append("Third")
+
+        class MyTask(ThreadTaskGroup):
+            task_classes = [Task1, Task2]
+
+        task = MyTask()
+        task([])
+        assert result == ["First", "Second", "Third"]

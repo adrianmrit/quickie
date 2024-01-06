@@ -21,9 +21,23 @@ def main(argv=None, *, task_paths=_DEFAULT_PATHS):
 class Main:
     """Represents the CLI entry of task-mom."""
 
-    def __init__(self, *, argv=None, task_paths):
+    def __init__(  # noqa: PLR0913
+        self, *, argv=None, task_paths, stdin=None, stdout=None, stderr=None
+    ):
         """Initialize the CLI."""
         self.argv = argv
+
+        if stdin is None:
+            stdin = sys.stdin
+        if stdout is None:
+            stdout = sys.stdout
+        if stderr is None:
+            stderr = sys.stderr
+
+        self.stdin = stdin
+        self.stdout = stdout
+        self.stderr = stderr
+
         self.parser = ArgumentParser(add_help=False, description=main.__doc__)
         group = self.parser.add_mutually_exclusive_group()
         group.add_argument(
@@ -100,7 +114,9 @@ class Main:
         """Get a task by name."""
         try:
             task_class = global_namespace.get_task_class(task_name)
-            return task_class(name=task_name)
+            return task_class(
+                name=task_name, stdin=self.stdin, stdout=self.stdout, stderr=self.stderr
+            )
         except KeyError:
             raise ValueError(f"Task {task_name!r} not found")
 

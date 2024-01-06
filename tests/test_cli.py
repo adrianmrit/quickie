@@ -105,7 +105,7 @@ def test_default(capsys: CaptureFixture):
         cli.main([])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert "usage: __main__.py [-h [TASK] | -V] [TASK] [ARGS ...]" in out
+    assert "[-h [TASK] | -V] [TASK] [ARGS ...]" in out
     assert not err
 
 

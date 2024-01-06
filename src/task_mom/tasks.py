@@ -7,6 +7,7 @@ together.
 """
 import abc
 import argparse
+import sys
 import typing
 
 
@@ -195,13 +196,38 @@ class Namespace(NamespaceABC):
 class Task:
     """Base class for all tasks."""
 
-    def __init__(self, name=None):
-        """Initialize the task."""
+    def __init__(
+        self,
+        name=None,
+        *,
+        stdout: typing.TextIO | None = None,
+        stderr: typing.TextIO | None = None,
+        stdin: typing.TextIO | None = None,
+    ):
+        """Initialize the task.
+
+        Args:
+            name: The name of the task.
+            stdout: The stdout stream.
+            stderr: The stderr stream.
+            stdin: The stdin stream.
+        """
         # We default to the class name in case the task was not called
         # from the CLI
         self.name = name or self.__class__.__name__
         self.parser = self.get_parser()
         self.add_arguments(self.parser)
+
+        if stdout is None:
+            stdout = sys.stdout
+        if stderr is None:
+            stderr = sys.stderr
+        if stdin is None:
+            stdin = sys.stdin
+
+        self.stdout = stdout
+        self.stderr = stderr
+        self.stdin = stdin
 
     def get_parser(self) -> argparse.ArgumentParser:
         """Get the parser for the task."""
@@ -267,7 +293,13 @@ class ProgramTask(Task):
         """Run the program."""
         import subprocess
 
-        result = subprocess.run([program, *args], check=False)
+        result = subprocess.run(
+            [program, *args],
+            check=False,
+            stderr=self.stderr,
+            stdout=self.stdout,
+            stdin=self.stdin,
+        )
         return result
 
 
@@ -295,5 +327,76 @@ class ScriptTask(Task):
         """Run the script."""
         import subprocess
 
-        result = subprocess.run(script, shell=True, check=False)
+        result = subprocess.run(
+            script,
+            shell=True,
+            check=False,
+            stdout=self.stdout,
+            stderr=self.stderr,
+            stdin=self.stdin,
+        )
         return result
+
+
+class _TaskGroup(Task):
+    """Base class for tasks that run other tasks."""
+
+    # TODO: Make single class that can run tasks in sequence or in parallel?
+
+    class Meta:
+        abstract = True
+
+    task_classes = ()
+    """The task classes to run."""
+
+    def get_tasks(self, **kwargs) -> typing.Sequence[Task]:
+        """Get the tasks to run."""
+        return [
+            task_cls(stdout=self.stdout, stderr=self.stderr, stdin=self.stdin)
+            for task_cls in self.task_classes
+        ]
+
+    def run_task(self, task: Task):
+        """Run a task."""
+        return task.run()
+
+
+class SerialTaskGroup(_TaskGroup):
+    """Base class for tasks that run other tasks in sequence."""
+
+    class Meta:
+        abstract = True
+
+    @typing.override
+    def run(self, **kwargs):
+        """Run the task."""
+        for task in self.get_tasks(**kwargs):
+            self.run_task(task)
+
+
+class ThreadTaskGroup(_TaskGroup):
+    """Base class for tasks that run other tasks in threads."""
+
+    class Meta:
+        abstract = True
+
+    max_workers = None
+    """The maximum number of workers to use."""
+
+    def get_max_workers(self, **kwargs) -> int | None:
+        """Get the maximum number of workers to use."""
+        return self.max_workers
+
+    @typing.override
+    def run(self, **kwargs):
+        """Run the task."""
+        import concurrent.futures
+
+        tasks = self.get_tasks(**kwargs)
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.get_max_workers(),
+            thread_name_prefix=f"task-mom-parallel-task.{self.name}",
+        ) as executor:
+            futures = [executor.submit(self.run_task, task) for task in tasks]
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
