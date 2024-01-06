@@ -3,6 +3,7 @@ task-mom.code-workspace
 
 .coverage
 .DS_Store
+htmlcov/
 
 ## Python ##
 # Byte-compiled / optimized / DLL files
