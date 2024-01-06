@@ -5,12 +5,12 @@ tests_namespace = tasks.Namespace("tests")
 
 @tasks.register
 @tests_namespace.register
+@tasks.allow_unknown_args
 class Test(tasks.ScriptTask):
     """Test task."""
 
-    def add_arguments(self, parser):
-        super().add_arguments(parser)
-        parser.add_argument("extra", nargs="*")
-
-    def get_script(self, extra) -> str:
-        return f"python -m pytest {extra}"
+    def get_script(self, *args) -> str:
+        args = " ".join(args)
+        script = f"python -m pytest {args}"
+        self.stdout.write(f"Running: {script}\n")
+        return script

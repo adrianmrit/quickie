@@ -22,7 +22,7 @@ class NamespaceABC(abc.ABC):
         T: type[Task]
     ](
         self,
-        __cls_or_name: T | str | None = None,
+        __cls_or_name=None,
         *,
         name: str | None = None,
     ) -> (
@@ -193,8 +193,44 @@ class Namespace(NamespaceABC):
         return self.get_store_ptr()[full_name]
 
 
+def allow_unknown_args(cls):
+    """Decorator to allow unknown arguments.
+
+    This decorator can be used to allow extra arguments to be passed to the
+    task. This is useful for tasks that run other programs, since they can
+    pass the arguments to the program.
+
+    Example:
+        >>> from task_mom import tasks
+        >>>
+        >>> @tasks.allow_unknown_args
+        >>> class MyTask(tasks.Task):
+        >>>     def run(self, *args, **kwargs):
+        >>>         return args, kwargs
+        >>>
+        >>> task = MyTask()
+        >>> task(["--hello", "world", "extra", "args"])
+        (("extra", "args"), {"hello": "world"})
+    """
+    cls.allow_unknown_args = True
+    return cls
+
+
+def disallow_unknown_args(cls):
+    """Decorator to disallow unknown arguments.
+
+    In case the task inherits from a task that allows unknown arguments, this
+    decorator can be used to disallow them.
+    """
+    cls.allow_unknown_args = False
+    return cls
+
+
 class Task:
     """Base class for all tasks."""
+
+    allow_unknown_args = False
+    """Whether to allow extra arguments."""
 
     def __init__(
         self,
@@ -229,11 +265,21 @@ class Task:
         self.stderr = stderr
         self.stdin = stdin
 
-    def get_parser(self) -> argparse.ArgumentParser:
-        """Get the parser for the task."""
-        parser = argparse.ArgumentParser(
-            prog=self.name, description=self.__doc__, add_help=False
-        )
+    def get_parser(self, **kwargs) -> argparse.ArgumentParser:
+        """Get the parser for the task.
+
+        The following keyword arguments are passed to the parser by default:
+        - prog: The name of the task.
+        - description: The docstring of the task.
+        - add_help: False.
+
+        Args:
+            kwargs: Extra arguments to pass to the parser.
+        """
+        kwargs.setdefault("prog", self.name)
+        kwargs.setdefault("description", self.__doc__)
+        kwargs.setdefault("add_help", False)
+        parser = argparse.ArgumentParser(**kwargs)
         return parser
 
     def add_arguments(self, parser: argparse.ArgumentParser):
@@ -250,21 +296,31 @@ class Task:
         """Get the help message of the task."""
         return self.parser.format_help()
 
-    def run(self, **kwargs):
-        """Run the task."""
+    def run(self, *args, **kwargs):
+        """Run the task.
+
+        This method should be overridden by subclasses to implement the task.
+
+        {0}
+        """
         raise NotImplementedError
 
     def __call__(self, args: typing.Sequence[str]):
-        """Call the task."""
-        parsed_args = self.parser.parse_args(args)
-        return self.run(**vars(parsed_args))
+        """Call the task.
+
+        Args:
+            args: Sequence of arguments to pass to the task.
+        """
+        if self.allow_unknown_args:
+            parsed_args, extra = self.parser.parse_known_args(args)
+        else:
+            parsed_args = self.parser.parse_args(args)
+            extra = ()
+        return self.run(*extra, **vars(parsed_args))
 
 
 class ProgramTask(Task):
     """Base class for tasks that run a program."""
-
-    class Meta:
-        abstract = True
 
     program: str | None = None
     """The program to run."""
@@ -272,25 +328,39 @@ class ProgramTask(Task):
     program_args: typing.Sequence[str] | None = None
     """The program arguments. Defaults to the task arguments."""
 
-    def get_program(self, **kwargs) -> str:
-        """Get the program to run."""
+    def get_program(self, *args, **kwargs) -> str:
+        """Get the program to run.
+
+        Args:
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
+        """
         if self.program is None:
             raise NotImplementedError("Either set program or override get_program()")
         return self.program
 
-    def get_program_args(self, **kwargs) -> typing.Sequence[str]:
-        """Get the program arguments. Defaults to the task arguments."""
+    def get_program_args(self, *args, **kwargs) -> typing.Sequence[str]:
+        """Get the program arguments. Defaults to the task arguments.
+
+        Args:
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
+        """
         return self.program_args or []
 
     @typing.override
-    def run(self, **kwargs):
-        """Run the task."""
-        program = self.get_program(**kwargs)
-        program_args = self.get_program_args(**kwargs)
+    def run(self, *args, **kwargs):
+        program = self.get_program(*args, **kwargs)
+        program_args = self.get_program_args(*args, **kwargs)
         return self.run_program(program, program_args)
 
     def run_program(self, program: str, args: typing.Sequence[str]):
-        """Run the program."""
+        """Run the program.
+
+        Args:
+            program: The program to run.
+            args: The program arguments.
+        """
         import subprocess
 
         result = subprocess.run(
@@ -306,21 +376,22 @@ class ProgramTask(Task):
 class ScriptTask(Task):
     """Base class for tasks that run a script."""
 
-    class Meta:
-        abstract = True
-
     script: str | None = None
 
-    def get_script(self, **kwargs) -> str:
-        """Get the script to run."""
+    def get_script(self, *args, **kwargs) -> str:
+        """Get the script to run.
+
+        Args:
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
+        """
         if self.script is None:
             raise NotImplementedError("Either set script or override get_script()")
         return self.script
 
     @typing.override
-    def run(self, **kwargs):
-        """Run the task."""
-        script = self.get_script(**kwargs)
+    def run(self, *args, **kwargs):
+        script = self.get_script(*args, **kwargs)
         self.run_script(script)
 
     def run_script(self, script: str):
@@ -343,13 +414,10 @@ class _TaskGroup(Task):
 
     # TODO: Make single class that can run tasks in sequence or in parallel?
 
-    class Meta:
-        abstract = True
-
     task_classes = ()
     """The task classes to run."""
 
-    def get_tasks(self, **kwargs) -> typing.Sequence[Task]:
+    def get_tasks(self, *args, **kwargs) -> typing.Sequence[Task]:
         """Get the tasks to run."""
         return [
             task_cls(stdout=self.stdout, stderr=self.stderr, stdin=self.stdin)
@@ -357,42 +425,38 @@ class _TaskGroup(Task):
         ]
 
     def run_task(self, task: Task):
-        """Run a task."""
+        """Run a task.
+
+        Args:
+            task: The task to run.
+        """
         return task.run()
 
 
 class SerialTaskGroup(_TaskGroup):
     """Base class for tasks that run other tasks in sequence."""
 
-    class Meta:
-        abstract = True
-
     @typing.override
-    def run(self, **kwargs):
-        """Run the task."""
-        for task in self.get_tasks(**kwargs):
+    def run(self, *args, **kwargs):
+        for task in self.get_tasks(*args, **kwargs):
             self.run_task(task)
 
 
 class ThreadTaskGroup(_TaskGroup):
     """Base class for tasks that run other tasks in threads."""
 
-    class Meta:
-        abstract = True
-
     max_workers = None
     """The maximum number of workers to use."""
 
-    def get_max_workers(self, **kwargs) -> int | None:
+    def get_max_workers(self, *args, **kwargs) -> int | None:
         """Get the maximum number of workers to use."""
         return self.max_workers
 
     @typing.override
-    def run(self, **kwargs):
-        """Run the task."""
+    def run(self, *args, **kwargs):
         import concurrent.futures
 
-        tasks = self.get_tasks(**kwargs)
+        tasks = self.get_tasks(*args, **kwargs)
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.get_max_workers(),
             thread_name_prefix=f"task-mom-parallel-task.{self.name}",

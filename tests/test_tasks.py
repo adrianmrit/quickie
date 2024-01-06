@@ -4,65 +4,55 @@ from typing import Any
 
 import pytest
 
-from task_mom.tasks import (
-    Namespace,
-    ProgramTask,
-    ScriptTask,
-    SerialTaskGroup,
-    Task,
-    ThreadTaskGroup,
-    get_task_class,
-    global_namespace,
-    register,
-)
+from task_mom import tasks
 
 
 class TestGlobalNamespace:
     def test_register(self):
-        @register
-        @register("alias")
-        class MyTask(Task):
+        @tasks.register
+        @tasks.register("alias")
+        class MyTask(tasks.Task):
             pass
 
-        assert get_task_class("mytask") is MyTask
-        assert get_task_class("alias") is MyTask
+        assert tasks.get_task_class("mytask") is MyTask
+        assert tasks.get_task_class("alias") is MyTask
 
     def test_register_namespace(self):
-        @global_namespace.register
-        class MyTask(Task):
+        @tasks.global_namespace.register
+        class MyTask(tasks.Task):
             pass
 
-        assert get_task_class("mytask") is MyTask
-        assert global_namespace.get_task_class("mytask") is MyTask
+        assert tasks.get_task_class("mytask") is MyTask
+        assert tasks.global_namespace.get_task_class("mytask") is MyTask
 
 
 class TestNamespace:
     def test_register(self):
-        namespace = Namespace("tests")
+        namespace = tasks.Namespace("tests")
 
         @namespace.register
         @namespace.register("alias")
-        class MyTask(Task):
+        class MyTask(tasks.Task):
             pass
 
         @namespace.register
-        class MyTask2(Task):
+        class MyTask2(tasks.Task):
             pass
 
-        sub_namespace = Namespace("sub", parent=namespace)
+        sub_namespace = tasks.Namespace("sub", parent=namespace)
 
         @sub_namespace.register
-        class MyTask3(Task):
+        class MyTask3(tasks.Task):
             pass
 
-        assert get_task_class("tests.mytask") is MyTask
-        assert get_task_class("tests.alias") is MyTask
-        assert get_task_class("tests.mytask2") is MyTask2
-        assert get_task_class("tests.sub.mytask3") is MyTask3
+        assert tasks.get_task_class("tests.mytask") is MyTask
+        assert tasks.get_task_class("tests.alias") is MyTask
+        assert tasks.get_task_class("tests.mytask2") is MyTask2
+        assert tasks.get_task_class("tests.sub.mytask3") is MyTask3
         assert sub_namespace.get_task_class("mytask3") is MyTask3
 
     def test_invalid_register(self):
-        namespace = Namespace("tests")
+        namespace = tasks.Namespace("tests")
 
         with pytest.raises(TypeError, match="Expected a Task class"):
             namespace.register("invalid", name="alias")
@@ -70,21 +60,31 @@ class TestNamespace:
 
 class TestTask:
     def test_parser(self):
-        class MyTask(Task):
+        @tasks.allow_unknown_args
+        class MyTask(tasks.Task):
             def add_arguments(self, parser):
                 parser.add_argument("arg1")
                 parser.add_argument("--arg2", "-a2")
 
-            def run(self, **kwargs):
-                return kwargs
+            def run(self, *args, **kwargs):
+                return args, kwargs
 
         task = MyTask()
 
+        result = task(["value1", "--arg2", "value2", "value3"])
+        assert result == (("value3",), {"arg1": "value1", "arg2": "value2"})
+
+        tasks.disallow_unknown_args(MyTask)
+
+        with pytest.raises(SystemExit) as exc_info:
+            task(["value1", "--arg2", "value2", "value3"])
+        assert exc_info.value.code == 2
+
         result = task(["value1", "--arg2", "value2"])
-        assert result == {"arg1": "value1", "arg2": "value2"}
+        assert result == ((), {"arg1": "value1", "arg2": "value2"})
 
     def test_help(self):
-        class Task1(Task):
+        class Task1(tasks.Task):
             """Some documentation"""
 
             def add_arguments(self, parser):
@@ -120,7 +120,7 @@ class TestTask:
         )
 
     def test_run_required(self):
-        class MyTask(Task):
+        class MyTask(tasks.Task):
             pass
 
         task = MyTask()
@@ -133,14 +133,14 @@ class TestProgramTask:
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        class MyTask(ProgramTask):
+        class MyTask(tasks.ProgramTask):
             program = "myprogram"
 
-        class TaskWithArgs(ProgramTask):
+        class TaskWithArgs(tasks.ProgramTask):
             program = "myprogram"
             program_args = ["arg1", "arg2"]
 
-        class TaskWithDynamicArgs(ProgramTask):
+        class TaskWithDynamicArgs(tasks.ProgramTask):
             def get_program(self, **kwargs: dict[str, Any]) -> str:
                 return "myprogram"
 
@@ -186,7 +186,7 @@ class TestProgramTask:
         subprocess_run.reset_mock()
 
     def test_program_required(self):
-        class MyTask(ProgramTask):
+        class MyTask(tasks.ProgramTask):
             pass
 
         task = MyTask()
@@ -201,10 +201,10 @@ class TestScriptTask:
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        class MyTask(ScriptTask):
+        class MyTask(tasks.ScriptTask):
             script = "myscript"
 
-        class DynamicScript(ScriptTask):
+        class DynamicScript(tasks.ScriptTask):
             def add_arguments(self, parser):
                 super().add_arguments(parser)
                 parser.add_argument("arg1")
@@ -238,7 +238,7 @@ class TestScriptTask:
         subprocess_run.reset_mock()
 
     def test_script_required(self):
-        class MyTask(ScriptTask):
+        class MyTask(tasks.ScriptTask):
             pass
 
         task = MyTask()
@@ -252,15 +252,15 @@ class TestSerialTaskGroup:
     def test_run(self, mocker):
         result = []
 
-        class Task1(Task):
+        class Task1(tasks.Task):
             def run(self, **kwargs):
                 result.append("First")
 
-        class Task2(Task):
+        class Task2(tasks.Task):
             def run(self, **kwargs):
                 result.append("Second")
 
-        class MyTask(SerialTaskGroup):
+        class MyTask(tasks.SerialTaskGroup):
             task_classes = [Task1, Task2]
 
         task = MyTask()
@@ -273,20 +273,20 @@ class TestThreadTaskGroup:
     def test_run(self, mocker):
         result = []
 
-        class Task1(Task):
+        class Task1(tasks.Task):
             def run(self, **kwargs):
                 while not result:  # Wait for Task2 to append
                     pass
                 result.append("Second")
 
-        class Task2(Task):
+        class Task2(tasks.Task):
             def run(self, **kwargs):
                 result.append("First")
                 while not len(result) == 2:  # Wait for Task1 to finish
                     pass
                 result.append("Third")
 
-        class MyTask(ThreadTaskGroup):
+        class MyTask(tasks.ThreadTaskGroup):
             task_classes = [Task1, Task2]
 
         task = MyTask()
