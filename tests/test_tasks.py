@@ -85,6 +85,14 @@ class TestTask:
             "  --arg2 ARG2, -a2 ARG2\n"
         )
 
+    def test_run_required(self):
+        class MyTask(Task):
+            pass
+
+        task = MyTask()
+        with pytest.raises(NotImplementedError):
+            task.run()
+
 
 class TestProgramTask:
     def test_run(self, mocker):
@@ -138,6 +146,16 @@ class TestProgramTask:
         with pytest.raises(RuntimeError, match="Program failed with exit code 1"):
             task([])
 
+    def test_program_required(self):
+        class MyTask(ProgramTask):
+            pass
+
+        task = MyTask()
+        with pytest.raises(
+            NotImplementedError, match="Either set program or override get_program()"
+        ):
+            task([])
+
 
 class TestScriptTask:
     def test_run(self, mocker):
@@ -177,4 +195,14 @@ class TestScriptTask:
 
         task = MyTask()
         with pytest.raises(RuntimeError, match="Script failed with exit code 1"):
+            task([])
+
+    def test_script_required(self):
+        class MyTask(ScriptTask):
+            pass
+
+        task = MyTask()
+        with pytest.raises(
+            NotImplementedError, match="Either set script or override get_script()"
+        ):
             task([])
