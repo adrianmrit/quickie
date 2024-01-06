@@ -1,0 +1,17 @@
+[tool.ruff]
+
+[tool.ruff.lint]
+select = [
+    "PL",  # pylint
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "D",   # pydocstyle
+]
+fixable = ["ALL"]
+ignore = ["D106"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]

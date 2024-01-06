@@ -1,0 +1,12 @@
+
+task-mom.code-workspace
+
+.coverage
+.DS_Store
+
+## Python ##
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+### VisualStudioCode ###
+.vscode/*
