@@ -31,7 +31,7 @@ setup(
     },
     # Requires
     python_requires=">=3.12",
-    install_requires=["classoptions>=0.2.0"],
+    install_requires=[],
     setup_requires=[
         "pytest-runner",
         "setuptools-scm",

@@ -3,38 +3,69 @@ from typing import Any
 
 import pytest
 
-from task_mom.tasks import ProgramTask, ScriptTask, Task
+from task_mom.tasks import (
+    Namespace,
+    ProgramTask,
+    ScriptTask,
+    Task,
+    get_task_class,
+    global_namespace,
+    register,
+)
 
 
-class TestTask:
-    def test_meta(self, mocker):
+class TestGlobalNamespace:
+    def test_register(self):
+        @register
+        @register("alias")
         class MyTask(Task):
             pass
 
-        # Abstract not inherited
-        assert Task._meta.abstract is True
-        assert MyTask._meta.abstract is False
-        # Default Name
-        assert MyTask._meta.name == "mytask"
+        assert get_task_class("mytask") is MyTask
+        assert get_task_class("alias") is MyTask
 
-        class MySubTask(MyTask):
+    def test_register_namespace(self):
+        @global_namespace.register
+        class MyTask(Task):
             pass
 
-        assert MySubTask._meta.name == "mysubtask"
+        assert get_task_class("mytask") is MyTask
+        assert global_namespace.get_task_class("mytask") is MyTask
 
-        class MySubTask2(MyTask):
-            class Meta:
-                name = "mytask2"
-                abstract = True
 
-        assert MySubTask2._meta.name == "mytask2"
+class TestNamespace:
+    def test_register(self):
+        namespace = Namespace("tests")
 
-        class MySubTask3(MyTask):
+        @namespace.register
+        @namespace.register("alias")
+        class MyTask(Task):
             pass
 
-        assert MySubTask3._meta.abstract is False
-        assert MySubTask3._meta.name == "mysubtask3"
+        @namespace.register
+        class MyTask2(Task):
+            pass
 
+        sub_namespace = Namespace("sub", parent=namespace)
+
+        @sub_namespace.register
+        class MyTask3(Task):
+            pass
+
+        assert get_task_class("tests.mytask") is MyTask
+        assert get_task_class("tests.alias") is MyTask
+        assert get_task_class("tests.mytask2") is MyTask2
+        assert get_task_class("tests.sub.mytask3") is MyTask3
+        assert sub_namespace.get_task_class("mytask3") is MyTask3
+
+    def test_invalid_register(self):
+        namespace = Namespace("tests")
+
+        with pytest.raises(TypeError, match="Expected a Task class"):
+            namespace.register("invalid", name="alias")
+
+
+class TestTask:
     def test_parser(self):
         class MyTask(Task):
             def add_arguments(self, parser):
@@ -60,11 +91,11 @@ class TestTask:
         class Task2(Task1):
             pass
 
-        task_1 = Task1()
+        task_1 = Task1("task")
         task_2 = Task2()
 
         assert (
-            task_1.get_help() == "usage: task1 [--arg2 ARG2] arg1\n"
+            task_1.get_help() == "usage: task [--arg2 ARG2] arg1\n"
             "\n"
             "Some documentation\n"
             "\n"
@@ -76,7 +107,7 @@ class TestTask:
         )
 
         assert task_2.get_help() == (
-            "usage: task2 [--arg2 ARG2] arg1\n"
+            "usage: Task2 [--arg2 ARG2] arg1\n"
             "\n"
             "positional arguments:\n"
             "  arg1\n"
@@ -135,17 +166,6 @@ class TestProgramTask:
         subprocess_run.assert_called_once_with(["myprogram", "value1"], check=False)
         subprocess_run.reset_mock()
 
-    def test_error_code_non_0(self, mocker):
-        subprocess_run = mocker.patch("subprocess.run")
-        subprocess_run.return_value = mocker.Mock(returncode=1)
-
-        class MyTask(ProgramTask):
-            program = "myprogram"
-
-        task = MyTask()
-        with pytest.raises(RuntimeError, match="Program failed with exit code 1"):
-            task([])
-
     def test_program_required(self):
         class MyTask(ProgramTask):
             pass
@@ -185,17 +205,6 @@ class TestScriptTask:
             "myscript value1", check=False, shell=True
         )
         subprocess_run.reset_mock()
-
-    def test_error_code_non_0(self, mocker):
-        subprocess_run = mocker.patch("subprocess.run")
-        subprocess_run.return_value = mocker.Mock(returncode=1)
-
-        class MyTask(ScriptTask):
-            script = "myscript"
-
-        task = MyTask()
-        with pytest.raises(RuntimeError, match="Script failed with exit code 1"):
-            task([])
 
     def test_script_required(self):
         class MyTask(ScriptTask):

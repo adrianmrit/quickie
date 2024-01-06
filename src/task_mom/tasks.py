@@ -9,57 +9,204 @@ import abc
 import argparse
 import typing
 
-import classoptions
 
+class NamespaceABC(abc.ABC):
+    """Abstract base class for namespaces."""
 
-class TaskMetaclasss(classoptions.ClassOptionsMetaclass, abc.ABCMeta):
-    """Metaclass for all tasks."""
+    @abc.abstractmethod
+    def get_store_ptr(self) -> typing.MutableMapping[str, type["Task"]]:
+        """Get the store of tasks."""
 
-    def __new__(mcs, name, bases, attrs):
-        """Sets a default name for the task if not provided."""
-        cls: Task = super().__new__(mcs, name, bases, attrs)  # type: ignore
+    def register[
+        T: type[Task]
+    ](
+        self,
+        __cls_or_name: T | str | None = None,
+        *,
+        name: str | None = None,
+    ) -> (
+        typing.Callable[[T], T] | T
+    ):
+        """Register a task class."""
+        # Handle the case where the decorator is used as `@register("name")`
+        if isinstance(__cls_or_name, str):
+            if name is not None:
+                raise TypeError("Expected a Task class, got a string instead")
+            return self.register(name=__cls_or_name)
 
-        if getattr(cls._meta, "name", None) is None:
-            cls._meta.name = cls.__name__.lower()
+        # Handle the case where it is used as a decorator
+        if __cls_or_name is None:
 
+            def function(cls):
+                self.register(cls, name=name)
+                return cls
+
+            return function
+
+        # Base case
+        cls: T = __cls_or_name
+        name = name or cls.__name__.lower()
+        name = self.namespace_name(name)
+
+        return self._store(cls, name=name)
+
+    def _store[T: type[Task]](self, cls: T, *, name: str) -> T:
+        """Store a task class."""
+        store = self.get_store_ptr()
+        store[name] = cls
         return cls
 
+    def namespace_name(self, name: str) -> str:
+        """Modify the name of a task."""
+        return name
 
-class Task(metaclass=TaskMetaclasss):
+    @abc.abstractmethod
+    def get_task_class(self, name: str) -> type["Task"]:
+        """Get a task class by name."""
+
+
+class _GlobalNamespace(NamespaceABC):
+    def __init__(self):
+        self._internal_namespace = {}
+
+    @typing.override
+    def get_store_ptr(self):
+        return self._internal_namespace
+
+    @typing.override
+    def get_task_class(self, name: str) -> type["Task"]:
+        return self._internal_namespace[name]
+
+
+global_namespace = _GlobalNamespace()
+"""The global namespace.
+
+This namespace is used to register tasks that are available globally.
+"""
+
+register = global_namespace.register
+"""Decorator to register a task class.
+
+Same as `global_namespace.register`.
+
+Example:
+    >>> from task_mom import tasks
+    >>> @register
+    >>> class MyTask(Task):
+    >>>     pass
+    >>>
+    >>> @register(name="mytask_alias")
+    >>> @register(name="mytask")  # equivalent to `@register`
+    >>> class MyTask(Task):
+    >>>     pass
+"""
+
+get_task_class = global_namespace.get_task_class
+"""Get a task class by name.
+
+Same as `global_namespace.get_task`.
+
+Example:
+    >>> from task_mom import tasks
+    >>> @register
+    >>> class MyTask(Task):
+    >>>     pass
+    >>>
+    >>> task = get_task_class("mytask")
+    >>> assert task is MyTask
+"""
+
+
+class Namespace(NamespaceABC):
+    """Namespace for tasks.
+
+    Namespaces can be used to group tasks together. They can be used to
+    organize tasks by their functionality, or by the project they belong to.
+
+    Namespaces can be nested. For example, the namespace "project" can have
+    the namespace "subproject", which can have the task "task1". The task
+    can be referred to as "project.subproject.task1".
+
+    Example:
+        >>> from task_mom import tasks
+        >>> namespace = tasks.Namespace("project")
+        >>>
+        >>> # Task is available as "project.task1"
+        >>> @namespace.register
+        >>> # Also available as "task1"
+        >>> @tasks.register
+        >>> class Task1(tasks.Task):
+        >>>     pass
+        >>>
+        >>> @namespace.register(name="task2")
+        >>> class Task2(tasks.Task):
+        >>>     pass
+        >>>
+        >>> subnamespace = tasks.Namespace("subproject1", parent=namespace)
+        >>>
+        >>> # Task is available as "project1.subproject1.task3"
+        >>> @subnamespace.register
+        >>> class Task3(Task):
+        >>>     pass
+        >>>
+        >>> namespace.register(subnamespace)
+    """
+
+    def __init__(self, name: str, *, separator=".", parent: NamespaceABC | None = None):
+        """Initialize the namespace.
+
+        Args:
+            name: The namespace name.
+            separator: The separator to use when referring to tasks in the
+                namespace.
+            parent: The parent namespace.
+        """
+        self._namespace = name
+        self._separator = separator
+
+        if parent is None:
+            self._parent = global_namespace
+        else:
+            self._parent = parent
+
+    @typing.override
+    def get_store_ptr(self):
+        return self._parent.get_store_ptr()
+
+    @typing.override
+    def namespace_name(self, name: str) -> str:
+        name = f"{self._namespace}{self._separator}{name}"
+        return self._parent.namespace_name(name)
+
+    @typing.override
+    def get_task_class(self, name: str) -> type["Task"]:
+        """Get a task class by name, relative to the namespace.
+
+        Args:
+            name: The name of the task.
+
+        Returns:
+            The task class.
+        """
+        full_name = self.namespace_name(name)
+        return self.get_store_ptr()[full_name]
+
+
+class Task:
     """Base class for all tasks."""
 
-    class DefaultMeta:
-        """Default metadata for tasks.
-
-        These options are automatically inherited by subclasses.
-        """
-
-        name: str
-        """The name of the task. Defaults to the name of the class in lowercase."""
-
-        abstract = False
-        """Whether the task is abstract. That is, it cannot be executed directly."""
-
-    class Meta:
-        """Metadata specific to the task where it is declared.
-
-        These options are not inherited by subclasses.
-        """
-
-        abstract = True
-
-    _meta: DefaultMeta
-    """Metadata for the task."""
-
-    def __init__(self):
+    def __init__(self, name=None):
         """Initialize the task."""
+        # We default to the class name in case the task was not called
+        # from the CLI
+        self.name = name or self.__class__.__name__
         self.parser = self.get_parser()
         self.add_arguments(self.parser)
 
     def get_parser(self) -> argparse.ArgumentParser:
         """Get the parser for the task."""
         parser = argparse.ArgumentParser(
-            prog=self._meta.name, description=self.__doc__, add_help=False
+            prog=self.name, description=self.__doc__, add_help=False
         )
         return parser
 
@@ -121,8 +268,6 @@ class ProgramTask(Task):
         import subprocess
 
         result = subprocess.run([program, *args], check=False)
-        if result.returncode != 0:
-            raise RuntimeError(f"Program failed with exit code {result.returncode}")
         return result
 
 
@@ -151,6 +296,4 @@ class ScriptTask(Task):
         import subprocess
 
         result = subprocess.run(script, shell=True, check=False)
-        if result.returncode != 0:
-            raise RuntimeError(f"Script failed with exit code {result.returncode}")
         return result
