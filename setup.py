@@ -31,7 +31,9 @@ setup(
     },
     # Requires
     python_requires=">=3.12",
-    install_requires=[],
+    install_requires=[
+        "frozendict",
+    ],
     setup_requires=[
         "pytest-runner",
         "setuptools-scm",

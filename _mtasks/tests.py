@@ -12,5 +12,5 @@ class Test(tasks.ScriptTask):
     def get_script(self, *args) -> str:
         args = " ".join(args)
         script = f"python -m pytest {args}"
-        self.stdout.write(f"Running: {script}\n")
+        self.writeln(f"Running: {script}")
         return script

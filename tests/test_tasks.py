@@ -1,3 +1,4 @@
+import io
 import sys
 from argparse import ArgumentParser
 from typing import Any
@@ -5,6 +6,7 @@ from typing import Any
 import pytest
 
 from task_mom import tasks
+from task_mom.context import Context
 
 
 class TestGlobalNamespace:
@@ -62,7 +64,7 @@ class TestTask:
     def test_parser(self):
         @tasks.allow_unknown_args
         class MyTask(tasks.Task):
-            def add_arguments(self, parser):
+            def add_args(self, parser):
                 parser.add_argument("arg1")
                 parser.add_argument("--arg2", "-a2")
 
@@ -87,7 +89,7 @@ class TestTask:
         class Task1(tasks.Task):
             """Some documentation"""
 
-            def add_arguments(self, parser):
+            def add_args(self, parser):
                 parser.add_argument("arg1")
                 parser.add_argument("--arg2", "-a2")
 
@@ -127,41 +129,137 @@ class TestTask:
         with pytest.raises(NotImplementedError):
             task.run()
 
+    def test_writeln(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        class MyTask(tasks.Task):
+            pass
+
+        context = Context(stdout=stdout, stderr=stderr)
+        task = MyTask(context=context)
+        task.writeln("Hello world!")
+
+        assert stdout.getvalue() == "Hello world!\n"
+        assert stderr.getvalue() == ""
+
+    def test_errorln(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        context = Context(stdout=stdout, stderr=stderr)
+
+        class MyTask(tasks.Task):
+            pass
+
+        task = MyTask(context=context)
+        task.errorln("Hello world!")
+
+        assert stdout.getvalue() == ""
+        assert stderr.getvalue() == "Hello world!\n"
+
+    def test_input(self):
+        # New pipe for stdin
+        stdin = io.StringIO()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        context = Context(stdin=stdin, stdout=stdout, stderr=stderr)
+        stdin.write("value1\n")
+        stdin.seek(0)
+
+        class MyTask(tasks.Task):
+            pass
+
+        task = MyTask(context=context)
+        result = task.input("Prompt message")
+        assert result == "value1"
+        assert stdout.getvalue() == "Prompt message"
+        assert not stderr.getvalue()
+
+
+class TestBaseSubprocessTask:
+    @pytest.mark.parametrize(
+        "attr,expected",
+        [
+            ("../other", "/example/other"),
+            ("other", "/example/cwd/other"),
+            ("/absolute", "/absolute"),
+            ("./relative", "/example/cwd/relative"),
+            ("", "/example/cwd"),
+            (None, "/example/cwd"),
+        ],
+    )
+    def test_cwd(self, attr, expected):
+        context = Context(cwd="/example/cwd")
+
+        class MyTask(tasks.BaseSubprocessTask):
+            cwd = attr
+
+        task = MyTask(context=context)
+        assert task.get_cwd() == expected
+
+    def test_env(self):
+        context = Context(env={"MYENV": "myvalue"})
+
+        class MyTask(tasks.BaseSubprocessTask):
+            env = {"OTHERENV": "othervalue"}
+
+        task = MyTask(context=context)
+        assert task.get_env() == {"MYENV": "myvalue", "OTHERENV": "othervalue"}
+
 
 class TestProgramTask:
     def test_run(self, mocker):
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
+        stdin = io.StringIO()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        context = Context(
+            cwd="/example/cwd",
+            env={"MYENV": "myvalue"},
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
         class MyTask(tasks.ProgramTask):
             program = "myprogram"
+            cwd = "../other"
+            env = {"OTHERENV": "othervalue"}
 
         class TaskWithArgs(tasks.ProgramTask):
             program = "myprogram"
             program_args = ["arg1", "arg2"]
 
         class TaskWithDynamicArgs(tasks.ProgramTask):
+            cwd = "/full/path"
+
             def get_program(self, **kwargs: dict[str, Any]) -> str:
                 return "myprogram"
 
-            def add_arguments(self, parser: ArgumentParser):
-                super().add_arguments(parser)
+            def add_args(self, parser: ArgumentParser):
+                super().add_args(parser)
                 parser.add_argument("--arg1")
 
             def get_program_args(self, **kwargs):
                 return [kwargs["arg1"]]
 
-        task = MyTask()
-        task_with_args = TaskWithArgs()
-        task_with_dynamic_args = TaskWithDynamicArgs()
+        task = MyTask(context=context)
+        task_with_args = TaskWithArgs(context=context)
+        task_with_dynamic_args = TaskWithDynamicArgs(context=context)
 
         task([])
         subprocess_run.assert_called_once_with(
             ["myprogram"],
             check=False,
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            cwd="/example/other",
+            env={"MYENV": "myvalue", "OTHERENV": "othervalue"},
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
         )
         subprocess_run.reset_mock()
 
@@ -169,9 +267,11 @@ class TestProgramTask:
         subprocess_run.assert_called_once_with(
             ["myprogram", "arg1", "arg2"],
             check=False,
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            cwd="/example/cwd",
+            env={"MYENV": "myvalue"},
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
         )
         subprocess_run.reset_mock()
 
@@ -179,9 +279,11 @@ class TestProgramTask:
         subprocess_run.assert_called_once_with(
             ["myprogram", "value1"],
             check=False,
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            cwd="/full/path",
+            env={"MYENV": "myvalue"},
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
         )
         subprocess_run.reset_mock()
 
@@ -201,28 +303,50 @@ class TestScriptTask:
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
+        class NamedStringIO(io.StringIO):
+            def __init__(self, name):
+                super().__init__()
+                self.name = name
+
+            def __repr__(self):
+                return f"<{self.name}>"
+
+        stdin = io.StringIO()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        context = Context(
+            cwd="/somedir",
+            env={"VAR": "VAL"},
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
         class MyTask(tasks.ScriptTask):
             script = "myscript"
 
         class DynamicScript(tasks.ScriptTask):
-            def add_arguments(self, parser):
-                super().add_arguments(parser)
+            def add_args(self, parser):
+                super().add_args(parser)
                 parser.add_argument("arg1")
 
             def get_script(self, **kwargs):
                 return "myscript " + kwargs["arg1"]
 
-        task = MyTask()
-        dynamic_task = DynamicScript()
+        task = MyTask(context=context)
+        dynamic_task = DynamicScript(context=context)
 
         task([])
         subprocess_run.assert_called_once_with(
             "myscript",
             check=False,
             shell=True,
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            cwd="/somedir",
+            env={"VAR": "VAL"},
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
         )
         subprocess_run.reset_mock()
 
@@ -231,9 +355,11 @@ class TestScriptTask:
             "myscript value1",
             check=False,
             shell=True,
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            cwd="/somedir",
+            env={"VAR": "VAL"},
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
         )
         subprocess_run.reset_mock()
 

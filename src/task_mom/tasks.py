@@ -7,19 +7,24 @@ together.
 """
 import abc
 import argparse
-import sys
+import os
 import typing
+
+from .context import Context, GlobalContext
+
+# Because vscode currently complains about type[Task]
+TaskType: typing.TypeAlias = type["Task"]
 
 
 class NamespaceABC(abc.ABC):
     """Abstract base class for namespaces."""
 
     @abc.abstractmethod
-    def get_store_ptr(self) -> typing.MutableMapping[str, type["Task"]]:
+    def get_store_ptr(self) -> typing.MutableMapping[str, TaskType]:
         """Get the store of tasks."""
 
     def register[
-        T: type[Task]
+        T: TaskType
     ](
         self,
         __cls_or_name=None,
@@ -51,7 +56,7 @@ class NamespaceABC(abc.ABC):
 
         return self._store(cls, name=name)
 
-    def _store[T: type[Task]](self, cls: T, *, name: str) -> T:
+    def _store[T: TaskType](self, cls: T, *, name: str) -> T:
         """Store a task class."""
         store = self.get_store_ptr()
         store[name] = cls
@@ -236,34 +241,38 @@ class Task:
         self,
         name=None,
         *,
-        stdout: typing.TextIO | None = None,
-        stderr: typing.TextIO | None = None,
-        stdin: typing.TextIO | None = None,
+        context: Context | None = None,
     ):
         """Initialize the task.
 
         Args:
             name: The name of the task.
-            stdout: The stdout stream.
-            stderr: The stderr stream.
-            stdin: The stdin stream.
+            context: The context of the task. To avoid side effects, a shallow
+                copy is made.
         """
         # We default to the class name in case the task was not called
         # from the CLI
         self.name = name or self.__class__.__name__
+        if context is None:
+            self.context = GlobalContext.get().copy()
+        else:
+            self.context = context.copy()
+
         self.parser = self.get_parser()
-        self.add_arguments(self.parser)
+        self.add_args(self.parser)
 
-        if stdout is None:
-            stdout = sys.stdout
-        if stderr is None:
-            stderr = sys.stderr
-        if stdin is None:
-            stdin = sys.stdin
+    def writeln(self, content: str):
+        """Write a line to stdout."""
+        self.context.stdout.write(content + "\n")
 
-        self.stdout = stdout
-        self.stderr = stderr
-        self.stdin = stdin
+    def errorln(self, content: str):
+        """Write a line to stderr."""
+        self.context.stderr.write(content + "\n")
+
+    def input(self, prompt: str) -> str:
+        """Prompt the user for input."""
+        self.context.stdout.write(prompt)
+        return self.context.stdin.readline().rstrip("\n")
 
     def get_parser(self, **kwargs) -> argparse.ArgumentParser:
         """Get the parser for the task.
@@ -282,7 +291,7 @@ class Task:
         parser = argparse.ArgumentParser(**kwargs)
         return parser
 
-    def add_arguments(self, parser: argparse.ArgumentParser):
+    def add_args(self, parser: argparse.ArgumentParser):
         """Add arguments to the parser.
 
         This method should be overridden by subclasses to add arguments to the parser.
@@ -291,6 +300,33 @@ class Task:
             parser: The parser to add arguments to.
         """
         pass
+
+    def parse_args(
+        self,
+        *,
+        parser: argparse.ArgumentParser,
+        args: typing.Sequence[str],
+        allow_unknown_args: bool,
+    ):
+        """Parse arguments.
+
+        Args:
+            parser: The parser to parse arguments with.
+            args: The arguments to parse.
+            allow_unknown_args: Whether to allow extra arguments.
+
+        Returns:
+            A tuple in the form ``(parsed_args, extra)``. Where `parsed_args` is a
+            mapping of known arguments, If `allow_unknown_args` is ``True``, `extra`
+            is a tuple containing the unknown arguments, otherwise it is an empty
+            tuple.
+        """
+        if allow_unknown_args:
+            parsed_args, extra = parser.parse_known_args(args)
+        else:
+            parsed_args = parser.parse_args(args)
+            extra = ()
+        return parsed_args, extra
 
     def get_help(self) -> str:
         """Get the help message of the task."""
@@ -311,15 +347,41 @@ class Task:
         Args:
             args: Sequence of arguments to pass to the task.
         """
-        if self.allow_unknown_args:
-            parsed_args, extra = self.parser.parse_known_args(args)
-        else:
-            parsed_args = self.parser.parse_args(args)
-            extra = ()
+        parsed_args, extra = self.parse_args(
+            parser=self.parser, args=args, allow_unknown_args=self.allow_unknown_args
+        )
         return self.run(*extra, **vars(parsed_args))
 
 
-class ProgramTask(Task):
+class BaseSubprocessTask(Task):
+    """Base class for tasks that run a subprocess."""
+
+    cwd: str | None = None
+    """The current working directory."""
+
+    env: typing.Mapping[str, str] | None = None
+    """The environment."""
+
+    def get_cwd(self, *args, **kwargs) -> str:
+        """Get the current working directory.
+
+        Args:
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
+        """
+        return os.path.abspath(os.path.join(self.context.cwd, self.cwd or ""))
+
+    def get_env(self, *args, **kwargs) -> typing.Mapping[str, str]:
+        """Get the environment.
+
+        Args:
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
+        """
+        return self.context.env | (self.env or {})
+
+
+class ProgramTask(BaseSubprocessTask):
     """Base class for tasks that run a program."""
 
     program: str | None = None
@@ -352,28 +414,34 @@ class ProgramTask(Task):
     def run(self, *args, **kwargs):
         program = self.get_program(*args, **kwargs)
         program_args = self.get_program_args(*args, **kwargs)
-        return self.run_program(program, program_args)
+        cwd = self.get_cwd(*args, **kwargs)
+        env = self.get_env(*args, **kwargs)
+        return self.run_program(program, args=program_args, cwd=cwd, env=env)
 
-    def run_program(self, program: str, args: typing.Sequence[str]):
+    def run_program(self, program: str, *, args: typing.Sequence[str], cwd, env):
         """Run the program.
 
         Args:
             program: The program to run.
             args: The program arguments.
+            cwd: The current working directory.
+            env: The environment.
         """
         import subprocess
 
         result = subprocess.run(
             [program, *args],
             check=False,
-            stderr=self.stderr,
-            stdout=self.stdout,
-            stdin=self.stdin,
+            cwd=cwd,
+            env=env,
+            stdout=self.context.stdout,
+            stderr=self.context.stderr,
+            stdin=self.context.stdin,
         )
         return result
 
 
-class ScriptTask(Task):
+class ScriptTask(BaseSubprocessTask):
     """Base class for tasks that run a script."""
 
     script: str | None = None
@@ -392,9 +460,11 @@ class ScriptTask(Task):
     @typing.override
     def run(self, *args, **kwargs):
         script = self.get_script(*args, **kwargs)
-        self.run_script(script)
+        cwd = self.get_cwd(*args, **kwargs)
+        env = self.get_env(*args, **kwargs)
+        self.run_script(script, cwd=cwd, env=env)
 
-    def run_script(self, script: str):
+    def run_script(self, script: str, *, cwd, env):
         """Run the script."""
         import subprocess
 
@@ -402,9 +472,11 @@ class ScriptTask(Task):
             script,
             shell=True,
             check=False,
-            stdout=self.stdout,
-            stderr=self.stderr,
-            stdin=self.stdin,
+            cwd=cwd,
+            env=env,
+            stdout=self.context.stdout,
+            stderr=self.context.stderr,
+            stdin=self.context.stdin,
         )
         return result
 
@@ -419,18 +491,17 @@ class _TaskGroup(Task):
 
     def get_tasks(self, *args, **kwargs) -> typing.Sequence[Task]:
         """Get the tasks to run."""
-        return [
-            task_cls(stdout=self.stdout, stderr=self.stderr, stdin=self.stdin)
-            for task_cls in self.task_classes
-        ]
+        return [task_cls(context=self.context) for task_cls in self.task_classes]
 
-    def run_task(self, task: Task):
+    def run_task(self, task: Task, *args, **kwargs):
         """Run a task.
 
         Args:
             task: The task to run.
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
         """
-        return task.run()
+        return task.run(*args, **kwargs)
 
 
 class SerialTaskGroup(_TaskGroup):
@@ -439,7 +510,7 @@ class SerialTaskGroup(_TaskGroup):
     @typing.override
     def run(self, *args, **kwargs):
         for task in self.get_tasks(*args, **kwargs):
-            self.run_task(task)
+            self.run_task(task, *args, **kwargs)
 
 
 class ThreadTaskGroup(_TaskGroup):
@@ -461,6 +532,8 @@ class ThreadTaskGroup(_TaskGroup):
             max_workers=self.get_max_workers(),
             thread_name_prefix=f"task-mom-parallel-task.{self.name}",
         ) as executor:
-            futures = [executor.submit(self.run_task, task) for task in tasks]
+            futures = [
+                executor.submit(self.run_task, task, *args, **kwargs) for task in tasks
+            ]
             for future in concurrent.futures.as_completed(futures):
                 future.result()

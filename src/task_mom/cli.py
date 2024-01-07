@@ -2,6 +2,8 @@
 import sys
 from argparse import ArgumentParser
 
+from task_mom.context import GlobalContext
+
 from ._version import __version__ as version
 from .tasks import global_namespace
 
@@ -114,9 +116,7 @@ class Main:
         """Get a task by name."""
         try:
             task_class = global_namespace.get_task_class(task_name)
-            return task_class(
-                name=task_name, stdin=self.stdin, stdout=self.stdout, stderr=self.stderr
-            )
+            return task_class(name=task_name, context=GlobalContext.get())
         except KeyError:
             raise ValueError(f"Task {task_name!r} not found")
 

@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import sys
@@ -8,8 +9,8 @@ from pytest import mark, raises
 from task_mom import cli
 
 PYTHON_PATH = sys.executable
-BIN_FOLDER = sys.prefix + "/bin"
-BIN_LOCATION = BIN_FOLDER + "/mom"
+BIN_FOLDER = os.path.join(sys.prefix, "bin")
+BIN_LOCATION = os.path.join(BIN_FOLDER, "mom")
 
 
 @mark.integration
