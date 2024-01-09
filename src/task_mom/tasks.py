@@ -27,34 +27,27 @@ class NamespaceABC(abc.ABC):
         T: TaskType
     ](
         self,
-        __cls_or_name=None,
+        cls_or_name: str | T | None = None,
         *,
         name: str | None = None,
     ) -> (
         typing.Callable[[T], T] | T
     ):
         """Register a task class."""
-        # Handle the case where the decorator is used as `@register("name")`
-        if isinstance(__cls_or_name, str):
-            if name is not None:
-                raise TypeError("Expected a Task class, got a string instead")
-            return self.register(name=__cls_or_name)
-
-        # Handle the case where it is used as a decorator
-        if __cls_or_name is None:
+        if isinstance(cls_or_name, str) or cls_or_name is None:
+            if name is None:
+                name = cls_or_name
 
             def function(cls):
                 self.register(cls, name=name)
                 return cls
 
             return function
-
-        # Base case
-        cls: T = __cls_or_name
-        name = name or cls.__name__.lower()
-        name = self.namespace_name(name)
-
-        return self._store(cls, name=name)
+        else:
+            # TODO: Check if issubclass(cls_or_name, Task)
+            name = name or cls_or_name.__name__.lower()
+            name = self.namespace_name(name)
+            return self._store(cls_or_name, name=name)
 
     def _store[T: TaskType](self, cls: T, *, name: str) -> T:
         """Store a task class."""
@@ -158,7 +151,7 @@ class Namespace(NamespaceABC):
         >>> namespace.register(subnamespace)
     """
 
-    def __init__(self, name: str, *, separator=".", parent: NamespaceABC | None = None):
+    def __init__(self, name: str, *, parent: NamespaceABC | None = None):
         """Initialize the namespace.
 
         Args:
@@ -168,7 +161,6 @@ class Namespace(NamespaceABC):
             parent: The parent namespace.
         """
         self._namespace = name
-        self._separator = separator
 
         if parent is None:
             self._parent = global_namespace
@@ -181,7 +173,7 @@ class Namespace(NamespaceABC):
 
     @typing.override
     def namespace_name(self, name: str) -> str:
-        name = f"{self._namespace}{self._separator}{name}"
+        name = f"{self._namespace}:{name}"
         return self._parent.namespace_name(name)
 
     @typing.override
@@ -272,6 +264,7 @@ class Task:
     def input(self, prompt: str) -> str:
         """Prompt the user for input."""
         self.context.stdout.write(prompt)
+        self.context.stdout.flush()
         return self.context.stdin.readline().rstrip("\n")
 
     def get_parser(self, **kwargs) -> argparse.ArgumentParser:
@@ -287,7 +280,6 @@ class Task:
         """
         kwargs.setdefault("prog", self.name)
         kwargs.setdefault("description", self.__doc__)
-        kwargs.setdefault("add_help", False)
         parser = argparse.ArgumentParser(**kwargs)
         return parser
 

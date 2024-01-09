@@ -47,17 +47,11 @@ class TestNamespace:
         class MyTask3(tasks.Task):
             pass
 
-        assert tasks.get_task_class("tests.mytask") is MyTask
-        assert tasks.get_task_class("tests.alias") is MyTask
-        assert tasks.get_task_class("tests.mytask2") is MyTask2
-        assert tasks.get_task_class("tests.sub.mytask3") is MyTask3
+        assert tasks.get_task_class("tests:mytask") is MyTask
+        assert tasks.get_task_class("tests:alias") is MyTask
+        assert tasks.get_task_class("tests:mytask2") is MyTask2
+        assert tasks.get_task_class("tests:sub:mytask3") is MyTask3
         assert sub_namespace.get_task_class("mytask3") is MyTask3
-
-    def test_invalid_register(self):
-        namespace = tasks.Namespace("tests")
-
-        with pytest.raises(TypeError, match="Expected a Task class"):
-            namespace.register("invalid", name="alias")
 
 
 class TestTask:
@@ -100,7 +94,7 @@ class TestTask:
         task_2 = Task2()
 
         assert (
-            task_1.get_help() == "usage: task [--arg2 ARG2] arg1\n"
+            task_1.get_help() == "usage: task [-h] [--arg2 ARG2] arg1\n"
             "\n"
             "Some documentation\n"
             "\n"
@@ -108,16 +102,18 @@ class TestTask:
             "  arg1\n"
             "\n"
             "options:\n"
+            "  -h, --help            show this help message and exit\n"
             "  --arg2 ARG2, -a2 ARG2\n"
         )
 
         assert task_2.get_help() == (
-            "usage: Task2 [--arg2 ARG2] arg1\n"
+            "usage: Task2 [-h] [--arg2 ARG2] arg1\n"
             "\n"
             "positional arguments:\n"
             "  arg1\n"
             "\n"
             "options:\n"
+            "  -h, --help            show this help message and exit\n"
             "  --arg2 ARG2, -a2 ARG2\n"
         )
 
