@@ -1,11 +1,9 @@
 from task_mom import tasks
+from task_mom.utils.imports import try_import
 
 from .tests import *  # noqa: F403
 
-try:
-    from .private import *  # type: ignore # noqa: F403
-except ImportError:
-    pass
+try_import(".private")
 
 
 @tasks.register(name="hello")

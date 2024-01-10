@@ -111,12 +111,6 @@ def test_default(capsys: CaptureFixture):
 
 
 @mark.integration
-def test_fails_find_paths():
-    with raises(FileNotFoundError, match="nonexistent.py"):
-        cli.main(["-h", "hello"], task_paths=["nonexistent.py"])
-
-
-@mark.integration
 def test_fails_find_task():
     with raises(ValueError, match="Task 'nonexistent' not found"):
         cli.main(["nonexistent"])

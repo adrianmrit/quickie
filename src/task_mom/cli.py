@@ -1,17 +1,20 @@
 """The CLI entry of task-mom."""
 import sys
+import typing
 from argparse import ArgumentParser
+from pathlib import Path
 
 from task_mom.context import GlobalContext
 
 from ._version import __version__ as version
 from .tasks import global_namespace
+from .utils import imports
 
 _DEFAULT_PATHS = (
-    "mtasks.py",
-    "mtasks/__init__.py",
-    "_mtasks.py",
-    "_mtasks/__init__.py",
+    Path("mtasks.py"),
+    Path("mtasks/__init__.py"),
+    Path("_mtasks.py"),
+    Path("_mtasks/__init__.py"),
 )
 
 
@@ -82,27 +85,16 @@ class Main:
             print(self.get_usage())
         self.parser.exit()
 
-    def load_tasks(self, paths):
+    def load_tasks(self, paths: typing.Iterable[Path]):
         """Load tasks from the tasks module."""
-        import os
-        from importlib.util import module_from_spec, spec_from_file_location
-
-        cwd = os.getcwd()
-
+        root = Path.cwd()
         for path in paths:
-            full_path = os.path.join(cwd, path)
-            # check path exists
-            if os.path.exists(full_path):
-                break
-        else:
-            paths_str = ", ".join(paths)
-            raise FileNotFoundError(f"Could not find any of {paths_str}")
-
-        spec = spec_from_file_location("_mtasks", full_path)
-        if spec is not None:
-            module = module_from_spec(spec)
-            sys.modules["_mtasks"] = module
-            spec.loader.exec_module(module)  # type: ignore
+            try:
+                # we discard the module. The tasks should be registered
+                # in the global namespace
+                imports.import_from_path(path, root=root)
+            except imports.InternalImportError:
+                pass
 
     def get_help(self):
         """Get the help message."""
