@@ -173,6 +173,11 @@ class TestTask:
         assert stdout.getvalue() == "Prompt message"
         assert not stderr.getvalue()
 
+        # No input on non required field
+        stdin.write("\n")
+        result = task.input("Prompt message", required=False)
+        assert result == ""
+
 
 class TestBaseSubprocessTask:
     @pytest.mark.parametrize(

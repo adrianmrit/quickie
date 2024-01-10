@@ -261,11 +261,23 @@ class Task:
         """Write a line to stderr."""
         self.context.stderr.write(content + "\n")
 
-    def input(self, prompt: str) -> str:
-        """Prompt the user for input."""
-        self.context.stdout.write(prompt)
-        self.context.stdout.flush()
-        return self.context.stdin.readline().rstrip("\n")
+    def input(self, prompt: str, required=True) -> str:
+        """Prompt the user for input.
+
+        Args:
+            prompt: The prompt to show to the user. Note that no newline or
+                ":" is added.
+            required: Whether the input is required. If ``False``, an empty
+                string can be returned.
+        """
+        result = ""
+        while not result:
+            self.context.stdout.write(prompt)
+            self.context.stdout.flush()
+            result = self.context.stdin.readline().rstrip("\n")
+            if not result and not required:
+                return result
+        return result
 
     def get_parser(self, **kwargs) -> argparse.ArgumentParser:
         """Get the parser for the task.
