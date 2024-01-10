@@ -290,7 +290,7 @@ class Task:
         Args:
             kwargs: Extra arguments to pass to the parser.
         """
-        kwargs.setdefault("prog", self.name)
+        kwargs.setdefault("prog", f"{self.context.program_name} {self.name}")
         kwargs.setdefault("description", self.__doc__)
         parser = argparse.ArgumentParser(**kwargs)
         return parser

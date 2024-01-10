@@ -13,6 +13,7 @@ class Context:
     def __init__(  # noqa: PLR0913
         self,
         *,
+        program_name: str | None = None,
         cwd: str | None = None,
         env: typing.Mapping | None = None,
         stdin=None,
@@ -20,6 +21,9 @@ class Context:
         stderr=None
     ):
         """Initialize the context."""
+        if program_name is None:
+            program_name = os.path.basename(sys.argv[0])
+
         if cwd is None:
             cwd = os.getcwd()
         if env is None:
@@ -32,6 +36,7 @@ class Context:
         if stderr is None:
             stderr = sys.stderr
 
+        self.program_name = program_name
         self.cwd = cwd
         self.env = frozendict(env)
         self.stdin = stdin
@@ -41,6 +46,7 @@ class Context:
     def copy(self):
         """Copy the context."""
         return Context(
+            program_name=self.program_name,
             cwd=self.cwd,
             env=self.env,
             stdin=self.stdin,

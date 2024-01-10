@@ -3,7 +3,6 @@ import re
 import subprocess
 import sys
 
-from _pytest.capture import CaptureFixture
 from pytest import mark, raises
 
 from task_mom import cli
@@ -36,7 +35,7 @@ def test_from_cli(argv):
         ["--help"],
     ],
 )
-def test_help(argv, capsys: CaptureFixture):
+def test_help(argv, capsys):
     with raises(SystemExit) as exc_info:
         cli.main(argv)
     assert exc_info.value.code == 0
@@ -50,11 +49,11 @@ def test_help(argv, capsys: CaptureFixture):
 @mark.parametrize(
     "argv",
     [
-        ["-h", "hello"],
-        ["--help", "hello"],
+        ["hello", "-h"],
+        ["hello", "--help"],
     ],
 )
-def test_task_help(argv, capsys: CaptureFixture):
+def test_task_help(argv, capsys):
     with raises(SystemExit) as exc_info:
         cli.main(argv)
     assert exc_info.value.code == 0
@@ -68,29 +67,11 @@ def test_task_help(argv, capsys: CaptureFixture):
 @mark.parametrize(
     "argv",
     [
-        ["-h", "hello", "arg1"],
-        ["--help", "hello", "arg1"],
-    ],
-)
-def test_task_help_with_args(argv, capsys: CaptureFixture):
-    with raises(SystemExit) as exc_info:
-        cli.main(argv)
-    assert exc_info.value.code == 2
-
-    out, err = capsys.readouterr()
-    assert "error: -h/--help only accepts one task name" in out
-    assert not err
-
-
-@mark.integration
-@mark.parametrize(
-    "argv",
-    [
         ["-V"],
         ["--version"],
     ],
 )
-def test_version(argv, capsys: CaptureFixture):
+def test_version(argv, capsys):
     with raises(SystemExit) as exc_info:
         cli.main(argv)
     assert exc_info.value.code == 0
@@ -101,12 +82,12 @@ def test_version(argv, capsys: CaptureFixture):
 
 
 @mark.integration
-def test_default(capsys: CaptureFixture):
+def test_default(capsys):
     with raises(SystemExit) as exc_info:
         cli.main([])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert "[-h [TASK] | -V] [TASK] [ARGS ...]" in out
+    assert "[-h] [-V] [task] [args ...]" in out
     assert not err
 
 
@@ -114,3 +95,12 @@ def test_default(capsys: CaptureFixture):
 def test_fails_find_task():
     with raises(ValueError, match="Task 'nonexistent' not found"):
         cli.main(["nonexistent"])
+
+
+@mark.integration
+def test_main_no_args(capsys):
+    with raises(SystemExit) as exc_info:
+        cli.main()
+    assert exc_info.value.code == 2
+    out = capsys.readouterr().err
+    assert "[-h] [-V] [task] [args ...]" in out

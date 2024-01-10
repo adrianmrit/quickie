@@ -1,4 +1,5 @@
 import io
+import os
 import sys
 from argparse import ArgumentParser
 from typing import Any
@@ -94,7 +95,8 @@ class TestTask:
         task_2 = Task2()
 
         assert (
-            task_1.get_help() == "usage: task [-h] [--arg2 ARG2] arg1\n"
+            task_1.get_help()
+            == f"usage: {os.path.basename(sys.argv[0])} task [-h] [--arg2 ARG2] arg1\n"
             "\n"
             "Some documentation\n"
             "\n"
@@ -107,7 +109,7 @@ class TestTask:
         )
 
         assert task_2.get_help() == (
-            "usage: Task2 [-h] [--arg2 ARG2] arg1\n"
+            f"usage: {os.path.basename(sys.argv[0])} Task2 [-h] [--arg2 ARG2] arg1\n"
             "\n"
             "positional arguments:\n"
             "  arg1\n"

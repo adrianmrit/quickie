@@ -7,9 +7,11 @@ import pytest
     "path,root,expected",
     (
         (Path("foo/bar.py"), Path("/foo"), "foo.bar"),
-        (Path("foo/bar.py"), Path("/foo/"), "foo.bar"),
+        (Path("foo/bar"), Path("/foo/"), "foo.bar"),
         (Path("foo/bar.py"), Path("/some other path/"), "foo.bar"),
-        (Path("/foo/bar.py"), Path("/some other path/"), "foo.bar"),
+        (Path("/foo/bar"), Path("/some other path/"), "foo.bar"),
+        (Path("/foo/bar/__init__.py"), Path("/some other path/"), "foo.bar"),
+        (Path("/foo/bar/__init__"), Path("/foo/"), "bar"),
     ),
 )
 def test_module_name_from_path(path, root, expected):

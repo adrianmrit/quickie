@@ -11,10 +11,8 @@ from .tasks import global_namespace
 from .utils import imports
 
 _DEFAULT_PATHS = (
-    Path("mtasks.py"),
-    Path("mtasks/__init__.py"),
-    Path("_mtasks.py"),
-    Path("_mtasks/__init__.py"),
+    Path("mtasks"),
+    Path("_mtasks"),
 )
 
 
@@ -30,6 +28,8 @@ class Main:
         self, *, argv=None, task_paths, stdin=None, stdout=None, stderr=None
     ):
         """Initialize the CLI."""
+        if argv is None:
+            argv = sys.argv[1:]
         self.argv = argv
 
         if stdin is None:
@@ -43,47 +43,46 @@ class Main:
         self.stdout = stdout
         self.stderr = stderr
 
-        self.parser = ArgumentParser(add_help=False, description=main.__doc__)
-        group = self.parser.add_mutually_exclusive_group()
-        group.add_argument(
-            "-h",
-            "--help",
-            nargs="?",
-            const=True,
-            metavar="TASK",
-            help="show this help message, or the help message for a task, and exit",
+        self.parser = ArgumentParser(description="A CLI tool that does your chores")
+        self.parser.add_argument("-V", "--version", action="version", version=version)
+        self.parser.add_argument("task", nargs="?", help="The task to run")
+        self.parser.add_argument(
+            "args", nargs="*", help="The arguments to pass to the task"
         )
-        group.add_argument("-V", "--version", action="version", version=version)
-        task_group = self.parser.add_argument_group("Task")
 
-        # Pass a task name, with optional arguments, to run it.
-        # Cannot be used with -h or -V
-        task_group.add_argument("task", nargs="?", metavar="TASK", help="task name")
-        task_group.add_argument(
-            "args", nargs="*", metavar="ARGS", help="task arguments"
-        )
         self.load_tasks(task_paths)
 
     def __call__(self):
         """A CLI tool that does your chores while you slack off."""
         # Help message for the cli.
         # Optionally accepts a task name to show the help message for it
-        args = self.parser.parse_args(self.argv)
-        if args.help and args.task:
-            print("error: -h/--help only accepts one task name")
-            self.parser.exit(2)
+        main_args, task_name, task_args = self._partition_args(self.argv)
+        _main_args = self.parser.parse_args(main_args)
 
-        if args.help:
-            if isinstance(args.help, str):
-                help = self.get_task_help(args.help)
-            else:
-                help = self.get_help()
-            print(help)
-        elif args.task:
-            self.run_task(args.task, args.args)
+        if task_name is not None:
+            self.run_task(task_name=task_name, args=task_args)
         else:
             print(self.get_usage())
         self.parser.exit()
+
+    def _partition_args(self, args):
+        """Partition the arguments into main arguments and task arguments.
+
+        We need this to avoid interpreting task arguments as main arguments. Also
+        allows us to pass options to the task without using the `--` separator.
+        """
+        main_args = []
+        task_name = None
+        task_args = []
+        current = main_args
+        for arg in args:
+            if not arg.startswith("-") and task_name is None:
+                task_name = arg
+                current = task_args
+            else:
+                current.append(arg)
+
+        return main_args, task_name, task_args
 
     def load_tasks(self, paths: typing.Iterable[Path]):
         """Load tasks from the tasks module."""
@@ -96,10 +95,6 @@ class Main:
             except imports.InternalImportError:
                 pass
 
-    def get_help(self):
-        """Get the help message."""
-        return self.parser.format_help()
-
     def get_usage(self):
         """Get the usage message."""
         return self.parser.format_usage()
@@ -111,11 +106,6 @@ class Main:
             return task_class(name=task_name, context=GlobalContext.get())
         except KeyError:
             raise ValueError(f"Task {task_name!r} not found")
-
-    def get_task_help(self, task_name):
-        """Get the help message for a task."""
-        task = self.get_task(task_name)
-        return task.get_help()
 
     def run_task(self, task_name, args):
         """Run a task."""
