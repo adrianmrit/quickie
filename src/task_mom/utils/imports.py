@@ -89,7 +89,6 @@ def try_import(module_name: str):
         # Get the name of the file from which this function was called
         caller = sys._getframe(1)
         parent_module = caller.f_globals["__package__"]
-        print(parent_module)
         module_name = module_name[1:]
         # Further dot-prefixed names are relative to the caller file
         while module_name.startswith("."):
