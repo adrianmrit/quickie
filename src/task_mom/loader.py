@@ -15,11 +15,8 @@ def load_tasks_from_module(module):
                 modules.append((sub_module, sub_namespace))
         for name, obj in module.__dict__.items():
             if isinstance(obj, type) and issubclass(obj, Task):
-                aliases = getattr(obj, "alias", None)
+                aliases = getattr(obj, "alias", None) or obj.__name__
                 if isinstance(aliases, str):
                     aliases = [aliases]
-                if aliases:
-                    for alias in aliases:
-                        namespace.register(obj, name=alias)
-                else:
-                    namespace.register(obj, name=name)
+                for alias in aliases:
+                    namespace.register(obj, name=alias)
