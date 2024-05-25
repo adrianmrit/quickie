@@ -33,6 +33,8 @@ setup(
     python_requires=">=3.12",
     install_requires=[
         "frozendict",
+        "oslex",
+        "dotenv",
     ],
     setup_requires=[
         "pytest-runner",

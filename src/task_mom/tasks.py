@@ -5,7 +5,7 @@ programs that can be run from the command line. They can be used to run
 commands, or to run other tasks. They can also be used to group other tasks
 together.
 """
-import abc
+
 import argparse
 import os
 import typing
@@ -14,180 +14,6 @@ from .context import Context, GlobalContext
 
 # Because vscode currently complains about type[Task]
 TaskType: typing.TypeAlias = type["Task"]
-
-
-class NamespaceABC(abc.ABC):
-    """Abstract base class for namespaces."""
-
-    @abc.abstractmethod
-    def get_store_ptr(self) -> typing.MutableMapping[str, TaskType]:
-        """Get the store of tasks."""
-
-    def register[
-        T: TaskType
-    ](
-        self,
-        cls_or_name: str | T | None = None,
-        *,
-        name: str | None = None,
-    ) -> (
-        typing.Callable[[T], T] | T
-    ):
-        """Register a task class."""
-        if isinstance(cls_or_name, str) or cls_or_name is None:
-            if name is None:
-                name = cls_or_name
-
-            def function(cls):
-                self.register(cls, name=name)
-                return cls
-
-            return function
-        else:
-            # TODO: Check if issubclass(cls_or_name, Task)
-            name = name or cls_or_name.__name__.lower()
-            name = self.namespace_name(name)
-            return self._store(cls_or_name, name=name)
-
-    def _store[T: TaskType](self, cls: T, *, name: str) -> T:
-        """Store a task class."""
-        store = self.get_store_ptr()
-        store[name] = cls
-        return cls
-
-    def namespace_name(self, name: str) -> str:
-        """Modify the name of a task."""
-        return name
-
-    @abc.abstractmethod
-    def get_task_class(self, name: str) -> type["Task"]:
-        """Get a task class by name."""
-
-
-class _GlobalNamespace(NamespaceABC):
-    def __init__(self):
-        self._internal_namespace = {}
-
-    @typing.override
-    def get_store_ptr(self):
-        return self._internal_namespace
-
-    @typing.override
-    def get_task_class(self, name: str) -> type["Task"]:
-        return self._internal_namespace[name]
-
-
-global_namespace = _GlobalNamespace()
-"""The global namespace.
-
-This namespace is used to register tasks that are available globally.
-"""
-
-register = global_namespace.register
-"""Decorator to register a task class.
-
-Same as `global_namespace.register`.
-
-Example:
-    >>> from task_mom import tasks
-    >>> @register
-    >>> class MyTask(Task):
-    >>>     pass
-    >>>
-    >>> @register(name="mytask_alias")
-    >>> @register(name="mytask")  # equivalent to `@register`
-    >>> class MyTask(Task):
-    >>>     pass
-"""
-
-get_task_class = global_namespace.get_task_class
-"""Get a task class by name.
-
-Same as `global_namespace.get_task`.
-
-Example:
-    >>> from task_mom import tasks
-    >>> @register
-    >>> class MyTask(Task):
-    >>>     pass
-    >>>
-    >>> task = get_task_class("mytask")
-    >>> assert task is MyTask
-"""
-
-
-class Namespace(NamespaceABC):
-    """Namespace for tasks.
-
-    Namespaces can be used to group tasks together. They can be used to
-    organize tasks by their functionality, or by the project they belong to.
-
-    Namespaces can be nested. For example, the namespace "project" can have
-    the namespace "subproject", which can have the task "task1". The task
-    can be referred to as "project.subproject.task1".
-
-    Example:
-        >>> from task_mom import tasks
-        >>> namespace = tasks.Namespace("project")
-        >>>
-        >>> # Task is available as "project.task1"
-        >>> @namespace.register
-        >>> # Also available as "task1"
-        >>> @tasks.register
-        >>> class Task1(tasks.Task):
-        >>>     pass
-        >>>
-        >>> @namespace.register(name="task2")
-        >>> class Task2(tasks.Task):
-        >>>     pass
-        >>>
-        >>> subnamespace = tasks.Namespace("subproject1", parent=namespace)
-        >>>
-        >>> # Task is available as "project1.subproject1.task3"
-        >>> @subnamespace.register
-        >>> class Task3(Task):
-        >>>     pass
-        >>>
-        >>> namespace.register(subnamespace)
-    """
-
-    def __init__(self, name: str, *, parent: NamespaceABC | None = None):
-        """Initialize the namespace.
-
-        Args:
-            name: The namespace name.
-            separator: The separator to use when referring to tasks in the
-                namespace.
-            parent: The parent namespace.
-        """
-        self._namespace = name
-
-        if parent is None:
-            self._parent = global_namespace
-        else:
-            self._parent = parent
-
-    @typing.override
-    def get_store_ptr(self):
-        return self._parent.get_store_ptr()
-
-    @typing.override
-    def namespace_name(self, name: str) -> str:
-        name = f"{self._namespace}:{name}"
-        return self._parent.namespace_name(name)
-
-    @typing.override
-    def get_task_class(self, name: str) -> type["Task"]:
-        """Get a task class by name, relative to the namespace.
-
-        Args:
-            name: The name of the task.
-
-        Returns:
-            The task class.
-        """
-        full_name = self.namespace_name(name)
-        return self.get_store_ptr()[full_name]
 
 
 def allow_unknown_args(cls):
@@ -225,6 +51,8 @@ def disallow_unknown_args(cls):
 
 class Task:
     """Base class for all tasks."""
+
+    alias: str | typing.Iterable[str] | None = None
 
     allow_unknown_args = False
     """Whether to allow extra arguments."""

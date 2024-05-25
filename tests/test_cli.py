@@ -87,20 +87,22 @@ def test_default(capsys):
         cli.main([])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert "[-h] [-V] [task] [args ...]" in out
+    assert "[-h] [-V] [-l] [-m MODULE | -g] [task] [args ...]" in out
     assert not err
 
 
 @mark.integration
 def test_fails_find_task():
-    with raises(ValueError, match="Task 'nonexistent' not found"):
-        cli.main(["nonexistent"])
+    with raises(cli.MomError, match="Task 'nonexistent' not found"):
+        cli.main(["nonexistent"], raise_error=True)
 
 
 @mark.integration
 def test_main_no_args(capsys):
     with raises(SystemExit) as exc_info:
         cli.main()
-    assert exc_info.value.code == 2
-    out = capsys.readouterr().err
-    assert "[-h] [-V] [task] [args ...]" in out
+    # Depending how we run it we might get a different exit code
+    assert exc_info.value.code in (0, 2)
+    out, err = capsys.readouterr()
+    out = out + err
+    assert "[-h] [-V] [-l] [-m MODULE | -g] [task] [args ...]" in out

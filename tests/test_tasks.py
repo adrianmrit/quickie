@@ -6,52 +6,42 @@ from typing import Any
 
 import pytest
 
+import task_mom.namespace
 from task_mom import tasks
 from task_mom.context import Context
 
 
 class TestGlobalNamespace:
     def test_register(self):
-        @tasks.register
-        @tasks.register("alias")
         class MyTask(tasks.Task):
             pass
 
-        assert tasks.get_task_class("mytask") is MyTask
-        assert tasks.get_task_class("alias") is MyTask
-
-    def test_register_namespace(self):
-        @tasks.global_namespace.register
-        class MyTask(tasks.Task):
-            pass
-
-        assert tasks.get_task_class("mytask") is MyTask
-        assert tasks.global_namespace.get_task_class("mytask") is MyTask
+        task_mom.namespace.global_namespace.register(MyTask, "mytask")
+        assert task_mom.namespace.get_task_class("mytask") is MyTask
 
 
 class TestNamespace:
     def test_register(self):
-        namespace = tasks.Namespace("tests")
-
-        @namespace.register
-        @namespace.register("alias")
         class MyTask(tasks.Task):
             pass
 
-        @namespace.register
         class MyTask2(tasks.Task):
             pass
 
-        sub_namespace = tasks.Namespace("sub", parent=namespace)
-
-        @sub_namespace.register
         class MyTask3(tasks.Task):
             pass
 
-        assert tasks.get_task_class("tests:mytask") is MyTask
-        assert tasks.get_task_class("tests:alias") is MyTask
-        assert tasks.get_task_class("tests:mytask2") is MyTask2
-        assert tasks.get_task_class("tests:sub:mytask3") is MyTask3
+        namespace = task_mom.namespace.Namespace("tests")
+        namespace.register(MyTask, "mytask")
+        namespace.register(MyTask, "alias")
+        namespace.register(MyTask2, "mytask2")
+        sub_namespace = task_mom.namespace.Namespace("sub", parent=namespace)
+        sub_namespace.register(MyTask3, "mytask3")
+
+        assert task_mom.namespace.get_task_class("tests:mytask") is MyTask
+        assert task_mom.namespace.get_task_class("tests:alias") is MyTask
+        assert task_mom.namespace.get_task_class("tests:mytask2") is MyTask2
+        assert task_mom.namespace.get_task_class("tests:sub:mytask3") is MyTask3
         assert sub_namespace.get_task_class("mytask3") is MyTask3
 
 

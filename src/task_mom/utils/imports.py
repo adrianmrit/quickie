@@ -1,7 +1,10 @@
 """Utilities for importing modules from paths."""
 
+import importlib
+import importlib.abc
 import importlib.util
 import sys
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 
@@ -9,103 +12,78 @@ class InternalImportError(ImportError):
     """An internal import error."""
 
 
-def module_name_from_path(path: Path, *, root: Path) -> str:
-    """Get the module name from a path.
+class _Finder(importlib.abc.MetaPathFinder):
+    """A finder specifically for a single module or package.
 
-    Example:
-        >>> module_name_from_path(Path("src/task_mom/utils/imports.py"), Path("src"))
-        "task_mom.utils.imports"
-
-    Args:
-        path: The path to the module.
-        root: The root path of the module.
+    This allows to import a module or package from a specific path without
+    adding the path to sys.path or allowing to import other modules from the
+    same path.
     """
-    path = path.with_suffix("")
 
-    try:
-        relative = path.relative_to(root)
-    except ValueError:
-        # Check if path is relative
-        if path.is_absolute():
-            path_parts = path.parts[1:]
+    def __init__(self, module_path: str | Path):
+        """Initialize the finder."""
+        self.module_path = Path(module_path)
+        self.module_name = self.module_path.stem
+        self.is_package = (self.module_path / "__init__.py").exists()
+
+    def find_spec(self, fullname, path=None, target=None):
+        """Find the module spec."""
+        if fullname != self.module_name:
+            return None
+
+        if self.is_package:
+            return self._find_package_spec(fullname)
         else:
-            path_parts = path.parts
+            return self._find_module_spec(fullname)
+
+    def _find_module_spec(self, fullname):
+        py_file = self.module_path.with_suffix(".py")
+        if not py_file.exists():
+            return None
+
+        loader = SourceFileLoader(fullname, str(py_file))
+        return importlib.machinery.ModuleSpec(fullname, loader, origin=str(py_file))
+
+    def _find_package_spec(self, fullname):
+        init_path = self.module_path / "__init__.py"
+        if not init_path.exists():
+            return None
+
+        loader = SourceFileLoader(fullname, str(init_path))
+        spec = importlib.machinery.ModuleSpec(
+            fullname, loader, origin=str(init_path), is_package=True
+        )
+        spec.submodule_search_locations = [str(self.module_path)]
+        return spec
+
+
+def import_from_path(path):
+    """Import a module from a path."""
+    path = Path(path)
+    module_name = path.stem
+
+    if path.is_file() and path.suffix == ".py":
+        parent_path = path.parent
+    elif path.is_dir():
+        parent_path = path
+        module_name = path.name
     else:
-        path_parts = relative.parts
+        raise InternalImportError(f"Path {path} is not a valid module or package")
 
-    if len(path_parts) >= 2 and path_parts[-1] == "__init__":
-        path_parts = path_parts[:-1]
-    return ".".join(path_parts)
+    finder = _Finder(path)
 
-
-def import_from_path(path: Path, *, root: Path = Path.cwd()):
-    """Import a module from a path.
-
-    Args:
-        path: The path to the module.
-        root: The root path of the module.
-
-    Returns:
-        The imported module.
-    """
-    module_name = module_name_from_path(path, root=root)
-    try:
-        return sys.modules[module_name]
-    except KeyError:
-        pass
-
-    spec = None
-    if "." not in module_name:
-        # If the module is in the root package, we can use the meta path finder
-        for meta_importer in sys.meta_path:
-            spec = meta_importer.find_spec(module_name, [str(root)])
-            if spec is not None:
-                break
-
-    if spec is None:
-        spec = importlib.util.spec_from_file_location(module_name, path.with_suffix(""))
-
-    if spec is None:
-        raise InternalImportError(f"Could not import {path!r}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)  # type: ignore
-    return module
-
-
-def try_import(module_name: str):
-    """Try to import a module.
-
-    If the name starts with a dot, it will be relative to the calling module.
-
-    Args:
-        module_name: The name of the module to import.
-
-    Returns:
-        The imported module or None if it could not be imported.
-    """
-    if module_name.startswith("."):
-        # Get the name of the file from which this function was called
-        caller = sys._getframe(1)
-        parent_module = caller.f_globals["__package__"]
-        module_name = module_name[1:]
-        # Further dot-prefixed names are relative to the caller file
-        while module_name.startswith("."):
-            parent_module = ".".join(parent_module.split(".")[:-1])
-            module_name = module_name[1:]
-        module_name = f"{parent_module}.{module_name}"
-
-    # Module relative to a folder further up the tree
-    if module_name.startswith("."):
-        return None
+    # Add the Finder to the meta path
+    sys.meta_path.append(finder)
 
     try:
-        return sys.modules[module_name]
-    except KeyError:
-        pass
-
-    try:
-        return importlib.import_module(module_name)
-    except ImportError:
-        return None
+        # Ensure parent path is in sys.path to resolve submodules
+        sys.path.insert(0, str(parent_path))
+        # Perform the import
+        module = importlib.import_module(module_name)
+        return module
+    except ImportError as e:
+        raise InternalImportError(f"Could not import {path}") from e
+    finally:
+        # Clean up by removing the Finder from the meta path and sys.path
+        sys.meta_path.remove(finder)
+        sys.path.remove(str(parent_path))
