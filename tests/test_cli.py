@@ -106,3 +106,12 @@ def test_main_no_args(capsys):
     out, err = capsys.readouterr()
     out = out + err
     assert "[-h] [-V] [-l] [-m MODULE | -g]" in out
+
+
+@mark.integration
+def test_task_not_found(capsys):
+    with raises(SystemExit) as exc_info:
+        cli.main(["nonexistent"])
+    assert exc_info.value.code == 1
+    out, err = capsys.readouterr()
+    assert "Task 'nonexistent' not found" in out

@@ -4,8 +4,9 @@ from frozendict import frozendict
 
 DEFAULT_CONSOLE_STYLE = frozendict(
     {
-        "info": "dim cyan",
+        "info": "cyan",
         "warning": "yellow",
         "error": "bold red",
+        "success": "green",
     }
 )

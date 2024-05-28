@@ -1,15 +1,11 @@
 import io
-import os
-import sys
 from argparse import ArgumentParser
 from typing import Any
 
 import pytest
-from rich.console import Console
 
 import task_mom.namespace
 from task_mom import tasks
-from task_mom.context import Context
 
 
 class TestGlobalNamespace:
@@ -136,7 +132,7 @@ class TestTask:
 
         context.console.file = io.StringIO()
         task = MyTask(context=context)
-        task.printe("Hello world!")
+        task.print_error("Hello world!")
 
         assert context.console.file.getvalue() == "Hello world!\n"
 
@@ -179,9 +175,6 @@ class TestProgramTask:
 
         context.cwd = "/example/cwd"
         context.env = {"MYENV": "myvalue"}
-        context.stdin = io.StringIO()
-        context.stdout = io.StringIO()
-        context.stderr = io.StringIO()
 
         class MyTask(tasks.ProgramTask):
             program = "myprogram"
@@ -215,9 +208,6 @@ class TestProgramTask:
             check=False,
             cwd="/example/other",
             env={"MYENV": "myvalue", "OTHERENV": "othervalue"},
-            stdin=context.stdin,
-            stdout=context.stdout,
-            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -227,9 +217,6 @@ class TestProgramTask:
             check=False,
             cwd="/example/cwd",
             env={"MYENV": "myvalue"},
-            stdin=context.stdin,
-            stdout=context.stdout,
-            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -239,9 +226,6 @@ class TestProgramTask:
             check=False,
             cwd="/full/path",
             env={"MYENV": "myvalue"},
-            stdin=context.stdin,
-            stdout=context.stdout,
-            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -263,9 +247,6 @@ class TestScriptTask:
 
         context.cwd = "/somedir"
         context.env = {"VAR": "VAL"}
-        context.stdin = io.StringIO()
-        context.stdout = io.StringIO()
-        context.stderr = io.StringIO()
 
         class MyTask(tasks.ScriptTask):
             script = "myscript"
@@ -288,9 +269,6 @@ class TestScriptTask:
             shell=True,
             cwd="/somedir",
             env={"VAR": "VAL"},
-            stdin=context.stdin,
-            stdout=context.stdout,
-            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -301,9 +279,6 @@ class TestScriptTask:
             shell=True,
             cwd="/somedir",
             env={"VAR": "VAL"},
-            stdin=context.stdin,
-            stdout=context.stdout,
-            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 

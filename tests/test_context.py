@@ -8,6 +8,3 @@ class TestContext:
         assert context.cwd == context_copy.cwd
         assert context.env is context_copy.env
         assert isinstance(context.env, frozendict)
-        assert context.stdin is context_copy.stdin
-        assert context.stdout is context_copy.stdout
-        assert context.stderr is context_copy.stderr

@@ -51,11 +51,11 @@ class TaskNotFoundError(MomError):
 #         super().__init__(f"Module {module_name} not found", exit_code=2)
 
 
-def main(argv=None, *, task_paths=_DEFAULT_PATHS, raise_error=False):
+def main(argv=None, *, raise_error=False):
     """Run the CLI."""
 
     traceback.install(suppress=[task_mom])
-    main = Main(argv=argv, task_paths=task_paths)
+    main = Main(argv=argv)
     try:
         main()
     except MomError as e:
@@ -68,38 +68,20 @@ def main(argv=None, *, task_paths=_DEFAULT_PATHS, raise_error=False):
 class Main:
     """Represents the CLI entry of task-mom."""
 
-    def __init__(  # noqa: PLR0913
-        self, *, argv=None, task_paths, stdin=None, stdout=None, stderr=None
-    ):
+    def __init__(self, *, argv=None):  # noqa: PLR0913
         self.settings = self.load_settings()
         """Initialize the CLI."""
         if argv is None:
             argv = sys.argv[1:]
         self.argv = argv
 
-        if stdin is None:
-            stdin = sys.stdin
-        if stdout is None:
-            stdout = sys.stdout
-            console_file = None
-        else:
-            console_file = stdout
-        if stderr is None:
-            stderr = sys.stderr
-
-        self.stdin = stdin
-        self.stdout = stdout
-        self.stderr = stderr
-        self.console = Console(theme=Theme(self.settings["style"]), file=console_file)
+        self.console = Console(theme=Theme(self.settings["style"]))
 
         self.global_context = Context(
             program_name=os.path.basename(sys.argv[0]),
             cwd=os.getcwd(),
             env=frozendict(os.environ),
             console=self.console,
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
         )
 
         self.parser = ArgumentParser(description="A CLI tool that does your chores")

@@ -81,15 +81,25 @@ class Task(metaclass=TaskMeta):
         """Print a line."""
         self.console.print(*args, **kwargs)
 
-    def printe(self, *args, **kwargs):
+    def print_error(self, *args, **kwargs):
         """Print an error message."""
         kwargs.setdefault("style", "error")
-        self.console.print(*args, **kwargs)
+        self.print(*args, **kwargs)
+
+    def print_success(self, *args, **kwargs):
+        """Print a success message."""
+        kwargs.setdefault("style", "success")
+        self.print(*args, **kwargs)
+
+    def print_warning(self, *args, **kwargs):
+        """Print a warning message."""
+        kwargs.setdefault("style", "warning")
+        self.print(*args, **kwargs)
 
     def print_info(self, *args, **kwargs):
         """Print an info message."""
         kwargs.setdefault("style", "info")
-        self.console.print(*args, **kwargs)
+        self.print(*args, **kwargs)
 
     def prompt(  # noqa: PLR0913
         self,
@@ -119,7 +129,6 @@ class Task(metaclass=TaskMeta):
             show_default=show_default,
             show_choices=show_choices,
             default=default,
-            stream=self.context.stdin,
         )
 
     def confirm(self, prompt, default: bool = False) -> bool:
@@ -129,9 +138,7 @@ class Task(metaclass=TaskMeta):
             prompt: The prompt message.
             default: The default value.
         """
-        return Confirm.ask(
-            prompt, console=self.console, default=default, stream=self.context.stdin
-        )
+        return Confirm.ask(prompt, console=self.console, default=default)
 
     def get_parser(self, **kwargs) -> argparse.ArgumentParser:
         """Get the parser for the task.
@@ -294,9 +301,6 @@ class ProgramTask(BaseSubprocessTask):
             check=False,
             cwd=cwd,
             env=env,
-            stdout=self.context.stdout,
-            stderr=self.context.stderr,
-            stdin=self.context.stdin,
         )
         return result
 
@@ -334,9 +338,6 @@ class ScriptTask(BaseSubprocessTask):
             check=False,
             cwd=cwd,
             env=env,
-            stdout=self.context.stdout,
-            stderr=self.context.stderr,
-            stdin=self.context.stdin,
         )
         return result
 

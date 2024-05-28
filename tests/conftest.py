@@ -1,5 +1,4 @@
 import os
-import sys
 
 import pytest
 from frozendict import frozendict
@@ -19,7 +18,4 @@ def context():
         cwd=os.getcwd(),
         env=frozendict(os.environ),
         console=Console(theme=DEFAULT_CONSOLE_THEME),
-        stdin=sys.stdin,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
     )
