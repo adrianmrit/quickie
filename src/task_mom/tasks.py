@@ -10,52 +10,46 @@ import argparse
 import os
 import typing
 
-from .context import Context, GlobalContext
+from classoptions import ClassOptionsMetaclass
+from rich.prompt import Confirm, Prompt
+
+from .context import Context
 
 # Because vscode currently complains about type[Task]
 TaskType: typing.TypeAlias = type["Task"]
 
 
-def allow_unknown_args(cls):
-    """Decorator to allow unknown arguments.
+class TaskMeta(ClassOptionsMetaclass):
+    """Metaclass for tasks."""
 
-    This decorator can be used to allow extra arguments to be passed to the
-    task. This is useful for tasks that run other programs, since they can
-    pass the arguments to the program.
-
-    Example:
-        >>> from task_mom import tasks
-        >>>
-        >>> @tasks.allow_unknown_args
-        >>> class MyTask(tasks.Task):
-        >>>     def run(self, *args, **kwargs):
-        >>>         return args, kwargs
-        >>>
-        >>> task = MyTask()
-        >>> task(["--hello", "world", "extra", "args"])
-        (("extra", "args"), {"hello": "world"})
-    """
-    cls.allow_unknown_args = True
-    return cls
-
-
-def disallow_unknown_args(cls):
-    """Decorator to disallow unknown arguments.
-
-    In case the task inherits from a task that allows unknown arguments, this
-    decorator can be used to disallow them.
-    """
-    cls.allow_unknown_args = False
-    return cls
+    def __new__(mcs, name, bases, attrs):  # noqa: D102
+        cls = super().__new__(mcs, name, bases, attrs)
+        default_meta_attr_keys = {
+            o for o in dir(cls.DefaultMeta) if not o.startswith("__")
+        }
+        meta_attr_keys = {o for o in dir(cls._meta) if not o.startswith("__")}
+        invalid_keys = meta_attr_keys - default_meta_attr_keys
+        if invalid_keys:
+            raise AttributeError(
+                f"Invalid options in Meta for {cls}: {', '.join(invalid_keys)}. "
+                f"Valid options are: {', '.join(default_meta_attr_keys)}"
+            )
+        if cls._meta.abstract:
+            return cls
+        if not cls._meta.alias:
+            cls._meta.alias = name.lower()
+        return cls
 
 
-class Task:
+class Task(metaclass=TaskMeta):
     """Base class for all tasks."""
 
-    alias: str | typing.Iterable[str] | None = None
+    class DefaultMeta:
+        alias: str | typing.Iterable[str] = None
+        allow_unknown_args = False
+        abstract = False
 
-    allow_unknown_args = False
-    """Whether to allow extra arguments."""
+    _meta: DefaultMeta
 
     def __init__(
         self,
@@ -73,39 +67,71 @@ class Task:
         # We default to the class name in case the task was not called
         # from the CLI
         self.name = name or self.__class__.__name__
-        if context is None:
-            self.context = GlobalContext.get().copy()
-        else:
-            self.context = context.copy()
+        self.context = context.copy()
 
         self.parser = self.get_parser()
         self.add_args(self.parser)
 
-    def writeln(self, content: str):
-        """Write a line to stdout."""
-        self.context.stdout.write(content + "\n")
+    @property
+    def console(self):
+        """Get the console."""
+        return self.context.console
 
-    def errorln(self, content: str):
-        """Write a line to stderr."""
-        self.context.stderr.write(content + "\n")
+    def print(self, *args, **kwargs):
+        """Print a line."""
+        self.console.print(*args, **kwargs)
 
-    def input(self, prompt: str, required=True) -> str:
+    def printe(self, *args, **kwargs):
+        """Print an error message."""
+        kwargs.setdefault("style", "error")
+        self.console.print(*args, **kwargs)
+
+    def print_info(self, *args, **kwargs):
+        """Print an info message."""
+        kwargs.setdefault("style", "info")
+        self.console.print(*args, **kwargs)
+
+    def prompt(  # noqa: PLR0913
+        self,
+        prompt,
+        *,
+        password: bool = False,
+        choices: list[str] | None = None,
+        show_default: bool = True,
+        show_choices: bool = True,
+        default: typing.Any = ...,
+    ) -> str:
         """Prompt the user for input.
 
         Args:
-            prompt: The prompt to show to the user. Note that no newline or
-                ":" is added.
-            required: Whether the input is required. If ``False``, an empty
-                string can be returned.
+            prompt: The prompt message.
+            password: Whether to hide the input.
+            choices: List of choices.
+            show_default: Whether to show the default value.
+            show_choices: Whether to show the choices.
+            default: The default value.
         """
-        result = ""
-        while not result:
-            self.context.stdout.write(prompt)
-            self.context.stdout.flush()
-            result = self.context.stdin.readline().rstrip("\n")
-            if not result and not required:
-                return result
-        return result
+        return Prompt.ask(
+            prompt,
+            console=self.console,
+            password=password,
+            choices=choices,
+            show_default=show_default,
+            show_choices=show_choices,
+            default=default,
+            stream=self.context.stdin,
+        )
+
+    def confirm(self, prompt, default: bool = False) -> bool:
+        """Prompt the user for confirmation.
+
+        Args:
+            prompt: The prompt message.
+            default: The default value.
+        """
+        return Confirm.ask(
+            prompt, console=self.console, default=default, stream=self.context.stdin
+        )
 
     def get_parser(self, **kwargs) -> argparse.ArgumentParser:
         """Get the parser for the task.
@@ -180,7 +206,9 @@ class Task:
             args: Sequence of arguments to pass to the task.
         """
         parsed_args, extra = self.parse_args(
-            parser=self.parser, args=args, allow_unknown_args=self.allow_unknown_args
+            parser=self.parser,
+            args=args,
+            allow_unknown_args=self._meta.allow_unknown_args,
         )
         return self.run(*extra, **vars(parsed_args))
 

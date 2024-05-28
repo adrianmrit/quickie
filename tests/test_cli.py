@@ -87,7 +87,7 @@ def test_default(capsys):
         cli.main([])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert "[-h] [-V] [-l] [-m MODULE | -g] [task] [args ...]" in out
+    assert "[-h] [-V] [-l] [-m MODULE | -g]" in out
     assert not err
 
 
@@ -105,4 +105,4 @@ def test_main_no_args(capsys):
     assert exc_info.value.code in (0, 2)
     out, err = capsys.readouterr()
     out = out + err
-    assert "[-h] [-V] [-l] [-m MODULE | -g] [task] [args ...]" in out
+    assert "[-h] [-V] [-l] [-m MODULE | -g]" in out

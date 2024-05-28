@@ -1,18 +1,8 @@
 from frozendict import frozendict
 
-from task_mom.context import Context, GlobalContext
-
-
-class TestGlobalContext:
-    def test_singleton(self):
-        assert GlobalContext() is GlobalContext()
-        assert GlobalContext.get() is GlobalContext()
-        assert isinstance(GlobalContext.get(), Context)
-
 
 class TestContext:
-    def test_copy(self):
-        context = Context()
+    def test_copy(self, context):
         context_copy = context.copy()
         assert context is not context_copy
         assert context.cwd == context_copy.cwd

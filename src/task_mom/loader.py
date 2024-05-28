@@ -15,7 +15,10 @@ def load_tasks_from_module(module):
                 modules.append((sub_module, sub_namespace))
         for name, obj in module.__dict__.items():
             if isinstance(obj, type) and issubclass(obj, Task):
-                aliases = getattr(obj, "alias", None) or obj.__name__
+                meta = getattr(obj, "_meta")
+                if meta.abstract:
+                    continue
+                aliases = meta.alias
                 if isinstance(aliases, str):
                     aliases = [aliases]
                 for alias in aliases:

@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from typing import Any
 
 import pytest
+from rich.console import Console
 
 import task_mom.namespace
 from task_mom import tasks
@@ -46,9 +47,11 @@ class TestNamespace:
 
 
 class TestTask:
-    def test_parser(self):
-        @tasks.allow_unknown_args
+    def test_parser(self, context):
         class MyTask(tasks.Task):
+            class Meta:
+                allow_unknown_args = True
+
             def add_args(self, parser):
                 parser.add_argument("arg1")
                 parser.add_argument("--arg2", "-a2")
@@ -56,12 +59,12 @@ class TestTask:
             def run(self, *args, **kwargs):
                 return args, kwargs
 
-        task = MyTask()
+        task = MyTask(context=context)
 
         result = task(["value1", "--arg2", "value2", "value3"])
         assert result == (("value3",), {"arg1": "value1", "arg2": "value2"})
 
-        tasks.disallow_unknown_args(MyTask)
+        MyTask._meta.allow_unknown_args = False
 
         with pytest.raises(SystemExit) as exc_info:
             task(["value1", "--arg2", "value2", "value3"])
@@ -70,7 +73,7 @@ class TestTask:
         result = task(["value1", "--arg2", "value2"])
         assert result == ((), {"arg1": "value1", "arg2": "value2"})
 
-    def test_help(self):
+    def test_help(self, context):
         class Task1(tasks.Task):
             """Some documentation"""
 
@@ -81,12 +84,12 @@ class TestTask:
         class Task2(Task1):
             pass
 
-        task_1 = Task1("task")
-        task_2 = Task2()
+        task_1 = Task1("task", context=context)
+        task_2 = Task2(context=context)
 
         assert (
             task_1.get_help()
-            == f"usage: {os.path.basename(sys.argv[0])} task [-h] [--arg2 ARG2] arg1\n"
+            == f"usage: {context.program_name} task [-h] [--arg2 ARG2] arg1\n"
             "\n"
             "Some documentation\n"
             "\n"
@@ -99,7 +102,7 @@ class TestTask:
         )
 
         assert task_2.get_help() == (
-            f"usage: {os.path.basename(sys.argv[0])} Task2 [-h] [--arg2 ARG2] arg1\n"
+            f"usage: {context.program_name} Task2 [-h] [--arg2 ARG2] arg1\n"
             "\n"
             "positional arguments:\n"
             "  arg1\n"
@@ -109,66 +112,33 @@ class TestTask:
             "  --arg2 ARG2, -a2 ARG2\n"
         )
 
-    def test_run_required(self):
+    def test_run_required(self, context):
         class MyTask(tasks.Task):
             pass
 
-        task = MyTask()
+        task = MyTask(context=context)
         with pytest.raises(NotImplementedError):
             task.run()
 
-    def test_writeln(self):
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-
+    def test_print(self, context):
         class MyTask(tasks.Task):
             pass
 
-        context = Context(stdout=stdout, stderr=stderr)
+        context.console.file = io.StringIO()
         task = MyTask(context=context)
-        task.writeln("Hello world!")
+        task.print("Hello world!")
 
-        assert stdout.getvalue() == "Hello world!\n"
-        assert stderr.getvalue() == ""
+        assert context.console.file.getvalue() == "Hello world!\n"
 
-    def test_errorln(self):
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-
-        context = Context(stdout=stdout, stderr=stderr)
-
+    def test_printe(self, context):
         class MyTask(tasks.Task):
             pass
 
+        context.console.file = io.StringIO()
         task = MyTask(context=context)
-        task.errorln("Hello world!")
+        task.printe("Hello world!")
 
-        assert stdout.getvalue() == ""
-        assert stderr.getvalue() == "Hello world!\n"
-
-    def test_input(self):
-        # New pipe for stdin
-        stdin = io.StringIO()
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-
-        context = Context(stdin=stdin, stdout=stdout, stderr=stderr)
-        stdin.write("value1\n")
-        stdin.seek(0)
-
-        class MyTask(tasks.Task):
-            pass
-
-        task = MyTask(context=context)
-        result = task.input("Prompt message")
-        assert result == "value1"
-        assert stdout.getvalue() == "Prompt message"
-        assert not stderr.getvalue()
-
-        # No input on non required field
-        stdin.write("\n")
-        result = task.input("Prompt message", required=False)
-        assert result == ""
+        assert context.console.file.getvalue() == "Hello world!\n"
 
 
 class TestBaseSubprocessTask:
@@ -183,8 +153,8 @@ class TestBaseSubprocessTask:
             (None, "/example/cwd"),
         ],
     )
-    def test_cwd(self, attr, expected):
-        context = Context(cwd="/example/cwd")
+    def test_cwd(self, attr, expected, context):
+        context.cwd = "/example/cwd"
 
         class MyTask(tasks.BaseSubprocessTask):
             cwd = attr
@@ -192,8 +162,8 @@ class TestBaseSubprocessTask:
         task = MyTask(context=context)
         assert task.get_cwd() == expected
 
-    def test_env(self):
-        context = Context(env={"MYENV": "myvalue"})
+    def test_env(self, context):
+        context.env = {"MYENV": "myvalue"}
 
         class MyTask(tasks.BaseSubprocessTask):
             env = {"OTHERENV": "othervalue"}
@@ -203,20 +173,15 @@ class TestBaseSubprocessTask:
 
 
 class TestProgramTask:
-    def test_run(self, mocker):
+    def test_run(self, mocker, context):
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        stdin = io.StringIO()
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        context = Context(
-            cwd="/example/cwd",
-            env={"MYENV": "myvalue"},
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
-        )
+        context.cwd = "/example/cwd"
+        context.env = {"MYENV": "myvalue"}
+        context.stdin = io.StringIO()
+        context.stdout = io.StringIO()
+        context.stderr = io.StringIO()
 
         class MyTask(tasks.ProgramTask):
             program = "myprogram"
@@ -250,9 +215,9 @@ class TestProgramTask:
             check=False,
             cwd="/example/other",
             env={"MYENV": "myvalue", "OTHERENV": "othervalue"},
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
+            stdin=context.stdin,
+            stdout=context.stdout,
+            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -262,9 +227,9 @@ class TestProgramTask:
             check=False,
             cwd="/example/cwd",
             env={"MYENV": "myvalue"},
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
+            stdin=context.stdin,
+            stdout=context.stdout,
+            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -274,17 +239,17 @@ class TestProgramTask:
             check=False,
             cwd="/full/path",
             env={"MYENV": "myvalue"},
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
+            stdin=context.stdin,
+            stdout=context.stdout,
+            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
-    def test_program_required(self):
+    def test_program_required(self, context):
         class MyTask(tasks.ProgramTask):
             pass
 
-        task = MyTask()
+        task = MyTask(context=context)
         with pytest.raises(
             NotImplementedError, match="Either set program or override get_program()"
         ):
@@ -292,29 +257,15 @@ class TestProgramTask:
 
 
 class TestScriptTask:
-    def test_run(self, mocker):
+    def test_run(self, mocker, context):
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        class NamedStringIO(io.StringIO):
-            def __init__(self, name):
-                super().__init__()
-                self.name = name
-
-            def __repr__(self):
-                return f"<{self.name}>"
-
-        stdin = io.StringIO()
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-
-        context = Context(
-            cwd="/somedir",
-            env={"VAR": "VAL"},
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
-        )
+        context.cwd = "/somedir"
+        context.env = {"VAR": "VAL"}
+        context.stdin = io.StringIO()
+        context.stdout = io.StringIO()
+        context.stderr = io.StringIO()
 
         class MyTask(tasks.ScriptTask):
             script = "myscript"
@@ -337,9 +288,9 @@ class TestScriptTask:
             shell=True,
             cwd="/somedir",
             env={"VAR": "VAL"},
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
+            stdin=context.stdin,
+            stdout=context.stdout,
+            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
@@ -350,17 +301,17 @@ class TestScriptTask:
             shell=True,
             cwd="/somedir",
             env={"VAR": "VAL"},
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
+            stdin=context.stdin,
+            stdout=context.stdout,
+            stderr=context.stderr,
         )
         subprocess_run.reset_mock()
 
-    def test_script_required(self):
+    def test_script_required(self, context):
         class MyTask(tasks.ScriptTask):
             pass
 
-        task = MyTask()
+        task = MyTask(context=context)
         with pytest.raises(
             NotImplementedError, match="Either set script or override get_script()"
         ):
@@ -368,7 +319,7 @@ class TestScriptTask:
 
 
 class TestSerialTaskGroup:
-    def test_run(self, mocker):
+    def test_run(self, context):
         result = []
 
         class Task1(tasks.Task):
@@ -382,14 +333,14 @@ class TestSerialTaskGroup:
         class MyTask(tasks.SerialTaskGroup):
             task_classes = [Task1, Task2]
 
-        task = MyTask()
+        task = MyTask(context=context)
         task([])
 
         assert result == ["First", "Second"]
 
 
 class TestThreadTaskGroup:
-    def test_run(self, mocker):
+    def test_run(self, context):
         result = []
 
         class Task1(tasks.Task):
@@ -408,6 +359,6 @@ class TestThreadTaskGroup:
         class MyTask(tasks.ThreadTaskGroup):
             task_classes = [Task1, Task2]
 
-        task = MyTask()
+        task = MyTask(context=context)
         task([])
         assert result == ["First", "Second", "Third"]

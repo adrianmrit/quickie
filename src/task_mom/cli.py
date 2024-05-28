@@ -1,18 +1,29 @@
 """The CLI entry of task-mom."""
 
+import os
 import sys
+import tomllib
 import typing
 from argparse import ArgumentParser
 from pathlib import Path
 
-from task_mom.context import GlobalContext
+from frozendict import frozendict
+from rich import traceback
+from rich.console import Console
+from rich.theme import Theme
 
+import task_mom
+from task_mom.context import Context
+
+from . import settings
 from ._version import __version__ as version
 from .loader import load_tasks_from_module
 from .namespace import global_namespace
 from .utils import imports
 
 _DEFAULT_PATHS = (Path("mom_tasks"),)
+_HOME_PATH = Path.home() / "mom"
+_SETTINGS_PATH = _HOME_PATH / "settings.toml"
 
 
 class MomError(Exception):
@@ -29,26 +40,28 @@ class TaskNotFoundError(MomError):
 
     def __init__(self, task_name):
         """Initialize the error."""
-        super().__init__(f"Task {task_name!r} not found", exit_code=1)
+        super().__init__(f"Task '{task_name}' not found", exit_code=1)
 
 
-class ModuleNotFoundError(MomError):
-    """Raised when a module is not found."""
+# class ModuleNotFoundError(MomError):
+#     """Raised when a module is not found."""
 
-    def __init__(self, module_name):
-        """Initialize the error."""
-        super().__init__(f"Module {module_name!r} not found", exit_code=2)
+#     def __init__(self, module_name):
+#         """Initialize the error."""
+#         super().__init__(f"Module {module_name} not found", exit_code=2)
 
 
 def main(argv=None, *, task_paths=_DEFAULT_PATHS, raise_error=False):
     """Run the CLI."""
 
+    traceback.install(suppress=[task_mom])
+    main = Main(argv=argv, task_paths=task_paths)
     try:
-        Main(argv=argv, task_paths=task_paths)()
+        main()
     except MomError as e:
         if raise_error:
             raise e
-        print(f"Error: {e}")
+        main.console.print(f"Error: [error]{e}[/error]", style="error")
         sys.exit(e.exit_code)
 
 
@@ -58,6 +71,7 @@ class Main:
     def __init__(  # noqa: PLR0913
         self, *, argv=None, task_paths, stdin=None, stdout=None, stderr=None
     ):
+        self.settings = self.load_settings()
         """Initialize the CLI."""
         if argv is None:
             argv = sys.argv[1:]
@@ -67,12 +81,26 @@ class Main:
             stdin = sys.stdin
         if stdout is None:
             stdout = sys.stdout
+            console_file = None
+        else:
+            console_file = stdout
         if stderr is None:
             stderr = sys.stderr
 
         self.stdin = stdin
         self.stdout = stdout
         self.stderr = stderr
+        self.console = Console(theme=Theme(self.settings["style"]), file=console_file)
+
+        self.global_context = Context(
+            program_name=os.path.basename(sys.argv[0]),
+            cwd=os.getcwd(),
+            env=frozendict(os.environ),
+            console=self.console,
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+        )
 
         self.parser = ArgumentParser(description="A CLI tool that does your chores")
         module_or_global_group = self.parser.add_mutually_exclusive_group()
@@ -105,7 +133,7 @@ class Main:
             paths = [Path(main_args.module)]
         elif main_args.use_global:
             required = True
-            paths = [self.get_global_module_path()]
+            paths = [_HOME_PATH]
         else:
             required = False
             paths = _DEFAULT_PATHS
@@ -117,20 +145,28 @@ class Main:
         elif task_name is not None:
             self.run_task(task_name=task_name, args=task_args)
         else:
-            print(self.get_usage())
+            self.console.print(self.get_usage())
         self.parser.exit()
+
+    def load_settings(self):
+        """Load the console theme."""
+        defaults = frozendict({"style": settings.DEFAULT_CONSOLE_STYLE})
+        if _SETTINGS_PATH.exists():
+            with _SETTINGS_PATH.open("r") as f:
+                user_settings = tomllib.load(f)
+                user_settings["style"] = frozendict(
+                    defaults["style"] | user_settings.get("style", {})
+                )
+                return frozendict(user_settings)
+        return defaults
 
     def list_tasks(self, modules):
         """List the available tasks."""
-        print("Available tasks:\n")
+        self.console.print("Available tasks:\n", style="bold green")
         # TODO: Improve this
         for task_name in global_namespace._internal_namespace.keys():
-            print(f"  {task_name}")
-        print()
-
-    def get_global_module_path(self):
-        """Get the global tasks."""
-        return Path.home() / "mom_tasks"
+            self.console.print(f"  {task_name}", style="info")
+        self.console.print()
 
     def _partition_args(self, args):
         """Partition the arguments into main arguments and task arguments.
@@ -174,7 +210,7 @@ class Main:
                 load_tasks_from_module(module)
             except imports.InternalImportError as e:
                 if required:
-                    raise ModuleNotFoundError(path) from e
+                    raise e
 
     def get_usage(self):
         """Get the usage message."""
@@ -184,14 +220,11 @@ class Main:
         """Get a task by name."""
         try:
             task_class = global_namespace.get_task_class(task_name)
-            return task_class(name=task_name, context=GlobalContext.get())
+            return task_class(name=task_name, context=self.global_context)
         except KeyError:
-            raise TaskNotFoundError(f"Task {task_name!r} not found")
+            raise TaskNotFoundError(task_name)
 
     def run_task(self, task_name, args):
         """Run a task."""
         task = self.get_task(task_name)
-        try:
-            return task(args)
-        except Exception as e:
-            raise RuntimeError(f"Error running task {task_name!r}") from e
+        return task(args)

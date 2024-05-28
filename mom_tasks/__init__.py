@@ -10,7 +10,9 @@ MOM_NAMESPACES = {
 class HelloWorld(tasks.Task):
     """Hello world task."""
 
-    alias = "hello"
+    class Meta:
+        alias = "hello"
 
     def run(self, **kwargs):
-        print("Hello world!")
+        self.confirm("[info]Are you ready?[/info]")
+        self.print_info("Hello world!")
