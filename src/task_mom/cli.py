@@ -21,7 +21,7 @@ from .loader import load_tasks_from_module
 from .namespace import global_namespace
 from .utils import imports
 
-_DEFAULT_PATHS = (Path("mom_tasks"),)
+_DEFAULT_PATH = Path("mom_tasks")
 _HOME_PATH = Path.home() / "mom"
 _SETTINGS_PATH = _HOME_PATH / "settings.toml"
 
@@ -43,12 +43,12 @@ class TaskNotFoundError(MomError):
         super().__init__(f"Task '{task_name}' not found", exit_code=1)
 
 
-# class ModuleNotFoundError(MomError):
-#     """Raised when a module is not found."""
+class TasksModuleNotFoundError(MomError):
+    """Raised when a module is not found."""
 
-#     def __init__(self, module_name):
-#         """Initialize the error."""
-#         super().__init__(f"Module {module_name} not found", exit_code=2)
+    def __init__(self, module_name):
+        """Initialize the error."""
+        super().__init__(f"Tasks module {module_name} not found", exit_code=2)
 
 
 def main(argv=None, *, raise_error=False):
@@ -69,8 +69,8 @@ class Main:
     """Represents the CLI entry of task-mom."""
 
     def __init__(self, *, argv=None):  # noqa: PLR0913
-        self.settings = self.load_settings()
         """Initialize the CLI."""
+        self.settings = self.load_settings()
         if argv is None:
             argv = sys.argv[1:]
         self.argv = argv
@@ -111,16 +111,13 @@ class Main:
         main_args = self.parser.parse_args(main_args)
 
         if main_args.module is not None:
-            required = True
-            paths = [Path(main_args.module)]
+            tasks_module_path = Path(main_args.module)
         elif main_args.use_global:
-            required = True
-            paths = [_HOME_PATH]
+            tasks_module_path = _HOME_PATH
         else:
-            required = False
-            paths = _DEFAULT_PATHS
+            tasks_module_path = self.get_default_module_path()
 
-        modules = self.load_tasks(paths=paths, required=required)
+        modules = self.load_tasks(path=tasks_module_path)
 
         if main_args.list:
             self.list_tasks(modules)
@@ -181,18 +178,23 @@ class Main:
 
         return main_args, task_name, task_args
 
-    def load_tasks(self, *, paths: typing.Iterable[Path], required: bool):
+    def get_default_module_path(self):
+        """Get the default module path."""
+        current = Path.cwd()
+        while True:
+            path = current / _DEFAULT_PATH
+            if (path).exists():
+                return path
+            if current == current.parent:
+                break
+            current = current.parent
+        raise TasksModuleNotFoundError(_DEFAULT_PATH)
+
+    def load_tasks(self, *, path: Path):
         """Load tasks from the tasks module."""
         root = Path.cwd()
-        for path in paths:
-            try:
-                # we discard the module. The tasks should be registered
-                # in the global namespace
-                module = imports.import_from_path(root / path)
-                load_tasks_from_module(module)
-            except imports.InternalImportError as e:
-                if required:
-                    raise e
+        module = imports.import_from_path(root / path)
+        load_tasks_from_module(module)
 
     def get_usage(self):
         """Get the usage message."""
