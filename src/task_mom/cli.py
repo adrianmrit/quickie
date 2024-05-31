@@ -117,10 +117,10 @@ class Main:
         else:
             tasks_module_path = self.get_default_module_path()
 
-        modules = self.load_tasks(path=tasks_module_path)
+        self.load_tasks(path=tasks_module_path)
 
         if main_args.list:
-            self.list_tasks(modules)
+            self.list_tasks()
         elif task_name is not None:
             self.run_task(task_name=task_name, args=task_args)
         else:
@@ -139,7 +139,7 @@ class Main:
                 return frozendict(user_settings)
         return defaults
 
-    def list_tasks(self, modules):
+    def list_tasks(self):
         """List the available tasks."""
         self.console.print("Available tasks:\n", style="bold green")
         # TODO: Improve this
