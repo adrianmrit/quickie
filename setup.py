@@ -31,7 +31,14 @@ setup(
     },
     # Requires
     python_requires=">=3.12",
-    install_requires=["classoptions", "frozendict", "oslex", "python-dotenv", "rich"],
+    install_requires=[
+        "classoptions",
+        "frozendict",
+        "oslex",
+        "python-dotenv",
+        "rich",
+        "argcomplete",
+    ],
     setup_requires=[
         "pytest-runner",
         "setuptools-scm",

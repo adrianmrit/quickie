@@ -46,6 +46,9 @@ class _GlobalNamespace(NamespaceABC):
     def get_task_class(self, name: str) -> "TaskType":
         return self._internal_namespace[name]
 
+    def keys(self):
+        return self._internal_namespace.keys()
+
 
 global_namespace = _GlobalNamespace()
 """The global namespace."""

@@ -3,57 +3,30 @@
 import os
 import sys
 import tomllib
-import typing
-from argparse import ArgumentParser
 from pathlib import Path
 
+import argcomplete
 from frozendict import frozendict
 from rich import traceback
 from rich.console import Console
 from rich.theme import Theme
 
 import task_mom
-from task_mom.context import Context
 
 from . import settings
-from ._version import __version__ as version
-from .loader import load_tasks_from_module
+from .argparser import MomArgumentsParser
+from .context import Context
+from .errors import MomError, TaskNotFoundError
+from .loader import get_default_module_path, load_tasks_from_module
 from .namespace import global_namespace
 from .utils import imports
 
-_DEFAULT_PATH = Path("mom_tasks")
 _HOME_PATH = Path.home() / "mom"
 _SETTINGS_PATH = _HOME_PATH / "settings.toml"
 
 
-class MomError(Exception):
-    """Base class for task-mom errors."""
-
-    def __init__(self, message, *, exit_code):
-        """Initialize the error."""
-        super().__init__(message)
-        self.exit_code = exit_code
-
-
-class TaskNotFoundError(MomError):
-    """Raised when a task is not found."""
-
-    def __init__(self, task_name):
-        """Initialize the error."""
-        super().__init__(f"Task '{task_name}' not found", exit_code=1)
-
-
-class TasksModuleNotFoundError(MomError):
-    """Raised when a module is not found."""
-
-    def __init__(self, module_name):
-        """Initialize the error."""
-        super().__init__(f"Tasks module {module_name} not found", exit_code=2)
-
-
 def main(argv=None, *, raise_error=False):
     """Run the CLI."""
-
     traceback.install(suppress=[task_mom])
     main = Main(argv=argv)
     try:
@@ -84,48 +57,54 @@ class Main:
             console=self.console,
         )
 
-        self.parser = ArgumentParser(description="A CLI tool that does your chores")
-        module_or_global_group = self.parser.add_mutually_exclusive_group()
-        self.parser.add_argument("-V", "--version", action="version", version=version)
-        self.parser.add_argument("-l", "--list", action="store_true", help="List tasks")
-        module_or_global_group.add_argument(
-            "-m", "--module", type=str, help="The module to load tasks from"
-        )
-        module_or_global_group.add_argument(
-            "-g",
-            "--global",
-            action="store_true",
-            help="Use global defined tasks",
-            dest="use_global",
-        )
-        self.parser.add_argument("task", nargs="?", help="The task to run")
-        self.parser.add_argument(
-            "args", nargs="*", help="The arguments to pass to the task"
-        )
+        self.parser = MomArgumentsParser(main=self)
 
     def __call__(self):
         """A CLI tool that does your chores while you slack off."""
         # Help message for the cli.
         # Optionally accepts a task name to show the help message for it
-        main_args, task_name, task_args = self._partition_args(self.argv)
-        main_args = self.parser.parse_args(main_args)
+        argcomplete.autocomplete(self.parser)
+        namespace = self.parser.parse_args(self.argv)
 
-        if main_args.module is not None:
-            tasks_module_path = Path(main_args.module)
-        elif main_args.use_global:
-            tasks_module_path = _HOME_PATH
-        else:
-            tasks_module_path = self.get_default_module_path()
-
-        self.load_tasks(path=tasks_module_path)
-
-        if main_args.list:
+        self.load_tasks_from_namespace(namespace)
+        if namespace.suggest_auto_completion:
+            if namespace.suggest_auto_completion == "bash":
+                self.suggest_autocompletion_bash()
+            elif namespace.suggest_auto_completion == "zsh":
+                self.suggest_autocompletion_zsh()
+        elif namespace.list:
             self.list_tasks()
-        elif task_name is not None:
-            self.run_task(task_name=task_name, args=task_args)
+        elif namespace.task is not None:
+            self.run_task(task_name=namespace.task, args=namespace.args)
         else:
             self.console.print(self.get_usage())
         self.parser.exit()
+
+    def suggest_autocompletion_bash(self):
+        """Suggest autocompletion for bash."""
+        self.console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
+        self.console.print(
+            'eval "$(register-python-argcomplete mom)"',
+            style="bold green",
+        )
+
+    def suggest_autocompletion_zsh(self):
+        """Suggest autocompletion for zsh."""
+        self.console.print("Add the following to ~/.zshrc:")
+        self.console.prin(
+            'eval "$(register-python-argcomplete mom)"',
+            style="bold green",
+        )
+
+    def load_tasks_from_namespace(self, namespace):
+        """Load tasks from the namespace."""
+        if namespace.module is not None:
+            tasks_module_path = Path(namespace.module)
+        elif namespace.use_global:
+            tasks_module_path = _HOME_PATH
+        else:
+            tasks_module_path = get_default_module_path()
+        self.load_tasks(path=tasks_module_path)
 
     def load_settings(self):
         """Load the console theme."""
@@ -143,52 +122,9 @@ class Main:
         """List the available tasks."""
         self.console.print("Available tasks:\n", style="bold green")
         # TODO: Improve this
-        for task_name in global_namespace._internal_namespace.keys():
+        for task_name in global_namespace.keys():
             self.console.print(f"  {task_name}", style="info")
         self.console.print()
-
-    def _partition_args(self, args):
-        """Partition the arguments into main arguments and task arguments.
-
-        We need this to avoid interpreting task arguments as main arguments. Also
-        allows us to pass options to the task without using the `--` separator.
-        """
-        main_args = []
-        task_name = None
-        task_args = []
-        current = main_args
-        args = iter(args)
-        while arg := next(args, None):
-            # Everything after the task name is a task argument
-            if task_name is None:
-                # Check if we are passing a module before the task name
-                if arg == "-m" or arg.startswith("--module"):
-                    next_arg = next(args, None)
-                    # If value not provided, it should be caught by the parser
-                    if next_arg is not None:
-                        current.append(arg)
-                        current.append(next_arg)
-                        continue
-                # Check if we found the task name
-                elif not arg.startswith("-"):
-                    task_name = arg
-                    current = task_args
-                    continue
-            current.append(arg)
-
-        return main_args, task_name, task_args
-
-    def get_default_module_path(self):
-        """Get the default module path."""
-        current = Path.cwd()
-        while True:
-            path = current / _DEFAULT_PATH
-            if (path).exists():
-                return path
-            if current == current.parent:
-                break
-            current = current.parent
-        raise TasksModuleNotFoundError(_DEFAULT_PATH)
 
     def load_tasks(self, *, path: Path):
         """Load tasks from the tasks module."""

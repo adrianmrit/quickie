@@ -1,7 +1,25 @@
 """Task loader."""
 
+from pathlib import Path
+
+from task_mom.errors import TasksModuleNotFoundError
 from task_mom.namespace import Namespace, global_namespace
 from task_mom.tasks import Task
+
+_DEFAULT_PATH = Path("mom_tasks")
+
+
+def get_default_module_path():
+    """Get the default module path."""
+    current = Path.cwd()
+    while True:
+        path = current / _DEFAULT_PATH
+        if (path).exists():
+            return path
+        if current == current.parent:
+            break
+        current = current.parent
+    raise TasksModuleNotFoundError(_DEFAULT_PATH)
 
 
 def load_tasks_from_module(module):
