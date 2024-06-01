@@ -15,6 +15,8 @@ from rich.prompt import Confirm, Prompt
 
 from .context import Context
 
+MAX_SHORT_HELP_LENGTH = 50
+
 # Because vscode currently complains about type[Task]
 TaskType: typing.TypeAlias = type["Task"]
 
@@ -38,6 +40,13 @@ class TaskMeta(ClassOptionsMetaclass):
             return cls
         if not cls._meta.alias:
             cls._meta.alias = name.lower()
+
+        if cls.__doc__ and not cls._meta.abstract and not cls._meta.help:
+            cls._meta.help = cls.__doc__
+            short_help = cls.__doc__.split("\n")[0]
+            if len(short_help) > MAX_SHORT_HELP_LENGTH:
+                short_help = short_help[:MAX_SHORT_HELP_LENGTH] + "..."
+            cls._meta.short_help = short_help
         return cls
 
 
@@ -48,8 +57,13 @@ class Task(metaclass=TaskMeta):
         alias: str | typing.Iterable[str] = None
         allow_unknown_args = False
         abstract = False
+        help: str | None = None
+        short_help: str | None = None
 
     _meta: DefaultMeta
+
+    class Meta:
+        abstract = True
 
     def __init__(
         self,
@@ -229,6 +243,9 @@ class BaseSubprocessTask(Task):
     env: typing.Mapping[str, str] | None = None
     """The environment."""
 
+    class Meta:
+        abstract = True
+
     def get_cwd(self, *args, **kwargs) -> str:
         """Get the current working directory.
 
@@ -256,6 +273,9 @@ class ProgramTask(BaseSubprocessTask):
 
     program_args: typing.Sequence[str] | None = None
     """The program arguments. Defaults to the task arguments."""
+
+    class Meta:
+        abstract = True
 
     def get_program(self, *args, **kwargs) -> str:
         """Get the program to run.
@@ -310,6 +330,9 @@ class ScriptTask(BaseSubprocessTask):
 
     script: str | None = None
 
+    class Meta:
+        abstract = True
+
     def get_script(self, *args, **kwargs) -> str:
         """Get the script to run.
 
@@ -350,6 +373,9 @@ class _TaskGroup(Task):
     task_classes = ()
     """The task classes to run."""
 
+    class Meta:
+        abstract = True
+
     def get_tasks(self, *args, **kwargs) -> typing.Sequence[Task]:
         """Get the tasks to run."""
         return [task_cls(context=self.context) for task_cls in self.task_classes]
@@ -368,6 +394,9 @@ class _TaskGroup(Task):
 class SerialTaskGroup(_TaskGroup):
     """Base class for tasks that run other tasks in sequence."""
 
+    class Meta:
+        abstract = True
+
     @typing.override
     def run(self, *args, **kwargs):
         for task in self.get_tasks(*args, **kwargs):
@@ -379,6 +408,9 @@ class ThreadTaskGroup(_TaskGroup):
 
     max_workers = None
     """The maximum number of workers to use."""
+
+    class Meta:
+        abstract = True
 
     def get_max_workers(self, *args, **kwargs) -> int | None:
         """Get the maximum number of workers to use."""

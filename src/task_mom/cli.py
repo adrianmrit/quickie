@@ -120,11 +120,33 @@ class Main:
 
     def list_tasks(self):
         """List the available tasks."""
-        self.console.print("Available tasks:\n", style="bold green")
-        # TODO: Improve this
-        for task_name in global_namespace.keys():
-            self.console.print(f"  {task_name}", style="info")
-        self.console.print()
+        import rich.text
+        import rich.tree
+
+        tree = rich.tree.Tree(
+            "Available tasks:", style="bold green", guide_style="info"
+        )
+        node_by_namespace = {}
+        for task_path, task in sorted(global_namespace.items(), key=lambda x: x[0]):
+            if ":" in task_path:
+                namespace, task_name = task_path.rsplit(":", 1)
+            else:
+                task_name = task_path
+                namespace = ""
+
+            task_info = rich.text.Text(task_name, style="info")
+            if task._meta.short_help:
+                task_info.append(f"\n  {task._meta.short_help}", style="green")
+            if namespace:
+                if namespace not in node_by_namespace:
+                    node_by_namespace[namespace] = tree.add(
+                        namespace, style="bold yellow", guide_style="yellow"
+                    )
+                node = node_by_namespace[namespace]
+            else:
+                node = tree
+            node.add(task_info)
+        self.console.print(tree)
 
     def load_tasks(self, *, path: Path):
         """Load tasks from the tasks module."""

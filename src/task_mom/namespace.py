@@ -49,6 +49,12 @@ class _GlobalNamespace(NamespaceABC):
     def keys(self):
         return self._internal_namespace.keys()
 
+    def values(self):
+        return self._internal_namespace.values()
+
+    def items(self):
+        return self._internal_namespace.items()
+
 
 global_namespace = _GlobalNamespace()
 """The global namespace."""
