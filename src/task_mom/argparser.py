@@ -1,9 +1,12 @@
 """Custom argument parser for task-mom."""
 
+import os
 import typing
 from argparse import ArgumentParser
 
 import argcomplete
+
+from task_mom.errors import MomError
 
 from ._version import __version__ as version
 from .namespace import global_namespace
@@ -21,7 +24,60 @@ class _TaskCompleter:
     def __call__(self, prefix, action, parser, parsed_args):
         try:
             self.main.load_tasks_from_namespace(parsed_args)
-            return [key for key in global_namespace.keys() if key.startswith(prefix)]
+            return {
+                key: task._meta.short_help or ""
+                for key, task in global_namespace.items()
+                if key.startswith(prefix)
+            }
+        except MomError:
+            pass
+        except Exception as e:
+            argcomplete.warn("Autocompletion failed with error:", e)
+
+
+class _ArgsCompleter:
+    def __init__(self, main: Main):
+        self.main = main
+
+    def get_file_names(self, prefix):
+        target_dir = os.path.dirname(prefix)
+        try:
+            names = os.listdir(target_dir or ".")
+        except Exception:
+            return  # empty iterator
+        incomplete_part = os.path.basename(prefix)
+        # Iterate on target_dir entries and filter on given predicate
+        for name in names:
+            if not name.startswith(incomplete_part):
+                continue
+            candidate = os.path.join(target_dir, name)
+            yield candidate + "/" if os.path.isdir(candidate) else candidate
+
+    def get_task_args(self, prefix, parsed_args):
+        try:
+            try:
+                self.main.load_tasks_from_namespace(parsed_args)
+                task = self.main.get_task(parsed_args.task)
+            except MomError:
+                return
+            for action in task.parser._actions:
+                if action.option_strings:
+                    for option in action.option_strings:
+                        if option.startswith(prefix):
+                            yield option, action.help
+        except Exception as e:
+            argcomplete.warn("Autocompletion failed with error:", e)
+
+    def __call__(self, prefix, action, parser, parsed_args):
+        if not parsed_args.task:
+            return {}
+        options = {}
+        try:
+            options.update(self.get_task_args(prefix, parsed_args))
+            for name in self.get_file_names(prefix):
+                if name not in options:
+                    options[name] = ""
+            return options
         except Exception as e:
             argcomplete.warn("Autocompletion failed with error:", e)
 
@@ -50,11 +106,13 @@ class MomArgumentsParser(ArgumentParser):
             help="Suggest autocompletion for the shell",
             dest="suggest_auto_completion",
             choices=["bash", "zsh"],
-        )
+        ).completer = argcomplete.ChoicesCompleter(["bash", "zsh"])
         self.add_argument(
             "task", nargs="?", help="The task to run"
         ).completer = _TaskCompleter(main)
-        self.add_argument("args", nargs="*", help="The arguments to pass to the task")
+        self.add_argument(
+            "args", nargs="*", help="The arguments to pass to the task"
+        ).completer = _ArgsCompleter(main)
 
     @typing.override
     def parse_known_args(self, args=None, namespace=None):
