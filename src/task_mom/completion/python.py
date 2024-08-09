@@ -58,7 +58,7 @@ class PytestCompleter(PathCompleter):
     ) -> typing.Generator[str, None, None]:
         """Complete the module."""
         try:
-            tree = ast.parse(self.read_python_file(), file_path)
+            tree = ast.parse(self.read_python_file(file_path), file_path)
         except SyntaxError:
             return
 
