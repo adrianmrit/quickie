@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 import argcomplete
 
 from task_mom._version import __version__ as version
-from task_mom.completion._internal import ArgsCompleter, TaskCompleter
+from task_mom.completion._internal import TaskCompleter
 
 
 class MomArgumentsParser(ArgumentParser):
@@ -37,9 +37,8 @@ class MomArgumentsParser(ArgumentParser):
         self.add_argument(
             "task", nargs="?", help="The task to run"
         ).completer = TaskCompleter(main)
-        self.add_argument(
-            "args", nargs="*", help="The arguments to pass to the task"
-        ).completer = ArgsCompleter(main)
+        # This does not need completion as it is handled by the task completer
+        self.add_argument("args", nargs="*", help="The arguments to pass to the task")
 
     @typing.override
     def parse_known_args(self, args=None, namespace=None):

@@ -13,8 +13,9 @@ class TestGlobalNamespace:
         class MyTask(tasks.Task):
             pass
 
-        task_mom.namespace.global_namespace.register(MyTask, "mytask")
-        assert task_mom.namespace.get_task_class("mytask") is MyTask
+        root_namespace = task_mom.namespace.RootNamespace()
+        root_namespace.register(MyTask, "mytask")
+        assert root_namespace.get_task_class("mytask") is MyTask
 
 
 class TestNamespace:
@@ -28,17 +29,18 @@ class TestNamespace:
         class MyTask3(tasks.Task):
             pass
 
-        namespace = task_mom.namespace.Namespace("tests")
+        root_namespace = task_mom.namespace.RootNamespace()
+        namespace = task_mom.namespace.Namespace("tests", parent=root_namespace)
         namespace.register(MyTask, "mytask")
         namespace.register(MyTask, "alias")
         namespace.register(MyTask2, "mytask2")
         sub_namespace = task_mom.namespace.Namespace("sub", parent=namespace)
         sub_namespace.register(MyTask3, "mytask3")
 
-        assert task_mom.namespace.get_task_class("tests:mytask") is MyTask
-        assert task_mom.namespace.get_task_class("tests:alias") is MyTask
-        assert task_mom.namespace.get_task_class("tests:mytask2") is MyTask2
-        assert task_mom.namespace.get_task_class("tests:sub:mytask3") is MyTask3
+        assert root_namespace.get_task_class("tests:mytask") is MyTask
+        assert root_namespace.get_task_class("tests:alias") is MyTask
+        assert root_namespace.get_task_class("tests:mytask2") is MyTask2
+        assert root_namespace.get_task_class("tests:sub:mytask3") is MyTask3
         assert sub_namespace.get_task_class("mytask3") is MyTask3
 
 

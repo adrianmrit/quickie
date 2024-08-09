@@ -46,13 +46,17 @@ class BaseCompleter(argcomplete.completers.BaseCompleter):
 class PathCompleter(BaseCompleter):
     """For auto-completing file paths."""
 
+    def get_pre_filtered_paths(self, target_dir: str) -> typing.Iterator[str]:
+        """Get path names in the target directory."""
+        try:
+            return os.listdir(target_dir or ".")
+        except Exception:
+            return []
+
     def get_paths(self, prefix: str) -> typing.Generator[str, None, None]:
         """Get path names that match the prefix."""
         target_dir = os.path.dirname(prefix)
-        try:
-            names = os.listdir(target_dir or ".")
-        except Exception:
-            return  # empty iterator
+        names = self.get_pre_filtered_paths(target_dir)
         incomplete_part = os.path.basename(prefix)
         # Iterate on target_dir entries and filter on given predicate
         for name in names:

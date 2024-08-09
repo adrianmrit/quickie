@@ -3,6 +3,7 @@
 import os
 import sys
 import tomllib
+from functools import cached_property
 from pathlib import Path
 
 import argcomplete
@@ -17,7 +18,7 @@ from task_mom.argparser import MomArgumentsParser
 from task_mom.context import Context
 from task_mom.errors import MomError, TaskNotFoundError
 from task_mom.loader import get_default_module_path, load_tasks_from_module
-from task_mom.namespace import global_namespace
+from task_mom.namespace import RootNamespace
 from task_mom.utils import imports
 
 _HOME_PATH = Path.home() / "mom"
@@ -101,6 +102,11 @@ class Main:
             self.console.print(self.get_usage())
         self.parser.exit()
 
+    @cached_property
+    def tasks_namespace(self):
+        """Get the namespace."""
+        return RootNamespace()
+
     def suggest_autocompletion_bash(self):
         """Suggest autocompletion for bash."""
         self.console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
@@ -148,7 +154,7 @@ class Main:
             "Available tasks:", style="bold green", guide_style="info"
         )
         node_by_namespace = {}
-        for task_path, task in sorted(global_namespace.items(), key=lambda x: x[0]):
+        for task_path, task in sorted(self.tasks_namespace.items(), key=lambda x: x[0]):
             if ":" in task_path:
                 namespace, task_name = task_path.rsplit(":", 1)
             else:
@@ -173,7 +179,7 @@ class Main:
         """Load tasks from the tasks module."""
         root = Path.cwd()
         module = imports.import_from_path(root / path)
-        load_tasks_from_module(module)
+        load_tasks_from_module(module, namespace=self.tasks_namespace)
 
     def get_usage(self):
         """Get the usage message."""
@@ -182,7 +188,7 @@ class Main:
     def get_task(self, task_name):
         """Get a task by name."""
         try:
-            task_class = global_namespace.get_task_class(task_name)
+            task_class = self.tasks_namespace.get_task_class(task_name)
             return task_class(name=task_name, context=self.global_context)
         except KeyError:
             raise TaskNotFoundError(task_name)

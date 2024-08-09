@@ -24,7 +24,7 @@ class PytestCompleter(PathCompleter):
             if not prefix.endswith("::"):
                 partial_name = node_names.pop()
         else:
-            file_path = ""
+            file_path = prefix
 
         if file_path.endswith(".py"):
             pre_resolved_path = file_path
@@ -38,19 +38,29 @@ class PytestCompleter(PathCompleter):
                 )
             ]
         else:
-            paths = []
-            for path in self.get_paths(prefix):
-                paths.append(path)
-                if path.endswith(".py"):
-                    paths.append(f"{path}::")
-            return paths
+            return super().complete(prefix=file_path, **kwargs)
+
+    @typing.override
+    def get_paths(self, prefix: str) -> typing.Generator[str, None, None]:
+        paths = super().get_paths(prefix)
+        for path in paths:
+            yield path
+            if path.endswith(".py"):
+                yield f"{path}::"
+
+    def read_python_file(self, file_path: str) -> str:
+        """Read the python file to a string."""
+        with open(file_path) as file:
+            return file.read()
 
     def get_python_paths(
         self, file_path: str, python_path: list[str], partial_name: str | None
     ) -> typing.Generator[str, None, None]:
         """Complete the module."""
-        with open(file_path) as file:
-            tree = ast.parse(file.read(), file_path)
+        try:
+            tree = ast.parse(self.read_python_file(), file_path)
+        except SyntaxError:
+            return
 
         # resolve the tree up to the last node
         for item in python_path:

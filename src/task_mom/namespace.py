@@ -34,7 +34,11 @@ class NamespaceABC(abc.ABC):
         """Get a task class by name."""
 
 
-class _GlobalNamespace(NamespaceABC):
+# TODO: Use a single namespace class with an optional parent parameter
+class RootNamespace(NamespaceABC):
+    """Root namespace for tasks."""
+
+    @typing.override
     def __init__(self):
         self._internal_namespace = {}
 
@@ -47,19 +51,16 @@ class _GlobalNamespace(NamespaceABC):
         return self._internal_namespace[name]
 
     def keys(self):
+        """Return the keys of the namespace."""
         return self._internal_namespace.keys()
 
     def values(self):
+        """Return the values of the namespace."""
         return self._internal_namespace.values()
 
     def items(self):
+        """Return the items of the namespace."""
         return self._internal_namespace.items()
-
-
-global_namespace = _GlobalNamespace()
-"""The global namespace."""
-get_task_class = global_namespace.get_task_class
-"""Get a task class by name."""
 
 
 class Namespace(NamespaceABC):
@@ -73,7 +74,7 @@ class Namespace(NamespaceABC):
     can be referred to as "project.subproject.task1".
     """
 
-    def __init__(self, name: str, *, parent: NamespaceABC | None = None):
+    def __init__(self, name: str, *, parent: NamespaceABC):
         """Initialize the namespace.
 
         Args:
@@ -83,11 +84,7 @@ class Namespace(NamespaceABC):
             parent: The parent namespace.
         """
         self._namespace = name
-
-        if parent is None:
-            self._parent = global_namespace
-        else:
-            self._parent = parent
+        self._parent = parent
 
     @typing.override
     def get_store_ptr(self):
