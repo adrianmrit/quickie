@@ -31,3 +31,10 @@ class InstallLocal(tasks.ScriptTask):
     rm -rf build
     rm -rf src/task_mom.egg-info
     """
+
+
+class InstallDev(tasks.ScriptTask):
+    class Meta:
+        alias = "install.dev"
+
+    script = "pip install .[dev]"

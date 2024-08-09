@@ -6,7 +6,7 @@ from task_mom.errors import TasksModuleNotFoundError
 from task_mom.namespace import Namespace, global_namespace
 from task_mom.tasks import Task
 
-_DEFAULT_PATH = Path("mom_tasks")
+_DEFAULT_PATH = Path("__mom__")
 
 
 def get_default_module_path():

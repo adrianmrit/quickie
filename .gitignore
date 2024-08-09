@@ -11,3 +11,5 @@ __pycache__/
 
 ### VisualStudioCode ###
 .vscode/*
+/build
+*.egg-info

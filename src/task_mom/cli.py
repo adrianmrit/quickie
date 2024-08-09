@@ -12,14 +12,13 @@ from rich.console import Console
 from rich.theme import Theme
 
 import task_mom
-
-from . import settings
-from .argparser import MomArgumentsParser
-from .context import Context
-from .errors import MomError, TaskNotFoundError
-from .loader import get_default_module_path, load_tasks_from_module
-from .namespace import global_namespace
-from .utils import imports
+from task_mom import settings
+from task_mom.argparser import MomArgumentsParser
+from task_mom.context import Context
+from task_mom.errors import MomError, TaskNotFoundError
+from task_mom.loader import get_default_module_path, load_tasks_from_module
+from task_mom.namespace import global_namespace
+from task_mom.utils import imports
 
 _HOME_PATH = Path.home() / "mom"
 _SETTINGS_PATH = _HOME_PATH / "settings.toml"
@@ -63,9 +62,31 @@ class Main:
         """A CLI tool that does your chores while you slack off."""
         # Help message for the cli.
         # Optionally accepts a task name to show the help message for it
-        argcomplete.autocomplete(self.parser)
-        namespace = self.parser.parse_args(self.argv)
 
+        if os.environ.get("_ARGCOMPLETE"):
+            comp_line = os.environ["COMP_LINE"]
+            comp_point = int(os.environ["COMP_POINT"])
+
+            # Hack to parse the arguments
+            (_, _, _, comp_words, _) = argcomplete.lexers.split_line(
+                comp_line, comp_point
+            )
+
+            # _ARGCOMPLETE is set by the shell script to tell us where comp_words
+            # should start, based on what we're completing.
+            # we ignore teh program name, hence no -1
+            start = int(os.environ["_ARGCOMPLETE"])
+            comp_words = comp_words[start:]
+            namespace = self.parser.parse_args(comp_words)
+            if namespace.task:
+                self.load_tasks_from_namespace(namespace)
+                task = self.get_task(namespace.task)
+                os.environ["_ARGCOMPLETE"] = str(comp_words.index(namespace.task))
+                argcomplete.autocomplete(task.parser)
+            else:
+                argcomplete.autocomplete(self.parser)
+
+        namespace = self.parser.parse_args(self.argv)
         self.load_tasks_from_namespace(namespace)
         if namespace.suggest_auto_completion:
             if namespace.suggest_auto_completion == "bash":
