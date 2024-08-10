@@ -81,8 +81,9 @@ class hello(Task):
 
 
 class ScriptTaskExample(ScriptTask):
-    alias = "echo"
-    allow_unknonw_args = True
+    class Meta:
+        alias = "echo"
+        allow_unknown_args = True
 
     def get_script(self, *args):
         return " ".join(["echo", *args])
