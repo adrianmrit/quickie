@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 
 import argcomplete
 
-from quickie._version import __version__ as version
+from quickie._meta import __version__ as version
 from quickie.completion._internal import TaskCompleter
 
 

@@ -1,5 +1,5 @@
 """Read the version from installed package data."""
 
-import importlib.metadata
+from _meta import __version__
 
-__version__ = importlib.metadata.Distribution.from_name("quickie").version
+__all__ = ["__version__"]
