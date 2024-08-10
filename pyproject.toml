@@ -57,17 +57,20 @@ path = "src/quickie/_meta.py"
 exclude = ["__quickie"]
 
 [tool.pytest.ini_options]
-addopts = [
-    "--verbose",
-    "--cov quickie",
-    "--cov-report html:htmlcov"
-]
+addopts = ["-vv"]
 markers = [
     "unit",
     "integration"
 ]
 python_files = "tests/*.py"
 mock_use_standalone_module = true
+
+[tool.coverage.run]
+source = ["src/quickie"]
+omit = [
+    "tests/*",
+    "__quickie/*"
+]
 
 [tool.ruff]
 
