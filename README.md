@@ -1,6 +1,5 @@
-# Quickie - A CLI tool that does your chores while you slack off
+# Quickie - A CLI tool for quick tasks
 
-[![Code style: yapf](https://img.shields.io/badge/code%20style-yapf-blue)](https://github.com/google/yapf)
 [![License](https://img.shields.io/github/license/adrianmrit/quickie)](https://github.com/adrianmrit/quickie/blob/master/LICENSE)
 
 ## Getting Started
@@ -15,7 +14,7 @@ Some prerequisites need to be installed.
 
 The recommended way to install `quickie` is via `pipx`.
 
-With `pipx` you can install `quickie` in an isolated environment, without polluting your global Python environment.
+With `pipx` you can add the `qck` command and the package in an isolated environment, without polluting your global Python environment.
 
 See the [pipx installation instructions](https://pipx.pypa.io/stable/installation/)
 
@@ -55,4 +54,48 @@ autoload -Uz compinit && compinit
 
 ## Usage
 
-To be done.
+Tasks are configured under a `__quickie.py` or `__quickie` python module in the current directory.
+If using a `__quickie` directory, the tasks are defined in the `__quickie/__init__.py` file.
+
+Tasks are defined as classes, though factory functions are also supported.
+
+### Why define tasks in Python?
+
+While many existing similar tools use YAML, TOML or custom formats to define tasks, `quickie` uses Python for the following reasons:
+
+- Built-in syntax highlighting and linting
+- Supported by most editors and IDEs
+- Easy to use and understand
+- Extensible and powerful
+
+### Quick Example
+
+Here is a simple example of a `__quickie.py` file:
+
+```python
+from quickie.tasks import Task, ScriptTask
+
+class hello(Task):
+    def run(self):
+        print("Hello, world!")
+
+
+class ScriptTaskExample(ScriptTask):
+    alias = "echo"
+    allow_unknonw_args = True
+
+    def get_script(self, *args):
+        return " ".join(["echo", *args])
+```
+
+You can run the `Hello` task with the following command:
+
+```sh
+qck hello
+```
+
+And the `ScriptTaskExample` task with:
+
+```sh
+qck echo "Hello, world!"
+```
