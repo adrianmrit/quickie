@@ -14,7 +14,7 @@ class ArgumentsParser(ArgumentParser):
 
     @typing.override
     def __init__(self, main):
-        super().__init__(description="A CLI tool that does your chores")
+        super().__init__(description="A CLI tool for quick tasks.")
         module_or_global_group = self.add_mutually_exclusive_group()
         self.add_argument("-V", "--version", action="version", version=version)
         self.add_argument("-l", "--list", action="store_true", help="List tasks")

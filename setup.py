@@ -15,6 +15,8 @@ _TEST_REQUIRES = [
 
 setup(
     # Metadata
+    name="quickie",
+    version=_INFO["__version__"],
     author=_INFO["__author__"],
     author_email=_INFO["__email__"],
     url=_INFO["__home__"],

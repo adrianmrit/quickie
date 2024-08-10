@@ -57,10 +57,7 @@ class Main:
         self.parser = ArgumentsParser(main=self)
 
     def __call__(self):
-        """A CLI tool that does your chores while you slack off."""
-        # Help message for the cli.
-        # Optionally accepts a task name to show the help message for it
-
+        """Run the CLI."""
         if os.environ.get("_ARGCOMPLETE"):
             comp_line = os.environ["COMP_LINE"]
             comp_point = int(os.environ["COMP_POINT"])
