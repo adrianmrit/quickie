@@ -1,9 +1,9 @@
-from task_mom import tasks
+from quickie import tasks
 
 from . import tests
 from .tests import Test  # noqa: F401
 
-MOM_NAMESPACES = {
+QCK_NAMESPACES = {
     "tests": tests,
 }
 
@@ -29,7 +29,7 @@ class InstallLocal(tasks.ScriptTask):
     script = """
     pipx install . --force
     rm -rf build
-    rm -rf src/task_mom.egg-info
+    rm -rf src/quickie.egg-info
     """
 
 

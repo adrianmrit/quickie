@@ -1,8 +1,8 @@
-from task_mom import tasks
+from quickie import tasks
 
 from . import nested
 
-MOM_NAMESPACES = {
+QCK_NAMESPACES = {
     "nested": nested,
 }
 

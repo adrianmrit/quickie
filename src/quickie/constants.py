@@ -1,12 +1,12 @@
-"""Settings for task_mom."""
+"""Settings for quickie."""
 
 from pathlib import Path
 
 from frozendict import frozendict
 
-HOME_PATH = Path.home() / "mom"
+HOME_PATH = Path.home() / "Quickie"
 SETTINGS_PATH = HOME_PATH / "settings.toml"
-TASKS_PATH = Path("__mom__")
+TASKS_PATH = Path("__quickie")
 
 DEFAULT_CONSOLE_STYLE = frozendict(
     {

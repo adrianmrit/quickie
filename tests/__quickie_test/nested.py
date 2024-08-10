@@ -1,4 +1,4 @@
-from task_mom import tasks
+from quickie import tasks
 
 
 class Other(tasks.ScriptTask):

@@ -1,4 +1,4 @@
-# task-mom Change Log
+# Quickie Change Log
 
 ## Release 0.1.0
 

@@ -1,14 +1,14 @@
-"""Arg completers for task-mom CLI."""
+"""Arg completers for quickie CLI."""
 
 from __future__ import annotations
 
 import typing
 
-from task_mom.completion.base import BaseCompleter
-from task_mom.errors import MomError
+from quickie.completion.base import BaseCompleter
+from quickie.errors import QuickieError
 
 if typing.TYPE_CHECKING:
-    from task_mom.cli import Main as TMain  # pragma: no cover
+    from quickie.cli import Main as TMain  # pragma: no cover
 
 
 class TaskCompleter(BaseCompleter):
@@ -27,5 +27,5 @@ class TaskCompleter(BaseCompleter):
                 for key, task in self.main.tasks_namespace.items()
                 if key.startswith(prefix)
             }
-        except MomError:
+        except QuickieError:
             pass

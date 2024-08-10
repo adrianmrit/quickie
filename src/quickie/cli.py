@@ -1,4 +1,4 @@
-"""The CLI entry of task-mom."""
+"""The CLI entry of quickie."""
 
 import os
 import sys
@@ -12,23 +12,23 @@ from rich import traceback
 from rich.console import Console
 from rich.theme import Theme
 
-import task_mom
-from task_mom import constants
-from task_mom.argparser import MomArgumentsParser
-from task_mom.context import Context
-from task_mom.errors import MomError, TaskNotFoundError
-from task_mom.loader import get_default_module_path, load_tasks_from_module
-from task_mom.namespace import RootNamespace
-from task_mom.utils import imports
+import quickie
+from quickie import constants
+from quickie.argparser import ArgumentsParser
+from quickie.context import Context
+from quickie.errors import QuickieError, TaskNotFoundError
+from quickie.loader import get_default_module_path, load_tasks_from_module
+from quickie.namespace import RootNamespace
+from quickie.utils import imports
 
 
 def main(argv=None, *, raise_error=False):
     """Run the CLI."""
-    traceback.install(suppress=[task_mom])
+    traceback.install(suppress=[quickie])
     main = Main(argv=argv)
     try:
         main()
-    except MomError as e:
+    except QuickieError as e:
         if raise_error:
             raise e
         main.console.print(f"Error: [error]{e}[/error]", style="error")
@@ -36,7 +36,7 @@ def main(argv=None, *, raise_error=False):
 
 
 class Main:
-    """Represents the CLI entry of task-mom."""
+    """Represents the CLI entry of quickie."""
 
     def __init__(self, *, argv=None):  # noqa: PLR0913
         """Initialize the CLI."""
@@ -54,7 +54,7 @@ class Main:
             console=self.console,
         )
 
-        self.parser = MomArgumentsParser(main=self)
+        self.parser = ArgumentsParser(main=self)
 
     def __call__(self):
         """A CLI tool that does your chores while you slack off."""
@@ -108,7 +108,7 @@ class Main:
         """Suggest autocompletion for bash."""
         self.console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
         self.console.print(
-            'eval "$(register-python-argcomplete mom)"',
+            'eval "$(register-python-argcomplete qck)"',
             style="bold green",
         )
 
@@ -116,7 +116,7 @@ class Main:
         """Suggest autocompletion for zsh."""
         self.console.print("Add the following to ~/.zshrc:")
         self.console.print(
-            'eval "$(register-python-argcomplete mom)"',
+            'eval "$(register-python-argcomplete qck)"',
             style="bold green",
         )
 

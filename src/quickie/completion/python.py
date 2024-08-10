@@ -1,9 +1,9 @@
-"""Python completers for task_mom."""
+"""Python completers for quickie."""
 
 import ast
 import typing
 
-from task_mom.completion.base import PathCompleter
+from quickie.completion.base import PathCompleter
 
 
 class PytestCompleter(PathCompleter):

@@ -1,6 +1,6 @@
 """Base classes for tasks.
 
-Tasks are the main building blocks of task-mom. They are like self-contained
+Tasks are the main building blocks of quickie. They are like self-contained
 programs that can be run from the command line. They can be used to run
 commands, or to run other tasks. They can also be used to group other tasks
 together.
@@ -423,7 +423,7 @@ class ThreadTaskGroup(_TaskGroup):
         tasks = self.get_tasks(*args, **kwargs)
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.get_max_workers(),
-            thread_name_prefix=f"task-mom-parallel-task.{self.name}",
+            thread_name_prefix=f"quickie-parallel-task.{self.name}",
         ) as executor:
             futures = [
                 executor.submit(self.run_task, task, *args, **kwargs) for task in tasks

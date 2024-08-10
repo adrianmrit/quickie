@@ -4,8 +4,8 @@ from typing import Any
 
 import pytest
 
-import task_mom.namespace
-from task_mom import tasks
+import quickie.namespace
+from quickie import tasks
 
 
 class TestGlobalNamespace:
@@ -13,7 +13,7 @@ class TestGlobalNamespace:
         class MyTask(tasks.Task):
             pass
 
-        root_namespace = task_mom.namespace.RootNamespace()
+        root_namespace = quickie.namespace.RootNamespace()
         root_namespace.register(MyTask, "mytask")
         assert root_namespace.get_task_class("mytask") is MyTask
 
@@ -29,12 +29,12 @@ class TestNamespace:
         class MyTask3(tasks.Task):
             pass
 
-        root_namespace = task_mom.namespace.RootNamespace()
-        namespace = task_mom.namespace.Namespace("tests", parent=root_namespace)
+        root_namespace = quickie.namespace.RootNamespace()
+        namespace = quickie.namespace.Namespace("tests", parent=root_namespace)
         namespace.register(MyTask, "mytask")
         namespace.register(MyTask, "alias")
         namespace.register(MyTask2, "mytask2")
-        sub_namespace = task_mom.namespace.Namespace("sub", parent=namespace)
+        sub_namespace = quickie.namespace.Namespace("sub", parent=namespace)
         sub_namespace.register(MyTask3, "mytask3")
 
         assert root_namespace.get_task_class("tests:mytask") is MyTask

@@ -1,16 +1,16 @@
-"""Custom argument parser for task-mom."""
+"""Custom argument parser for quickie."""
 
 import typing
 from argparse import ArgumentParser
 
 import argcomplete
 
-from task_mom._version import __version__ as version
-from task_mom.completion._internal import TaskCompleter
+from quickie._version import __version__ as version
+from quickie.completion._internal import TaskCompleter
 
 
-class MomArgumentsParser(ArgumentParser):
-    """Custom argument parser for task-mom."""
+class ArgumentsParser(ArgumentParser):
+    """Custom argument parser for quickie."""
 
     @typing.override
     def __init__(self, main):
@@ -42,8 +42,8 @@ class MomArgumentsParser(ArgumentParser):
 
     @typing.override
     def parse_known_args(self, args=None, namespace=None):
-        mom_args, task_args = self._partition_args(args)
-        namespace, argv = super().parse_known_args(mom_args, namespace)
+        qck_args, task_args = self._partition_args(args)
+        namespace, argv = super().parse_known_args(qck_args, namespace)
 
         if argv:
             # Because the unknown arguments are not task arguments, we raise an error
@@ -55,19 +55,19 @@ class MomArgumentsParser(ArgumentParser):
         return namespace, []
 
     def _partition_args(self, args):
-        mom_args = []
+        qck_args = []
         task_args = []
         args = iter(args)
         while arg := next(args, None):
             if arg in {"-m", "--module", "--autocomplete"}:
-                mom_args.append(arg)
-                mom_args.append(next(args))
+                qck_args.append(arg)
+                qck_args.append(next(args))
             elif arg.startswith("-"):
-                mom_args.append(arg)
+                qck_args.append(arg)
             else:
                 # Task found
-                mom_args.append(arg)
+                qck_args.append(arg)
                 # The rest of the arguments are task arguments
                 task_args = list(args)
 
-        return mom_args, task_args
+        return qck_args, task_args

@@ -2,10 +2,10 @@
 
 from pathlib import Path
 
-from task_mom import constants
-from task_mom.errors import TasksModuleNotFoundError
-from task_mom.namespace import Namespace
-from task_mom.tasks import Task
+from quickie import constants
+from quickie.errors import TasksModuleNotFoundError
+from quickie.namespace import Namespace
+from quickie.tasks import Task
 
 
 def get_default_module_path():
@@ -32,10 +32,10 @@ def load_tasks_from_module(module, namespace):
         # name in both the parent module and the child module, the parent
         # module task will be registered last and will be the one that is
         # returned when getting the task by name.
-        if hasattr(module, "MOM_NAMESPACES") and module not in handled_modules:
+        if hasattr(module, "QCK_NAMESPACES") and module not in handled_modules:
             modules.append((module, namespace))
             handled_modules.add(module)
-            for name, sub_module in module.MOM_NAMESPACES.items():
+            for name, sub_module in module.QCK_NAMESPACES.items():
                 if name:
                     sub_namespace = Namespace(name=name, parent=namespace)
                 else:

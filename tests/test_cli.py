@@ -6,12 +6,12 @@ import sys
 import pytest
 from pytest import mark, raises
 
-from task_mom import cli
-from task_mom.argparser import MomArgumentsParser
+from quickie import cli
+from quickie.argparser import ArgumentsParser
 
 PYTHON_PATH = sys.executable
 BIN_FOLDER = os.path.join(sys.prefix, "bin")
-BIN_LOCATION = os.path.join(BIN_FOLDER, "mom")
+BIN_LOCATION = os.path.join(BIN_FOLDER, "qck")
 
 
 @mark.integration
@@ -19,9 +19,9 @@ BIN_LOCATION = os.path.join(BIN_FOLDER, "mom")
     "argv",
     [
         [BIN_LOCATION, "-h"],
-        [PYTHON_PATH, "-m", "task_mom", "-h", "hello"],
-        [PYTHON_PATH, "-m", "task_mom", "hello"],
-        [PYTHON_PATH, "-m", "task_mom", "-h"],
+        [PYTHON_PATH, "-m", "quickie", "-h", "hello"],
+        [PYTHON_PATH, "-m", "quickie", "hello"],
+        [PYTHON_PATH, "-m", "quickie", "-h"],
     ],
 )  # yapf: disable
 def test_from_cli(argv):
@@ -95,7 +95,7 @@ def test_default(capsys):
 
 @mark.integration
 def test_fails_find_task():
-    with raises(cli.MomError, match="Task 'nonexistent' not found"):
+    with raises(cli.QuickieError, match="Task 'nonexistent' not found"):
         cli.main(["nonexistent"], raise_error=True)
 
 
@@ -141,7 +141,7 @@ def test_suggest_autocompletion_bash(capsys):
         cli.main(["--autocomplete", "bash"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert 'eval "$(register-python-argcomplete mom)"' in out
+    assert 'eval "$(register-python-argcomplete qck)"' in out
 
 
 @mark.integration
@@ -150,7 +150,7 @@ def test_suggest_autocompletion_zsh(capsys):
         cli.main(["--autocomplete", "zsh"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert 'eval "$(register-python-argcomplete mom)"' in out
+    assert 'eval "$(register-python-argcomplete qck)"' in out
 
 
 class TestAutocompletion:
@@ -175,7 +175,7 @@ class TestAutocompletion:
     @mark.integration
     def test_autocompletion(self, add_env, mocker):
         add_env("_ARGCOMPLETE", "1")
-        add_env("COMP_LINE", "mom test ")
+        add_env("COMP_LINE", "qck test ")
         add_env("COMP_POINT", "4")
         autocomplete_mock = mocker.patch("argcomplete.autocomplete")
         with raises(SystemExit) as exc_info:
@@ -185,12 +185,12 @@ class TestAutocompletion:
         # check the args passed to the autocomplete function
         args, _ = autocomplete_mock.call_args
         assert args[0].description
-        assert args[0].description == MomArgumentsParser(None).description
+        assert args[0].description == ArgumentsParser(None).description
 
     @mark.integration
     def test_task_autocompletion(self, add_env, mocker):
         add_env("_ARGCOMPLETE", "1")
-        add_env("COMP_LINE", "mom hello ")
+        add_env("COMP_LINE", "qck hello ")
         add_env("COMP_POINT", "10")
         autocomplete_mock = mocker.patch("argcomplete.autocomplete")
         with raises(SystemExit) as exc_info:

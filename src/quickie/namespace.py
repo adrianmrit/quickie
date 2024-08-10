@@ -4,7 +4,7 @@ import abc
 import typing
 
 if typing.TYPE_CHECKING:
-    from task_mom.tasks import TaskType
+    from quickie.tasks import TaskType
 
 
 class NamespaceABC(abc.ABC):

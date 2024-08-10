@@ -1,10 +1,12 @@
 from pathlib import Path
 
+from quickie import constants
+
 
 def test_import_from_path():
-    from task_mom.utils.imports import import_from_path
+    from quickie.utils.imports import import_from_path
 
     root = Path.cwd()
-    path = root / "__mom__"
+    path = root / constants.TASKS_PATH
     module = import_from_path(path)
-    assert module.__name__ == "__mom__"
+    assert module.__name__ == constants.TASKS_PATH.stem
