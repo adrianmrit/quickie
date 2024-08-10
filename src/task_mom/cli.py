@@ -13,16 +13,13 @@ from rich.console import Console
 from rich.theme import Theme
 
 import task_mom
-from task_mom import settings
+from task_mom import constants
 from task_mom.argparser import MomArgumentsParser
 from task_mom.context import Context
 from task_mom.errors import MomError, TaskNotFoundError
 from task_mom.loader import get_default_module_path, load_tasks_from_module
 from task_mom.namespace import RootNamespace
 from task_mom.utils import imports
-
-_HOME_PATH = Path.home() / "mom"
-_SETTINGS_PATH = _HOME_PATH / "settings.toml"
 
 
 def main(argv=None, *, raise_error=False):
@@ -118,7 +115,7 @@ class Main:
     def suggest_autocompletion_zsh(self):
         """Suggest autocompletion for zsh."""
         self.console.print("Add the following to ~/.zshrc:")
-        self.console.prin(
+        self.console.print(
             'eval "$(register-python-argcomplete mom)"',
             style="bold green",
         )
@@ -128,16 +125,16 @@ class Main:
         if namespace.module is not None:
             tasks_module_path = Path(namespace.module)
         elif namespace.use_global:
-            tasks_module_path = _HOME_PATH
+            tasks_module_path = constants.HOME_PATH
         else:
             tasks_module_path = get_default_module_path()
         self.load_tasks(path=tasks_module_path)
 
     def load_settings(self):
         """Load the console theme."""
-        defaults = frozendict({"style": settings.DEFAULT_CONSOLE_STYLE})
-        if _SETTINGS_PATH.exists():
-            with _SETTINGS_PATH.open("r") as f:
+        defaults = frozendict({"style": constants.DEFAULT_CONSOLE_STYLE})
+        if constants.SETTINGS_PATH.exists():
+            with constants.SETTINGS_PATH.open("r") as f:
                 user_settings = tomllib.load(f)
                 user_settings["style"] = frozendict(
                     defaults["style"] | user_settings.get("style", {})

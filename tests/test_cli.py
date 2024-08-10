@@ -3,9 +3,11 @@ import re
 import subprocess
 import sys
 
+import pytest
 from pytest import mark, raises
 
 from task_mom import cli
+from task_mom.argparser import MomArgumentsParser
 
 PYTHON_PATH = sys.executable
 BIN_FOLDER = os.path.join(sys.prefix, "bin")
@@ -115,3 +117,86 @@ def test_task_not_found(capsys):
     assert exc_info.value.code == 1
     out, err = capsys.readouterr()
     assert "Task 'nonexistent' not found" in out
+
+
+@mark.integration
+def test_list(capsys):
+    with raises(SystemExit) as exc_info:
+        cli.main(["-l"])
+    assert exc_info.value.code == 0
+    out, err = capsys.readouterr()
+    assert out == (
+        "Available tasks:\n"
+        "├── hello\n"
+        "│     Hello world task.\n"
+        "└── nested\n"
+        "    └── other\n"
+        "          Other task.\n"
+    )
+
+
+@mark.integration
+def test_suggest_autocompletion_bash(capsys):
+    with raises(SystemExit) as exc_info:
+        cli.main(["--autocomplete", "bash"])
+    assert exc_info.value.code == 0
+    out, err = capsys.readouterr()
+    assert 'eval "$(register-python-argcomplete mom)"' in out
+
+
+@mark.integration
+def test_suggest_autocompletion_zsh(capsys):
+    with raises(SystemExit) as exc_info:
+        cli.main(["--autocomplete", "zsh"])
+    assert exc_info.value.code == 0
+    out, err = capsys.readouterr()
+    assert 'eval "$(register-python-argcomplete mom)"' in out
+
+
+class TestAutocompletion:
+    @pytest.fixture(autouse=True)
+    def add_env(self):
+        set_keys = {}
+
+        def fn(key, value):
+            if key in os.environ:
+                set_keys[key] = os.environ[key]
+            else:
+                set_keys[key] = None
+            os.environ[key] = value
+
+        yield fn
+        for key, value in set_keys.items():
+            if value is None:
+                os.environ.pop(key)
+            else:
+                os.environ[key] = value
+
+    @mark.integration
+    def test_autocompletion(self, add_env, mocker):
+        add_env("_ARGCOMPLETE", "1")
+        add_env("COMP_LINE", "mom test ")
+        add_env("COMP_POINT", "4")
+        autocomplete_mock = mocker.patch("argcomplete.autocomplete")
+        with raises(SystemExit) as exc_info:
+            cli.main([])
+        assert exc_info.value.code == 0
+        autocomplete_mock.assert_called_once()
+        # check the args passed to the autocomplete function
+        args, _ = autocomplete_mock.call_args
+        assert args[0].description
+        assert args[0].description == MomArgumentsParser(None).description
+
+    @mark.integration
+    def test_task_autocompletion(self, add_env, mocker):
+        add_env("_ARGCOMPLETE", "1")
+        add_env("COMP_LINE", "mom hello ")
+        add_env("COMP_POINT", "10")
+        autocomplete_mock = mocker.patch("argcomplete.autocomplete")
+        with raises(SystemExit) as exc_info:
+            cli.main([])
+        assert exc_info.value.code == 0
+        autocomplete_mock.assert_called_once()
+        # check the args passed to the autocomplete function
+        args, _ = autocomplete_mock.call_args
+        assert args[0].description == "Hello world task."
