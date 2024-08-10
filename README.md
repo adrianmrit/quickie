@@ -21,13 +21,13 @@ See the [pipx installation instructions](https://pipx.pypa.io/stable/installatio
 After installing `pipx`, you can install `quickie` with the following command:
 
 ```sh
-pipx install quickie
+pipx install quickie-runner
 ```
 
 You can also install `quickie` with `pip`:
 
 ```sh
-pip install quickie
+pip install quickie-runner
 ```
 
 ## Tab completion
@@ -37,7 +37,7 @@ Tab completion is available for bash and zsh. It depends on the `argcomplete` pa
 To enable tab completion for `quickie`, add the following line to your `.bashrc` or `.zshrc`:
 
 ```sh
-eval "$(register-python-argcomplete quickie)"
+eval "$(register-python-argcomplete qck)"
 ```
 
 If you get the following error in the zsh shell:
