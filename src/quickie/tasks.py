@@ -36,12 +36,12 @@ class TaskMeta(ClassOptionsMetaclass):
                 f"Invalid options in Meta for {cls}: {', '.join(invalid_keys)}. "
                 f"Valid options are: {', '.join(default_meta_attr_keys)}"
             )
-        if cls._meta.abstract:
+        if cls._meta.private:
             return cls
-        if not cls._meta.alias:
-            cls._meta.alias = name.lower()
+        if not cls._meta.name:
+            cls._meta.name = name.lower()
 
-        if cls.__doc__ and not cls._meta.abstract and not cls._meta.help:
+        if cls.__doc__ and not cls._meta.private and not cls._meta.help:
             cls._meta.help = cls.__doc__
             short_help = cls.__doc__.split("\n")[0]
             if len(short_help) > MAX_SHORT_HELP_LENGTH:
@@ -54,16 +54,35 @@ class Task(metaclass=TaskMeta):
     """Base class for all tasks."""
 
     class DefaultMeta:
-        alias: str | typing.Iterable[str] = None
-        allow_unknown_args = False
-        abstract = False
+        """Default meta options."""
+
+        name: typing.ClassVar[str | typing.Iterable[str]] = None
+        """Name to identify and invoke the task.
+
+        Multiple names can be provided as an iterable.
+        """
+
+        extra_args: typing.ClassVar[bool] = False
+        """Whether to allow extra command line arguments."""
+
+        private = False
+        """Whether the task is private
+
+        Private tasks cannot be run from the command line, but can be used
+        as base classes for other tasks, or called from other tasks.
+        """
+
         help: str | None = None
+        """Help message of the task. If not provided, the docstring is used."""
+
         short_help: str | None = None
+        """Short help message of the task. If not provided, the first line of the
+        docstring is used."""
 
     _meta: DefaultMeta
 
     class Meta:
-        abstract = True
+        private = True
 
     def __init__(
         self,
@@ -185,22 +204,22 @@ class Task(metaclass=TaskMeta):
         *,
         parser: argparse.ArgumentParser,
         args: typing.Sequence[str],
-        allow_unknown_args: bool,
+        extra_args: bool,
     ):
         """Parse arguments.
 
         Args:
             parser: The parser to parse arguments with.
             args: The arguments to parse.
-            allow_unknown_args: Whether to allow extra arguments.
+            extra_args: Whether to allow extra arguments.
 
         Returns:
             A tuple in the form ``(parsed_args, extra)``. Where `parsed_args` is a
-            mapping of known arguments, If `allow_unknown_args` is ``True``, `extra`
+            mapping of known arguments, If `extra_args` is ``True``, `extra`
             is a tuple containing the unknown arguments, otherwise it is an empty
             tuple.
         """
-        if allow_unknown_args:
+        if extra_args:
             parsed_args, extra = parser.parse_known_args(args)
         else:
             parsed_args = parser.parse_args(args)
@@ -229,7 +248,7 @@ class Task(metaclass=TaskMeta):
         parsed_args, extra = self.parse_args(
             parser=self.parser,
             args=args,
-            allow_unknown_args=self._meta.allow_unknown_args,
+            extra_args=self._meta.extra_args,
         )
         return self.run(*extra, **vars(parsed_args))
 
@@ -237,14 +256,14 @@ class Task(metaclass=TaskMeta):
 class BaseSubprocessTask(Task):
     """Base class for tasks that run a subprocess."""
 
-    cwd: str | None = None
+    cwd: typing.ClassVar[str | None] = None
     """The current working directory."""
 
-    env: typing.Mapping[str, str] | None = None
+    env: typing.ClassVar[typing.Mapping[str, str] | None] = None
     """The environment."""
 
     class Meta:
-        abstract = True
+        private = True
 
     def get_cwd(self, *args, **kwargs) -> str:
         """Get the current working directory.
@@ -265,45 +284,64 @@ class BaseSubprocessTask(Task):
         return self.context.env | (self.env or {})
 
 
-class ProgramTask(BaseSubprocessTask):
-    """Base class for tasks that run a program."""
+class Command(BaseSubprocessTask):
+    """Base class for tasks that run a binary."""
 
-    program: str | None = None
-    """The program to run."""
+    binary: typing.ClassVar[str | None] = None
+    """The name or path of the program to run."""
 
-    program_args: typing.Sequence[str] | None = None
+    args: typing.ClassVar[typing.Sequence[str] | None] = None
     """The program arguments. Defaults to the task arguments."""
 
     class Meta:
-        abstract = True
+        private = True
 
-    def get_program(self, *args, **kwargs) -> str:
-        """Get the program to run.
+    def get_binary(self, *args, **kwargs) -> str:
+        """Get the name or path of the program to run.
 
         Args:
             args: Unknown arguments.
             kwargs: Parsed known arguments.
         """
-        if self.program is None:
+        if self.binary is None:
             raise NotImplementedError("Either set program or override get_program()")
-        return self.program
+        return self.binary
 
-    def get_program_args(self, *args, **kwargs) -> typing.Sequence[str]:
-        """Get the program arguments. Defaults to the task arguments.
+    def get_args(self, *args, **kwargs) -> typing.Sequence[str]:
+        """Get the program arguments.
 
         Args:
             args: Unknown arguments.
             kwargs: Parsed known arguments.
         """
-        return self.program_args or []
+        return self.args or []
+
+    def get_cmd(self, *args, **kwargs) -> typing.Sequence[str]:
+        """Get the full command to run, as a sequence.
+
+        The first element must be the program to run, followed by the arguments.
+
+        Args:
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
+        """
+        program = self.get_binary(*args, **kwargs)
+        program_args = self.get_args(*args, **kwargs)
+        return [program, *program_args]
 
     @typing.override
     def run(self, *args, **kwargs):
-        program = self.get_program(*args, **kwargs)
-        program_args = self.get_program_args(*args, **kwargs)
+        cmd = self.get_cmd(*args, **kwargs)
+        if len(cmd) == 0:
+            raise ValueError("No program to run")
+        elif len(cmd) == 1:
+            program = cmd[0]
+            args = []
+        else:
+            program, *args = cmd
         cwd = self.get_cwd(*args, **kwargs)
         env = self.get_env(*args, **kwargs)
-        return self.run_program(program, args=program_args, cwd=cwd, env=env)
+        return self.run_program(program, args=args, cwd=cwd, env=env)
 
     def run_program(self, program: str, *, args: typing.Sequence[str], cwd, env):
         """Run the program.
@@ -325,13 +363,13 @@ class ProgramTask(BaseSubprocessTask):
         return result
 
 
-class ScriptTask(BaseSubprocessTask):
+class Script(BaseSubprocessTask):
     """Base class for tasks that run a script."""
 
-    script: str | None = None
+    script: typing.ClassVar[str | None] = None
 
     class Meta:
-        abstract = True
+        private = True
 
     def get_script(self, *args, **kwargs) -> str:
         """Get the script to run.
@@ -374,7 +412,7 @@ class _TaskGroup(Task):
     """The task classes to run."""
 
     class Meta:
-        abstract = True
+        private = True
 
     def get_tasks(self, *args, **kwargs) -> typing.Sequence[Task]:
         """Get the tasks to run."""
@@ -391,11 +429,11 @@ class _TaskGroup(Task):
         return task.run(*args, **kwargs)
 
 
-class SerialTaskGroup(_TaskGroup):
+class Group(_TaskGroup):
     """Base class for tasks that run other tasks in sequence."""
 
     class Meta:
-        abstract = True
+        private = True
 
     @typing.override
     def run(self, *args, **kwargs):
@@ -403,14 +441,14 @@ class SerialTaskGroup(_TaskGroup):
             self.run_task(task, *args, **kwargs)
 
 
-class ThreadTaskGroup(_TaskGroup):
+class ThreadGroup(_TaskGroup):
     """Base class for tasks that run other tasks in threads."""
 
     max_workers = None
     """The maximum number of workers to use."""
 
     class Meta:
-        abstract = True
+        private = True
 
     def get_max_workers(self, *args, **kwargs) -> int | None:
         """Get the maximum number of workers to use."""

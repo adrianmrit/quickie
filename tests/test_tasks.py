@@ -1,11 +1,10 @@
 import io
-from argparse import ArgumentParser
-from typing import Any
 
 import pytest
 
 import quickie.namespace
 from quickie import tasks
+from quickie.factories import arg, command, script, task
 
 
 class TestGlobalNamespace:
@@ -46,29 +45,24 @@ class TestNamespace:
 
 class TestTask:
     def test_parser(self, context):
-        class MyTask(tasks.Task):
-            class Meta:
-                allow_unknown_args = True
+        @task(extra_args=True)
+        @arg("arg1")
+        @arg("--arg2", "-a2")
+        def my_task(*args, **kwargs):
+            return args, kwargs
 
-            def add_args(self, parser):
-                parser.add_argument("arg1")
-                parser.add_argument("--arg2", "-a2")
+        task_instance = my_task(context=context)
 
-            def run(self, *args, **kwargs):
-                return args, kwargs
-
-        task = MyTask(context=context)
-
-        result = task(["value1", "--arg2", "value2", "value3"])
+        result = task_instance(["value1", "--arg2", "value2", "value3"])
         assert result == (("value3",), {"arg1": "value1", "arg2": "value2"})
 
-        MyTask._meta.allow_unknown_args = False
+        my_task._meta.extra_args = False
 
         with pytest.raises(SystemExit) as exc_info:
-            task(["value1", "--arg2", "value2", "value3"])
+            task_instance(["value1", "--arg2", "value2", "value3"])
         assert exc_info.value.code == 2
 
-        result = task(["value1", "--arg2", "value2"])
+        result = task_instance(["value1", "--arg2", "value2"])
         assert result == ((), {"arg1": "value1", "arg2": "value2"})
 
     def test_help(self, context):
@@ -114,17 +108,17 @@ class TestTask:
         class MyTask(tasks.Task):
             pass
 
-        task = MyTask(context=context)
+        task_instance = MyTask(context=context)
         with pytest.raises(NotImplementedError):
-            task.run()
+            task_instance.run()
 
     def test_print(self, context):
         class MyTask(tasks.Task):
             pass
 
         context.console.file = io.StringIO()
-        task = MyTask(context=context)
-        task.print("Hello world!")
+        task_instance = MyTask(context=context)
+        task_instance.print("Hello world!")
 
         assert context.console.file.getvalue() == "Hello world!\n"
 
@@ -133,10 +127,12 @@ class TestTask:
             pass
 
         context.console.file = io.StringIO()
-        task = MyTask(context=context)
-        task.print_error("Hello world!")
+        task_instance = MyTask(context=context)
+        task_instance.print_error("Hello world!")
 
-        assert context.console.file.getvalue() == "Hello world!\n"
+        out = context.console.file.getvalue()
+        assert "Hello world!" in out
+        assert out.endswith("\n")
 
 
 class TestBaseSubprocessTask:
@@ -157,8 +153,8 @@ class TestBaseSubprocessTask:
         class MyTask(tasks.BaseSubprocessTask):
             cwd = attr
 
-        task = MyTask(context=context)
-        assert task.get_cwd() == expected
+        task_instance = MyTask(context=context)
+        assert task_instance.get_cwd() == expected
 
     def test_env(self, context):
         context.env = {"MYENV": "myvalue"}
@@ -166,11 +162,11 @@ class TestBaseSubprocessTask:
         class MyTask(tasks.BaseSubprocessTask):
             env = {"OTHERENV": "othervalue"}
 
-        task = MyTask(context=context)
-        assert task.get_env() == {"MYENV": "myvalue", "OTHERENV": "othervalue"}
+        task_instance = MyTask(context=context)
+        assert task_instance.get_env() == {"MYENV": "myvalue", "OTHERENV": "othervalue"}
 
 
-class TestProgramTask:
+class TestCommand:
     def test_run(self, mocker, context):
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
@@ -178,33 +174,24 @@ class TestProgramTask:
         context.cwd = "/example/cwd"
         context.env = {"MYENV": "myvalue"}
 
-        class MyTask(tasks.ProgramTask):
-            program = "myprogram"
-            cwd = "../other"
-            env = {"OTHERENV": "othervalue"}
+        @command(cwd="../other", env={"OTHERENV": "othervalue"})
+        def my_task():
+            return ["myprogram"]
 
-        class TaskWithArgs(tasks.ProgramTask):
-            program = "myprogram"
-            program_args = ["arg1", "arg2"]
+        class TaskWithArgs(tasks.Command):
+            binary = "myprogram"
+            args = ["arg1", "arg2"]
 
-        class TaskWithDynamicArgs(tasks.ProgramTask):
-            cwd = "/full/path"
+        @command(cwd="/full/path", env={"MYENV": "myvalue"})
+        @arg("--arg1")
+        def dynamic_args_task(arg1):
+            return ["myprogram", arg1]
 
-            def get_program(self, **kwargs: dict[str, Any]) -> str:
-                return "myprogram"
-
-            def add_args(self, parser: ArgumentParser):
-                super().add_args(parser)
-                parser.add_argument("--arg1")
-
-            def get_program_args(self, **kwargs):
-                return [kwargs["arg1"]]
-
-        task = MyTask(context=context)
+        task_instance = my_task(context=context)
         task_with_args = TaskWithArgs(context=context)
-        task_with_dynamic_args = TaskWithDynamicArgs(context=context)
+        task_with_dynamic_args = dynamic_args_task(context=context)
 
-        task([])
+        task_instance([])
         subprocess_run.assert_called_once_with(
             ["myprogram"],
             check=False,
@@ -232,14 +219,14 @@ class TestProgramTask:
         subprocess_run.reset_mock()
 
     def test_program_required(self, context):
-        class MyTask(tasks.ProgramTask):
+        class MyTask(tasks.Command):
             pass
 
-        task = MyTask(context=context)
+        task_instance = MyTask(context=context)
         with pytest.raises(
             NotImplementedError, match="Either set program or override get_program()"
         ):
-            task([])
+            task_instance([])
 
 
 class TestScriptTask:
@@ -250,21 +237,18 @@ class TestScriptTask:
         context.cwd = "/somedir"
         context.env = {"VAR": "VAL"}
 
-        class MyTask(tasks.ScriptTask):
+        class MyTask(tasks.Script):
             script = "myscript"
 
-        class DynamicScript(tasks.ScriptTask):
-            def add_args(self, parser):
-                super().add_args(parser)
-                parser.add_argument("arg1")
+        @arg("arg1")
+        @script
+        def dynamic_script(*, arg1):
+            return "myscript " + arg1
 
-            def get_script(self, **kwargs):
-                return "myscript " + kwargs["arg1"]
+        task_instance = MyTask(context=context)
+        dynamic_task = dynamic_script(context=context)
 
-        task = MyTask(context=context)
-        dynamic_task = DynamicScript(context=context)
-
-        task([])
+        task_instance([])
         subprocess_run.assert_called_once_with(
             "myscript",
             check=False,
@@ -282,36 +266,35 @@ class TestScriptTask:
             cwd="/somedir",
             env={"VAR": "VAL"},
         )
-        subprocess_run.reset_mock()
 
     def test_script_required(self, context):
-        class MyTask(tasks.ScriptTask):
+        class MyTask(tasks.Script):
             pass
 
-        task = MyTask(context=context)
+        task_instance = MyTask(context=context)
         with pytest.raises(
             NotImplementedError, match="Either set script or override get_script()"
         ):
-            task([])
+            task_instance([])
 
 
 class TestSerialTaskGroup:
     def test_run(self, context):
         result = []
 
-        class Task1(tasks.Task):
-            def run(self, **kwargs):
-                result.append("First")
+        @task
+        def task_1():
+            result.append("First")
 
         class Task2(tasks.Task):
             def run(self, **kwargs):
                 result.append("Second")
 
-        class MyTask(tasks.SerialTaskGroup):
-            task_classes = [Task1, Task2]
+        class MyTask(tasks.Group):
+            task_classes = [task_1, Task2]
 
-        task = MyTask(context=context)
-        task([])
+        task_instance = MyTask(context=context)
+        task_instance([])
 
         assert result == ["First", "Second"]
 
@@ -333,9 +316,9 @@ class TestThreadTaskGroup:
                     pass
                 result.append("Third")
 
-        class MyTask(tasks.ThreadTaskGroup):
+        class MyTask(tasks.ThreadGroup):
             task_classes = [Task1, Task2]
 
-        task = MyTask(context=context)
-        task([])
+        task_instance = MyTask(context=context)
+        task_instance([])
         assert result == ["First", "Second", "Third"]

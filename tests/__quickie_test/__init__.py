@@ -11,7 +11,7 @@ class HelloWorld(tasks.Task):
     """Hello world task."""
 
     class Meta:
-        alias = "hello"
+        name = "hello"
 
     def run(self, **kwargs):
         self.print("Hello world!")

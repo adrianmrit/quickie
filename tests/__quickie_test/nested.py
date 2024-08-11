@@ -1,12 +1,12 @@
 from quickie import tasks
 
 
-class Other(tasks.ScriptTask):
+class Other(tasks.Script):
     """Other task."""
 
     class Meta:
-        alias = "other"
-        allow_unknown_args = True
+        name = "other"
+        extra_args = True
 
     def get_script(self, *args) -> str:
         args = " ".join(args)

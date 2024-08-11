@@ -12,23 +12,24 @@ Some prerequisites need to be installed.
 
 ### Installing
 
-The recommended way to install `quickie` is via `pipx`.
+Quickie can be installed via `pip` or `pipx`. This will add the `qck` binary and add the `quickie` package to your Python environment.
 
-With `pipx` you can add the `qck` command and the package in an isolated environment, without polluting your global Python environment.
+For example, if you want to run quickie for a single project, you can install it with `pip` under a virtual environment:
 
-See the [pipx installation instructions](https://pipx.pypa.io/stable/installation/)
+```sh
+pip install quickie-runner
+```
 
-After installing `pipx`, you can install `quickie` with the following command:
+If you want to install `quickie` globally, you can either use `pip`, or `pipx` to install it in an isolated environment.
 
 ```sh
 pipx install quickie-runner
 ```
 
-You can also install `quickie` with `pip`:
+See the [pipx installation instructions](https://pipx.pypa.io/stable/installation/)
 
-```sh
-pip install quickie-runner
-```
+You can use both installation methods, i.e. to use a version specific to a project, while running global
+commands with the global installation.
 
 ## Tab completion
 
@@ -73,30 +74,32 @@ While many existing similar tools use YAML, TOML or custom formats to define tas
 Here is a simple example of a `__quickie.py` file:
 
 ```python
-from quickie.tasks import Task, ScriptTask
+from quickie import arg, script, task
 
-class hello(Task):
-    def run(self):
-        print("Hello, world!")
+@task(name=["hello", "greet"])
+@arg("name", help="The name to greet")
+def hello(name):
+    """Greet someone"""  # added as the task help
+    print(f"Hello, {name}!")
 
 
-class ScriptTaskExample(ScriptTask):
-    class Meta:
-        alias = "echo"
-        allow_unknown_args = True
-
-    def get_script(self, *args):
-        return " ".join(["echo", *args])
+@script(extra_args=True, help="Echo the given arguments")
+def echo():
+    return " ".join(["echo", *args])
 ```
 
-You can run the `Hello` task with the following command:
+You can run the `hello` task with the following command:
 
 ```sh
-qck hello
+$ qck hello world
+Hello, world!
+$ qck greet world
+Hello, world!
 ```
 
-And the `ScriptTaskExample` task with:
+And the `script` task with:
 
 ```sh
-qck echo "Hello, world!"
+$ qck echo Hello there
+Hello there
 ```

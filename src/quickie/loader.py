@@ -42,12 +42,12 @@ def load_tasks_from_module(module, namespace):
                     sub_namespace = namespace
                 modules.append((sub_module, sub_namespace))
         else:
-            for name, obj in module.__dict__.items():
+            for obj in module.__dict__.values():
                 if isinstance(obj, type) and issubclass(obj, Task):
                     meta = getattr(obj, "_meta")
-                    if meta.abstract:
+                    if meta.private:
                         continue
-                    aliases = meta.alias
+                    aliases = meta.name
                     if isinstance(aliases, str):
                         aliases = [aliases]
                     for alias in aliases:
