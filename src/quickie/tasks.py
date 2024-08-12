@@ -7,6 +7,7 @@ together.
 """
 
 import argparse
+import functools
 import os
 import typing
 
@@ -403,30 +404,43 @@ class Script(BaseSubprocessTask):
         return result
 
 
+def partial_task[T: type[Task]](task_cls: T, *args, **kwargs) -> T:
+    """Create a new Task that will be called with the given arguments by default."""
+
+    return type(
+        f"{task_cls.__name__}Partial",
+        (task_cls,),
+        {
+            "run": functools.partialmethod(task_cls.run, *args, **kwargs),
+            "Meta": task_cls.Meta,  # preserve properties
+        },
+    )
+
+
 class _TaskGroup(Task):
     """Base class for tasks that run other tasks."""
 
-    # TODO: Make single class that can run tasks in sequence or in parallel?
-
-    task_classes = ()
+    task_classes: typing.ClassVar[typing.Sequence[type[Task]]] = ()
     """The task classes to run."""
 
     class Meta:
         private = True
 
-    def get_tasks(self, *args, **kwargs) -> typing.Sequence[Task]:
-        """Get the tasks to run."""
-        return [task_cls(context=self.context) for task_cls in self.task_classes]
-
-    def run_task(self, task: Task, *args, **kwargs):
-        """Run a task.
-
-        Args:
-            task: The task to run.
-            args: Unknown arguments.
-            kwargs: Parsed known arguments.
+    def get_tasks(self, *args, **kwargs) -> typing.Iterator[type[Task]]:
         """
-        return task.run(*args, **kwargs)
+        Get the tasks to run.
+
+        By default returns an instance of each task class in task classes, with
+        Returns:
+            A sequence of tuples in the form ``(task, args, kwargs)``.
+        """
+        return self.task_classes
+
+    def run_task(self, task_cls: type[Task]):
+        """Run a task."""
+        # This is safer than passing the parent arguments. If need to pass
+        # extra arguments, can override get_tasks and use partial_task
+        return task_cls(context=self.context).run()
 
 
 class Group(_TaskGroup):
@@ -437,8 +451,8 @@ class Group(_TaskGroup):
 
     @typing.override
     def run(self, *args, **kwargs):
-        for task in self.get_tasks(*args, **kwargs):
-            self.run_task(task, *args, **kwargs)
+        for task_cls in self.get_tasks(*args, **kwargs):
+            self.run_task(task_cls)
 
 
 class ThreadGroup(_TaskGroup):
@@ -463,8 +477,6 @@ class ThreadGroup(_TaskGroup):
             max_workers=self.get_max_workers(),
             thread_name_prefix=f"quickie-parallel-task.{self.name}",
         ) as executor:
-            futures = [
-                executor.submit(self.run_task, task, *args, **kwargs) for task in tasks
-            ]
+            futures = [executor.submit(self.run_task, task) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
                 future.result()

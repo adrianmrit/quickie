@@ -4,7 +4,7 @@ import pytest
 
 import quickie.namespace
 from quickie import tasks
-from quickie.factories import arg, command, script, task
+from quickie.factories import arg, command, group, script, task, thread_group
 
 
 class TestGlobalNamespace:
@@ -282,19 +282,21 @@ class TestSerialTaskGroup:
     def test_run(self, context):
         result = []
 
-        @task
-        def task_1():
-            result.append("First")
+        @task(bind=True)
+        def task_1(self, arg):
+            result.append(arg)
 
         class Task2(tasks.Task):
-            def run(self, **kwargs):
+            def run(self):
                 result.append("Second")
 
-        class MyTask(tasks.Group):
-            task_classes = [task_1, Task2]
+        @group
+        @arg("arg")
+        def my_group(arg):
+            return [tasks.partial_task(task_1, arg), Task2]
 
-        task_instance = MyTask(context=context)
-        task_instance([])
+        task_instance = my_group(context=context)
+        task_instance(["First"])
 
         assert result == ["First", "Second"]
 
@@ -304,21 +306,22 @@ class TestThreadTaskGroup:
         result = []
 
         class Task1(tasks.Task):
-            def run(self, **kwargs):
+            def run(self):
                 while not result:  # Wait for Task2 to append
                     pass
                 result.append("Second")
 
-        class Task2(tasks.Task):
-            def run(self, **kwargs):
-                result.append("First")
-                while not len(result) == 2:  # Wait for Task1 to finish
-                    pass
-                result.append("Third")
+        @task
+        def task2(arg):
+            result.append("First")
+            while not len(result) == 2:  # Wait for Task1 to finish  # noqa: PLR2004
+                pass
+            result.append(arg)
 
-        class MyTask(tasks.ThreadGroup):
-            task_classes = [Task1, Task2]
+        @thread_group
+        def my_task():
+            return [Task1, tasks.partial_task(task2, "Third")]
 
-        task_instance = MyTask(context=context)
+        task_instance = my_task(context=context)
         task_instance([])
         assert result == ["First", "Second", "Third"]

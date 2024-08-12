@@ -195,11 +195,13 @@ def generic_task_factory(  # noqa: PLR0913
         kwds["add_args"] = add_args
 
     if bind:
-        fn = functools.partialmethod(fn)
+        new_fn = functools.partialmethod(fn)
     else:
-        fn = staticmethod(fn)
+        # Still wrap as a method
+        def new_fn(_, *args, **kwargs):
+            return fn(*args, **kwargs)
 
-    kwds[override_method] = fn
+    kwds[override_method] = new_fn
 
     return type(name, bases, kwds)
 
@@ -352,4 +354,101 @@ def command(  # noqa: PLR0913
         bases=(tasks.Command,),
         override_method=tasks.Command.get_cmd.__name__,
         extra_kwds={"env": env, "cwd": cwd},
+    )
+
+
+def group(  # noqa: PLR0913
+    fn: typing.Callable | None = None,
+    *,
+    name: str | None = None,
+    extra_args: bool = False,
+    private: bool = False,
+    help: str | None = None,
+    short_help: str | None = None,
+    bind: bool = False,
+):
+    """Create a group task from a function.
+
+    The returned task will run in the same order. To add arguments to individual
+    tasks in the group, you can return an instance of `partial_task` with the task
+    and the arguments.
+
+    Example:
+    ```python
+    @group
+    @arg("arg1")
+    def my_group(arg1):
+        return [task1, partial_task(task2, arg1)]
+    ```
+
+    Args:
+        fn: The function to create the group task from.
+        name: The name of the group task.
+        extra_args: If the group task accepts extra arguments.
+        private: If the group task is private.
+        help: The help text for the group task.
+        short_help: The short help text for the group task.
+        bind: If true, the first parameter of the function will be the
+            task class instance.
+    """
+    return generic_task_factory(
+        fn,
+        name=name,
+        extra_args=extra_args,
+        private=private,
+        help=help,
+        short_help=short_help,
+        bind=bind,
+        bases=(tasks.Group,),
+        override_method=tasks.Group.get_tasks.__name__,
+    )
+
+
+def thread_group(  # noqa: PLR0913
+    fn: typing.Callable | None = None,
+    *,
+    name: str | None = None,
+    extra_args: bool = False,
+    private: bool = False,
+    help: str | None = None,
+    short_help: str | None = None,
+    bind: bool = False,
+):
+    """Create a thread group task from a function.
+
+    The returned task will run in parallel. To add arguments to individual tasks
+    in the group, you can return an instance of `partial_task` with the task and the
+    arguments.
+
+    Note that the tasks run in separate threads, so they should be thread-safe. This
+    means that they are also affected by the Global Interpreter Lock (GIL).
+
+    Example:
+    ```python
+    @thread_group
+    @arg("arg1")
+    def my_group(arg1):
+        return [task1, partial_task(task2, arg1)]
+    ```
+
+    Args:
+        fn: The function to create the thread group task from.
+        name: The name of the thread group task.
+        extra_args: If the thread group task accepts extra arguments.
+        private: If the thread group task is private.
+        help: The help text for the thread group task.
+        short_help: The short help text for the thread group task.
+        bind: If true, the first parameter of the function will be the
+            task class instance.
+    """
+    return generic_task_factory(
+        fn,
+        name=name,
+        extra_args=extra_args,
+        private=private,
+        help=help,
+        short_help=short_help,
+        bind=bind,
+        bases=(tasks.ThreadGroup,),
+        override_method=tasks.ThreadGroup.get_tasks.__name__,
     )
