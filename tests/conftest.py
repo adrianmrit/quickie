@@ -9,6 +9,7 @@ from rich.theme import Theme
 
 from quickie import constants
 from quickie.context import Context
+from quickie.namespace import RootNamespace
 
 DEFAULT_CONSOLE_THEME = Theme(constants.DEFAULT_CONSOLE_STYLE)
 
@@ -30,4 +31,5 @@ def context():
         cwd=os.getcwd(),
         env=frozendict(os.environ),
         console=Console(theme=DEFAULT_CONSOLE_THEME),
+        namespace=RootNamespace(),
     )

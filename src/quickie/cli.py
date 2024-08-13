@@ -3,7 +3,6 @@
 import os
 import sys
 import tomllib
-from functools import cached_property
 from pathlib import Path
 
 import argcomplete
@@ -16,7 +15,7 @@ import quickie
 from quickie import constants
 from quickie.argparser import ArgumentsParser
 from quickie.context import Context
-from quickie.errors import QuickieError, TaskNotFoundError
+from quickie.errors import QuickieError
 from quickie.loader import get_default_module_path, load_tasks_from_module
 from quickie.namespace import RootNamespace
 from quickie.utils import imports
@@ -46,12 +45,14 @@ class Main:
         self.argv = argv
 
         self.console = Console(theme=Theme(self.settings["style"]))
+        self.tasks_namespace = RootNamespace()
 
         self.global_context = Context(
             program_name=os.path.basename(sys.argv[0]),
             cwd=os.getcwd(),
             env=frozendict(os.environ),
             console=self.console,
+            namespace=self.tasks_namespace,
         )
 
         self.parser = ArgumentsParser(main=self)
@@ -95,11 +96,6 @@ class Main:
         else:
             self.console.print(self.get_usage())
         self.parser.exit()
-
-    @cached_property
-    def tasks_namespace(self):
-        """Get the namespace."""
-        return RootNamespace()
 
     def suggest_autocompletion_bash(self):
         """Suggest autocompletion for bash."""
@@ -181,11 +177,8 @@ class Main:
 
     def get_task(self, task_name):
         """Get a task by name."""
-        try:
-            task_class = self.tasks_namespace.get_task_class(task_name)
-            return task_class(name=task_name, context=self.global_context)
-        except KeyError:
-            raise TaskNotFoundError(task_name)
+        task_class = self.tasks_namespace.get_task_class(task_name)
+        return task_class(name=task_name, context=self.global_context)
 
     def run_task(self, task_name, args):
         """Run a task."""

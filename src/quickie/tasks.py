@@ -6,6 +6,7 @@ commands, or to run other tasks. They can also be used to group other tasks
 together.
 """
 
+import abc
 import argparse
 import functools
 import os
@@ -18,8 +19,8 @@ from .context import Context
 
 MAX_SHORT_HELP_LENGTH = 50
 
-# Because vscode currently complains about type[Task]
-TaskType: typing.TypeAlias = type["Task"]
+type TaskType = type[Task]
+type TaskTypeOrProxy = type[Task] | type[_TaskProxy]
 
 
 class TaskMeta(ClassOptionsMetaclass):
@@ -53,6 +54,15 @@ class TaskMeta(ClassOptionsMetaclass):
 
 class Task(metaclass=TaskMeta):
     """Base class for all tasks."""
+
+    before: typing.ClassVar[typing.Sequence[TaskType]] = ()
+    """Tasks to run before this task."""
+
+    after: typing.ClassVar[typing.Sequence[TaskType]] = ()
+    """Tasks to run after this task."""
+
+    cleanup: typing.ClassVar[typing.Sequence[TaskType]] = ()
+    """Tasks to run after this task, even if it fails."""
 
     class DefaultMeta:
         """Default meta options."""
@@ -89,7 +99,7 @@ class Task(metaclass=TaskMeta):
         self,
         name=None,
         *,
-        context: Context | None = None,
+        context: Context,
     ):
         """Initialize the task.
 
@@ -240,6 +250,46 @@ class Task(metaclass=TaskMeta):
         """
         raise NotImplementedError
 
+    def _resolve_related(self, task_cls):
+        """Get the task class."""
+        if isinstance(task_cls, str):
+            return self.context.namespace.get_task_class(task_cls)
+        return task_cls
+
+    def get_before(self, *args, **kwargs) -> typing.Iterator[TaskType]:
+        """Get the tasks to run before this task."""
+        for before in self.before:
+            yield self._resolve_related(before)
+
+    def get_after(self, *args, **kwargs) -> typing.Iterator[TaskType]:
+        """Get the tasks to run after this task."""
+        for after in self.after:
+            yield self._resolve_related(after)
+
+    def get_cleanup(self, *args, **kwargs) -> typing.Iterator[TaskType]:
+        """Get the tasks to run after this task, even if it fails."""
+        for cleanup in self.cleanup:
+            yield self._resolve_related(cleanup)
+
+    def run_before(self, *args, **kwargs):
+        """Run the tasks before this task."""
+        for task_cls in self.get_before(*args, **kwargs):
+            task_cls(context=self.context).run()
+
+    def run_after(self, *args, **kwargs):
+        """Run the tasks after this task."""
+        for task_cls in self.get_after(*args, **kwargs):
+            task_cls(context=self.context).run()
+
+    def run_cleanup(self, *args, **kwargs):
+        """Run the tasks after this task, even if it fails."""
+        for task_cls in self.get_cleanup(*args, **kwargs):
+            try:
+                task_cls(context=self.context).run()
+            except Exception as e:
+                self.print_error(f"Error running cleanup task {task_cls}: {e}")
+                continue
+
     def __call__(self, args: typing.Sequence[str]):
         """Call the task.
 
@@ -251,7 +301,14 @@ class Task(metaclass=TaskMeta):
             args=args,
             extra_args=self._meta.extra_args,
         )
-        return self.run(*extra, **vars(parsed_args))
+        parsed_args = vars(parsed_args)
+        try:
+            self.run_before(*args, **parsed_args)
+            result = self.run(*extra, **parsed_args)
+            self.run_after(*args, **parsed_args)
+            return result
+        finally:
+            self.run_cleanup(*args, **parsed_args)
 
 
 class BaseSubprocessTask(Task):
@@ -404,39 +461,96 @@ class Script(BaseSubprocessTask):
         return result
 
 
-def partial_task[T: type[Task]](task_cls: T, *args, **kwargs) -> T:
-    """Create a new Task that will be called with the given arguments by default."""
+class _TaskProxy(abc.ABC):
+    """A proxy for tasks that resolves the task class when called"""
 
-    return type(
-        f"{task_cls.__name__}Partial",
-        (task_cls,),
-        {
-            "run": functools.partialmethod(task_cls.run, *args, **kwargs),
-            "Meta": task_cls.Meta,  # preserve properties
-        },
-    )
+    @abc.abstractmethod
+    def resolve_task_cls(self, context: Context) -> TaskType:
+        """Resolve the task class."""
+        pass  # pragma: no cover
+
+    def __call__(self, *args, context: Context, **kwargs) -> TaskType:
+        """Resolves and initializes the task class. Thus allows to use the same interface as when initializing a task class."""
+        task_cls = self.resolve_task_cls(context)
+        return task_cls(*args, context=context, **kwargs)
+
+
+class _LazyTaskProxy(_TaskProxy):
+    """Used to resolve the task class lazily."""
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def resolve_task_cls(self, context: Context) -> TaskType:
+        """Resolve the task class."""
+        return context.namespace.get_task_class(self.name)
+
+
+class _PartialTaskProxy(_TaskProxy):
+    """Wrapper for partial tasks."""
+
+    def __init__(self, task_cls: TaskTypeOrProxy, *args, **kwargs):
+        self.task_cls = task_cls
+        self.args = args
+        self.kwargs = kwargs
+
+    def resolve_task_cls(self, context: Context) -> TaskType:
+        task_cls = self.task_cls
+        while isinstance(task_cls, _TaskProxy):
+            task_cls = task_cls.resolve_task_cls(context)
+        return task_cls
+
+    def __call__(self, *args, **kwargs) -> TaskType:
+        """
+        Initialize the task class with the given arguments, patches the run method to pass the arguments, and returns the instance.
+
+        This way we can inject the arguments without subclassing or modifying the original task class. And this also allows to use
+        the same interface as when initializing a task class.
+        """
+        instance = super().__call__(*args, **kwargs)
+        instance.run = functools.partial(instance.run, *self.args, **self.kwargs)
+        return instance
+
+
+def lazy_task(name: str) -> TaskType:
+    """
+    Loads a task lazily by name.
+
+    This is useful in cases where the task is not yet defined, or to avoid circular imports.
+
+    Note that the task must be registered in the namespace before running it. Thus cannot lazily
+    load tasks from external unimported modules.
+    """
+    return _LazyTaskProxy(name)
+
+
+def partial_task(task_cls: TaskTypeOrProxy | str, *args, **kwargs) -> _PartialTaskProxy:
+    """
+    Wraps a task class with partial arguments.
+
+    This is useful when you want to inject arguments to a task without subclassing or modifying the original task class.
+    """
+
+    if isinstance(task_cls, str):
+        task_cls = lazy_task(task_cls)
+    return _PartialTaskProxy(task_cls, *args, **kwargs)
 
 
 class _TaskGroup(Task):
     """Base class for tasks that run other tasks."""
 
-    task_classes: typing.ClassVar[typing.Sequence[type[Task]]] = ()
+    task_classes: typing.ClassVar[typing.Sequence[TaskType | str]] = ()
     """The task classes to run."""
 
     class Meta:
         private = True
 
-    def get_tasks(self, *args, **kwargs) -> typing.Iterator[type[Task]]:
-        """
-        Get the tasks to run.
+    def get_tasks(self, *args, **kwargs) -> typing.Iterator[TaskType]:
+        """Get the tasks to run."""
+        for task_cls in self.task_classes:
+            yield self._resolve_related(task_cls)
 
-        By default returns an instance of each task class in task classes, with
-        Returns:
-            A sequence of tuples in the form ``(task, args, kwargs)``.
-        """
-        return self.task_classes
-
-    def run_task(self, task_cls: type[Task]):
+    def run_task(self, task_cls: TaskType):
         """Run a task."""
         # This is safer than passing the parent arguments. If need to pass
         # extra arguments, can override get_tasks and use partial_task

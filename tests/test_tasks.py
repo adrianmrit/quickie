@@ -134,6 +134,143 @@ class TestTask:
         assert "Hello world!" in out
         assert out.endswith("\n")
 
+    def test_before_after_and_cleanup(self, context):
+        result = []
+
+        @task
+        def other(arg):
+            result.append(arg)
+
+        context.namespace.register(other, "other")
+        context.namespace.register(other, "namespaced.other")
+
+        @task(
+            before=[
+                tasks.partial_task(other, "before"),
+                tasks.partial_task("defined_later", "before2"),
+            ],
+            after=[
+                tasks.partial_task("namespaced.other", "after"),
+                tasks.partial_task(other, "after2"),
+            ],
+            cleanup=[
+                tasks.partial_task(other, "cleanup"),
+                tasks.partial_task(other, "cleanup2"),
+            ],
+        )
+        def my_task():
+            result.append("Task result")
+
+        @task
+        def defined_later(arg):
+            result.append(f"{arg} defined later")
+
+        context.namespace.register(defined_later, "defined_later")
+
+        task_instance = my_task(context=context)
+        task_instance([])
+
+        assert result == [
+            "before",
+            "before2 defined later",
+            "Task result",
+            "after",
+            "after2",
+            "cleanup",
+            "cleanup2",
+        ]
+
+    def test_cleanup_on_errors(self, context):
+        class MyError(Exception):
+            pass
+
+        result = []
+
+        @task
+        def task_with_error():
+            raise MyError("An error occurred")
+
+        @task
+        def task_without_error(arg):
+            result.append(arg)
+
+        @task(
+            before=[
+                tasks.partial_task(task_without_error, "before"),
+                task_with_error,
+            ],
+            after=[
+                tasks.partial_task(task_without_error, "after"),
+            ],
+            cleanup=[
+                tasks.partial_task(task_without_error, "cleanup"),
+            ],
+        )
+        def my_task():
+            result.append("Task result")
+
+        task_instance = my_task(context=context)
+        with pytest.raises(MyError):
+            task_instance([])
+
+        assert result == [
+            "before",
+            "cleanup",
+        ]
+
+        @task(
+            before=[
+                tasks.partial_task(task_without_error, "before"),
+            ],
+            after=[
+                tasks.partial_task(task_without_error, "after"),
+                task_with_error,
+                tasks.partial_task(task_without_error, "after2"),
+            ],
+            cleanup=[
+                tasks.partial_task(task_without_error, "cleanup"),
+            ],
+        )
+        def my_task():
+            result.append("Task result")
+
+        task_instance = my_task(context=context)
+        result = []
+        with pytest.raises(MyError):
+            task_instance([])
+
+        assert result == [
+            "before",
+            "Task result",
+            "after",
+            "cleanup",
+        ]
+
+        @task(
+            before=[
+                tasks.partial_task(task_without_error, "before"),
+            ],
+            after=[
+                tasks.partial_task(task_without_error, "after"),
+                tasks.partial_task(task_without_error, "after2"),
+            ],
+            cleanup=[
+                tasks.partial_task(task_without_error, "cleanup"),
+            ],
+        )
+        def my_task():
+            raise MyError("An error occurred")
+
+        task_instance = my_task(context=context)
+        result = []
+        with pytest.raises(MyError):
+            task_instance([])
+
+        assert result == [
+            "before",
+            "cleanup",
+        ]
+
 
 class TestBaseSubprocessTask:
     @pytest.mark.parametrize(

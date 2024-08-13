@@ -3,6 +3,8 @@
 import abc
 import typing
 
+from quickie.errors import TaskNotFoundError
+
 if typing.TYPE_CHECKING:
     from quickie.tasks import TaskType
 
@@ -11,19 +13,8 @@ class NamespaceABC(abc.ABC):
     """Abstract base class for namespaces."""
 
     @abc.abstractmethod
-    def get_store_ptr(self) -> typing.MutableMapping[str, "TaskType"]:
-        """Get the store of tasks."""
-
     def register[T: TaskType](self, cls: T, name: str) -> T:
         """Register a task class."""
-        name = self.namespace_name(name)
-        return self._store(cls, name=name)
-
-    def _store[T: TaskType](self, cls: T, *, name: str) -> T:
-        """Store a task class."""
-        store = self.get_store_ptr()
-        store[name] = cls
-        return cls
 
     def namespace_name(self, name: str) -> str:
         """Modify the name of a task."""
@@ -34,7 +25,6 @@ class NamespaceABC(abc.ABC):
         """Get a task class by name."""
 
 
-# TODO: Use a single namespace class with an optional parent parameter
 class RootNamespace(NamespaceABC):
     """Root namespace for tasks."""
 
@@ -43,12 +33,16 @@ class RootNamespace(NamespaceABC):
         self._internal_namespace = {}
 
     @typing.override
-    def get_store_ptr(self):
-        return self._internal_namespace
+    def register[T: TaskType](self, cls: T, name: str) -> T:
+        self._internal_namespace[name] = cls
+        return cls
 
     @typing.override
     def get_task_class(self, name: str) -> "TaskType":
-        return self._internal_namespace[name]
+        try:
+            return self._internal_namespace[name]
+        except KeyError:
+            raise TaskNotFoundError(name)
 
     def keys(self):
         """Return the keys of the namespace."""
@@ -87,13 +81,13 @@ class Namespace(NamespaceABC):
         self._parent = parent
 
     @typing.override
-    def get_store_ptr(self):
-        return self._parent.get_store_ptr()
+    def namespace_name(self, name: str) -> str:
+        return f"{self._namespace}:{name}"
 
     @typing.override
-    def namespace_name(self, name: str) -> str:
-        name = f"{self._namespace}:{name}"
-        return self._parent.namespace_name(name)
+    def register[T: TaskType](self, cls: T, name: str) -> T:
+        full_name = self.namespace_name(name)
+        return self._parent.register(cls, full_name)
 
     @typing.override
     def get_task_class(self, name: str) -> "TaskType":
@@ -106,4 +100,4 @@ class Namespace(NamespaceABC):
             The task class.
         """
         full_name = self.namespace_name(name)
-        return self.get_store_ptr()[full_name]
+        return self._parent.get_task_class(full_name)
