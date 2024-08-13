@@ -1,3 +1,4 @@
+import functools
 import io
 
 import pytest
@@ -53,16 +54,16 @@ class TestTask:
 
         task_instance = my_task(context=context)
 
-        result = task_instance(["value1", "--arg2", "value2", "value3"])
+        result = task_instance.parse_and_run(["value1", "--arg2", "value2", "value3"])
         assert result == (("value3",), {"arg1": "value1", "arg2": "value2"})
 
         my_task._meta.extra_args = False
 
         with pytest.raises(SystemExit) as exc_info:
-            task_instance(["value1", "--arg2", "value2", "value3"])
+            task_instance.parse_and_run(["value1", "--arg2", "value2", "value3"])
         assert exc_info.value.code == 2
 
-        result = task_instance(["value1", "--arg2", "value2"])
+        result = task_instance.parse_and_run(["value1", "--arg2", "value2"])
         assert result == ((), {"arg1": "value1", "arg2": "value2"})
 
     def test_help(self, context):
@@ -168,7 +169,7 @@ class TestTask:
         context.namespace.register(defined_later, "defined_later")
 
         task_instance = my_task(context=context)
-        task_instance([])
+        task_instance()
 
         assert result == [
             "before",
@@ -211,7 +212,7 @@ class TestTask:
 
         task_instance = my_task(context=context)
         with pytest.raises(MyError):
-            task_instance([])
+            task_instance()
 
         assert result == [
             "before",
@@ -237,7 +238,7 @@ class TestTask:
         task_instance = my_task(context=context)
         result = []
         with pytest.raises(MyError):
-            task_instance([])
+            task_instance()
 
         assert result == [
             "before",
@@ -264,12 +265,44 @@ class TestTask:
         task_instance = my_task(context=context)
         result = []
         with pytest.raises(MyError):
-            task_instance([])
+            task_instance()
 
         assert result == [
             "before",
             "cleanup",
         ]
+
+    @pytest.mark.xfail(reason="Cache not supported yet when bind=True")
+    def test_cache(self, context):
+        counter = 0
+
+        @task
+        @functools.cache
+        def my_task(a, b):
+            nonlocal counter
+            counter += 1
+            return a + b
+
+        # initialize multiple times, as this is what might happen in practice
+        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        assert counter == 1
+        assert my_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
+        assert counter == 2  # noqa: PLR2004
+
+        # should also work if bind=True
+        @task(bind=True)
+        @functools.cache
+        def my_task(_, a, b):
+            nonlocal counter
+            counter += 1
+            return a + b
+
+        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        assert counter == 3  # noqa: PLR2004
+        assert my_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
+        assert counter == 4  # noqa: PLR2004
 
 
 class TestBaseSubprocessTask:
@@ -328,7 +361,7 @@ class TestCommand:
         task_with_args = TaskWithArgs(context=context)
         task_with_dynamic_args = dynamic_args_task(context=context)
 
-        task_instance([])
+        task_instance()
         subprocess_run.assert_called_once_with(
             ["myprogram"],
             check=False,
@@ -346,7 +379,7 @@ class TestCommand:
         )
         subprocess_run.reset_mock()
 
-        task_with_dynamic_args(["--arg1", "value1"])
+        task_with_dynamic_args.parse_and_run(["--arg1", "value1"])
         subprocess_run.assert_called_once_with(
             ["myprogram", "value1"],
             check=False,
@@ -395,7 +428,7 @@ class TestScriptTask:
         )
         subprocess_run.reset_mock()
 
-        dynamic_task(["value1"])
+        dynamic_task.parse_and_run(["value1"])
         subprocess_run.assert_called_once_with(
             "myscript value1",
             check=False,
@@ -433,7 +466,7 @@ class TestSerialTaskGroup:
             return [tasks.partial_task(task_1, arg), Task2]
 
         task_instance = my_group(context=context)
-        task_instance(["First"])
+        task_instance.parse_and_run(["First"])
 
         assert result == ["First", "Second"]
 
@@ -460,5 +493,5 @@ class TestThreadTaskGroup:
             return [Task1, tasks.partial_task(task2, "Third")]
 
         task_instance = my_task(context=context)
-        task_instance([])
+        task_instance()
         assert result == ["First", "Second", "Third"]

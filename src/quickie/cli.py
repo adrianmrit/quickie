@@ -183,4 +183,4 @@ class Main:
     def run_task(self, task_name, args):
         """Run a task."""
         task = self.get_task(task_name)
-        return task(args)
+        return task.parse_and_run(args)

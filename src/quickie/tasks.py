@@ -235,20 +235,12 @@ class Task(metaclass=TaskMeta):
         else:
             parsed_args = parser.parse_args(args)
             extra = ()
-        return parsed_args, extra
+        parsed_args = vars(parsed_args)
+        return extra, parsed_args
 
     def get_help(self) -> str:
         """Get the help message of the task."""
         return self.parser.format_help()
-
-    def run(self, *args, **kwargs):
-        """Run the task.
-
-        This method should be overridden by subclasses to implement the task.
-
-        {0}
-        """
-        raise NotImplementedError
 
     def _resolve_related(self, task_cls):
         """Get the task class."""
@@ -274,41 +266,58 @@ class Task(metaclass=TaskMeta):
     def run_before(self, *args, **kwargs):
         """Run the tasks before this task."""
         for task_cls in self.get_before(*args, **kwargs):
-            task_cls(context=self.context).run()
+            task_cls(context=self.context)()
 
     def run_after(self, *args, **kwargs):
         """Run the tasks after this task."""
         for task_cls in self.get_after(*args, **kwargs):
-            task_cls(context=self.context).run()
+            task_cls(context=self.context)()
 
     def run_cleanup(self, *args, **kwargs):
         """Run the tasks after this task, even if it fails."""
         for task_cls in self.get_cleanup(*args, **kwargs):
             try:
-                task_cls(context=self.context).run()
+                task_cls(context=self.context)()
             except Exception as e:
                 self.print_error(f"Error running cleanup task {task_cls}: {e}")
                 continue
 
-    def __call__(self, args: typing.Sequence[str]):
-        """Call the task.
+    def parse_and_run(self, args: typing.Sequence[str]):
+        """Parse arguments and run the task."""
+        extra, parsed_args = self.parse_args(
+            parser=self.parser, args=args, extra_args=self._meta.extra_args
+        )
+        return self.__call__(*extra, **parsed_args)
+
+    def run(self, *args, **kwargs):
+        """Runs work related to the task, excluding before, after, and cleanup tasks.
+
+        This method should be overridden by subclasses to implement the task.
+        """
+        raise NotImplementedError
+
+    # not implemented in __call__ so that we can override it at the instance level
+    def full_run(self, *args, **kwargs):
+        """Call the task, including before, after, and cleanup tasks.
 
         Args:
-            args: Sequence of arguments to pass to the task.
+            args: Unknown arguments.
+            kwargs: Parsed known arguments.
+
+        Returns:
+            The result of the task.
         """
-        parsed_args, extra = self.parse_args(
-            parser=self.parser,
-            args=args,
-            extra_args=self._meta.extra_args,
-        )
-        parsed_args = vars(parsed_args)
         try:
-            self.run_before(*args, **parsed_args)
-            result = self.run(*extra, **parsed_args)
-            self.run_after(*args, **parsed_args)
+            self.run_before(*args, **kwargs)
+            result = self.run(*args, **kwargs)
+            self.run_after(*args, **kwargs)
             return result
         finally:
-            self.run_cleanup(*args, **parsed_args)
+            self.run_cleanup(*args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        """Convenient shortcut for full_run."""
+        return self.full_run(*args, **kwargs)
 
 
 class BaseSubprocessTask(Task):
@@ -508,7 +517,9 @@ class _PartialTaskProxy(_TaskProxy):
         the same interface as when initializing a task class.
         """
         instance = super().__call__(*args, **kwargs)
-        instance.run = functools.partial(instance.run, *self.args, **self.kwargs)
+        instance.full_run = functools.partial(
+            instance.full_run, *self.args, **self.kwargs
+        )
         return instance
 
 
@@ -554,7 +565,7 @@ class _TaskGroup(Task):
         """Run a task."""
         # This is safer than passing the parent arguments. If need to pass
         # extra arguments, can override get_tasks and use partial_task
-        return task_cls(context=self.context).run()
+        return task_cls(context=self.context).__call__()
 
 
 class Group(_TaskGroup):
