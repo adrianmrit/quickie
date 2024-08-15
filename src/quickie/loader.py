@@ -1,24 +1,7 @@
 """Task loader."""
 
-from pathlib import Path
-
-from quickie import constants
-from quickie.errors import TasksModuleNotFoundError
 from quickie.namespace import Namespace
 from quickie.tasks import Task
-
-
-def get_default_module_path():
-    """Get the default module path."""
-    current = Path.cwd()
-    while True:
-        path = current / constants.TASKS_PATH
-        if (path).exists():
-            return path
-        if current == current.parent:
-            break
-        current = current.parent
-    raise TasksModuleNotFoundError(constants.TASKS_PATH)
 
 
 def load_tasks_from_module(module, namespace):

@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 import pytest
 from frozendict import frozendict
@@ -7,29 +6,45 @@ from pytest import MonkeyPatch
 from rich.console import Console
 from rich.theme import Theme
 
-from quickie import constants
+from quickie import cli, config
 from quickie.context import Context
 from quickie.namespace import RootNamespace
 
-DEFAULT_CONSOLE_THEME = Theme(constants.DEFAULT_CONSOLE_STYLE)
+DEFAULT_CONSOLE_THEME = Theme(config.CONSOLE_STYLE)
 
 
 @pytest.fixture(autouse=True, scope="session")
-def patch_constants():
+def patch_config(tmpdir_factory):
     m = MonkeyPatch()
-    m.setattr("quickie.constants.TASKS_PATH", Path("tests/__quickie_test"))
-    m.setattr("quickie.constants.HOME_PATH", Path("tests/__home_test__"))
-    m.setattr(
-        "quickie.constants.SETTINGS_PATH", Path("tests/__home_test__/settings.toml")
-    )
+    original = cli.Main.get_config
+
+    def _new_load_config(self, **kwargs):
+        # Values can be set and be null or empty string, in which case we
+        # want to override the default.
+        kwargs["home_path"] = kwargs.get("home_path") or "tests/__quickie_home"
+        kwargs["tasks_module_name"] = (
+            kwargs.get("tasks_module_name") or "tests/__quickie_test"
+        )
+        kwargs["tmp_relative_path"] = kwargs.get("tmp_relative_path") or str(
+            tmpdir_factory.mktemp("quickie_tmp")
+        )
+        return original(self, **kwargs)
+
+    m.setattr(cli.Main, "_load_config", _new_load_config)
 
 
 @pytest.fixture
-def context():
+def context(tmpdir):
     return Context(
         program_name="qck",
         cwd=os.getcwd(),
         env=frozendict(os.environ),
         console=Console(theme=DEFAULT_CONSOLE_THEME),
         namespace=RootNamespace(),
+        config=config.CliConfig(
+            home_path="tests/__quickie_home",
+            tasks_module_name="tests/__quickie_test",
+            tmp_relative_path=str(tmpdir),
+            use_global=False,
+        ),
     )

@@ -6,7 +6,7 @@ from quickie.completion.python import PytestCompleter
 
 class TestTaskCompleter:
     def test_complete(self, mocker):
-        mocker.patch("quickie.cli.Main.load_tasks_from_namespace")
+        mocker.patch("quickie.cli.Main.load_tasks")
 
         class MyTask(tasks.Task):
             """My task"""

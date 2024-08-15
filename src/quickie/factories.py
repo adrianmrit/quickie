@@ -102,6 +102,7 @@ def generic_task_factory(  # noqa: PLR0913
     help: str | None = None,
     short_help: str | None = None,
     bind: bool = False,
+    condition: tasks.BaseCondition | None = None,
     before: typing.Sequence[tasks.Task] = None,
     after: typing.Sequence[tasks.Task] = None,
     cleanup: typing.Sequence[tasks.Task] = None,
@@ -155,6 +156,7 @@ def generic_task_factory(  # noqa: PLR0913
         short_help: The short help text for the task.
         bind: If true, the first parameter of the function will be the
             task class instance.
+        condition: The condition to check before running the task.
         before: The tasks to run before the task.
         after: The tasks to run after the task.
         cleanup: The tasks to run after the task, even if it fails.
@@ -172,6 +174,7 @@ def generic_task_factory(  # noqa: PLR0913
             help=help,
             short_help=short_help,
             bind=bind,
+            condition=condition,
             before=before,
             after=after,
             cleanup=cleanup,
@@ -203,6 +206,9 @@ def generic_task_factory(  # noqa: PLR0913
     if add_args is not None:
         kwds["add_args"] = add_args
 
+    if condition:
+        kwds["condition"] = condition
+
     if before:
         kwds["before"] = before
 
@@ -233,6 +239,7 @@ def task(  # noqa: PLR0913
     help: str | None = None,
     short_help: str | None = None,
     bind: bool = False,
+    condition: tasks.BaseCondition | None = None,
     before: typing.Sequence[tasks.Task] = None,
     after: typing.Sequence[tasks.Task] = None,
     cleanup: typing.Sequence[tasks.Task] = None,
@@ -260,6 +267,7 @@ def task(  # noqa: PLR0913
         short_help: The short help text for the task.
         bind: If true, the first parameter of the function will be the
             task class instance.
+        condition: The condition to check before running the task.
         before: The tasks to run before the task.
         after: The tasks to run after the task.
         cleanup: The tasks to run after the task, even if it fails.
@@ -272,6 +280,7 @@ def task(  # noqa: PLR0913
         help=help,
         short_help=short_help,
         bind=bind,
+        condition=condition,
         before=before,
         after=after,
         cleanup=cleanup,
@@ -289,6 +298,7 @@ def script(  # noqa: PLR0913
     help: str | None = None,
     short_help: str | None = None,
     bind: bool = False,
+    condition: tasks.BaseCondition | None = None,
     before: typing.Sequence[tasks.Task] = None,
     after: typing.Sequence[tasks.Task] = None,
     cleanup: typing.Sequence[tasks.Task] = None,
@@ -318,6 +328,7 @@ def script(  # noqa: PLR0913
         short_help: The short help text for the script.
         bind: If true, the first parameter of the function will be the
             task class instance.
+        condition: The condition to check before running the script.
         before: The tasks to run before the script.
         after: The tasks to run after the script.
         cleanup: The tasks to run after the script, even if it fails.
@@ -332,6 +343,7 @@ def script(  # noqa: PLR0913
         help=help,
         short_help=short_help,
         bind=bind,
+        condition=condition,
         before=before,
         after=after,
         cleanup=cleanup,
@@ -350,6 +362,7 @@ def command(  # noqa: PLR0913
     help: str | None = None,
     short_help: str | None = None,
     bind: bool = False,
+    condition: tasks.BaseCondition | None = None,
     before: typing.Sequence[tasks.Task] = None,
     after: typing.Sequence[tasks.Task] = None,
     cleanup: typing.Sequence[tasks.Task] = None,
@@ -393,6 +406,7 @@ def command(  # noqa: PLR0913
         help=help,
         short_help=short_help,
         bind=bind,
+        condition=condition,
         before=before,
         after=after,
         cleanup=cleanup,
@@ -411,6 +425,7 @@ def group(  # noqa: PLR0913
     help: str | None = None,
     short_help: str | None = None,
     bind: bool = False,
+    condition: tasks.BaseCondition | None = None,
     before: typing.Sequence[tasks.Task] = None,
     after: typing.Sequence[tasks.Task] = None,
     cleanup: typing.Sequence[tasks.Task] = None,
@@ -438,6 +453,7 @@ def group(  # noqa: PLR0913
         short_help: The short help text for the group task.
         bind: If true, the first parameter of the function will be the
             task class instance.
+        condition: The condition to check before running the group task.
         before: The tasks to run before the group task.
         after: The tasks to run after the group task.
         cleanup: The tasks to run after the group task, even if it fails.
@@ -450,6 +466,7 @@ def group(  # noqa: PLR0913
         help=help,
         short_help=short_help,
         bind=bind,
+        condition=condition,
         before=before,
         after=after,
         cleanup=cleanup,
@@ -467,6 +484,7 @@ def thread_group(  # noqa: PLR0913
     help: str | None = None,
     short_help: str | None = None,
     bind: bool = False,
+    condition: tasks.BaseCondition | None = None,
     before: typing.Sequence[tasks.Task] = None,
     after: typing.Sequence[tasks.Task] = None,
     cleanup: typing.Sequence[tasks.Task] = None,
@@ -497,6 +515,7 @@ def thread_group(  # noqa: PLR0913
         short_help: The short help text for the thread group task.
         bind: If true, the first parameter of the function will be the
             task class instance.
+        condition: The condition to check before running the thread group task.
         before: The tasks to run before the thread group task.
         after: The tasks to run after the thread group task.
         cleanup: The tasks to run after the thread group task, even if it fails.
@@ -509,6 +528,7 @@ def thread_group(  # noqa: PLR0913
         help=help,
         short_help=short_help,
         bind=bind,
+        condition=condition,
         before=before,
         after=after,
         cleanup=cleanup,

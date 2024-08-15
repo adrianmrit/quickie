@@ -19,9 +19,8 @@ class TaskCompleter(BaseCompleter):
         self.main = main
 
     @typing.override
-    def complete(self, *, prefix, parsed_args, **_):
+    def complete(self, *, prefix, **_):
         try:
-            self.main.load_tasks_from_namespace(parsed_args)
             return {
                 key: task._meta.short_help or ""
                 for key, task in self.main.tasks_namespace.items()

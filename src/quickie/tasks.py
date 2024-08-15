@@ -8,12 +8,15 @@ together.
 
 import abc
 import argparse
+import contextlib
 import functools
 import os
 import typing
 
 from classoptions import ClassOptionsMetaclass
 from rich.prompt import Confirm, Prompt
+
+from quickie.utils.conditions.base import BaseCondition
 
 from .context import Context
 
@@ -54,6 +57,9 @@ class TaskMeta(ClassOptionsMetaclass):
 
 class Task(metaclass=TaskMeta):
     """Base class for all tasks."""
+
+    condition: typing.ClassVar[BaseCondition | None] = None
+    """The condition to check before running the task."""
 
     before: typing.ClassVar[typing.Sequence[TaskType]] = ()
     """Tasks to run before this task."""
@@ -282,6 +288,12 @@ class Task(metaclass=TaskMeta):
                 self.print_error(f"Error running cleanup task {task_cls}: {e}")
                 continue
 
+    def condition_passes(self, *args, **kwargs):
+        """Check the condition before running the task."""
+        if self.condition is not None:
+            return self.condition(self, *args, **kwargs)
+        return True
+
     def parse_and_run(self, args: typing.Sequence[str]):
         """Parse arguments and run the task."""
         extra, parsed_args = self.parse_args(
@@ -307,6 +319,8 @@ class Task(metaclass=TaskMeta):
         Returns:
             The result of the task.
         """
+        if not self.condition_passes(*args, **kwargs):
+            return
         try:
             self.run_before(*args, **kwargs)
             result = self.run(*args, **kwargs)
@@ -471,7 +485,7 @@ class Script(BaseSubprocessTask):
 
 
 class _TaskProxy(abc.ABC):
-    """A proxy for tasks that resolves the task class when called"""
+    """A proxy for tasks that resolves the task class when called."""
 
     @abc.abstractmethod
     def resolve_task_cls(self, context: Context) -> TaskType:
@@ -479,7 +493,10 @@ class _TaskProxy(abc.ABC):
         pass  # pragma: no cover
 
     def __call__(self, *args, context: Context, **kwargs) -> TaskType:
-        """Resolves and initializes the task class. Thus allows to use the same interface as when initializing a task class."""
+        """Resolves and initializes the task class.
+
+        This allows to use the same interface as when initializing a task class.
+        """
         task_cls = self.resolve_task_cls(context)
         return task_cls(*args, context=context, **kwargs)
 
@@ -490,6 +507,7 @@ class _LazyTaskProxy(_TaskProxy):
     def __init__(self, name: str):
         self.name = name
 
+    @typing.override
     def resolve_task_cls(self, context: Context) -> TaskType:
         """Resolve the task class."""
         return context.namespace.get_task_class(self.name)
@@ -503,6 +521,7 @@ class _PartialTaskProxy(_TaskProxy):
         self.args = args
         self.kwargs = kwargs
 
+    @typing.override
     def resolve_task_cls(self, context: Context) -> TaskType:
         task_cls = self.task_cls
         while isinstance(task_cls, _TaskProxy):
@@ -510,11 +529,11 @@ class _PartialTaskProxy(_TaskProxy):
         return task_cls
 
     def __call__(self, *args, **kwargs) -> TaskType:
-        """
-        Initialize the task class with the given arguments, patches the run method to pass the arguments, and returns the instance.
+        """Patch full_run to inject the arguments, and return the instance.
 
-        This way we can inject the arguments without subclassing or modifying the original task class. And this also allows to use
-        the same interface as when initializing a task class.
+        This way we can inject the arguments without subclassing or modifying the
+        original task class. And this also allows to use the same interface as when
+        initializing a task class.
         """
         instance = super().__call__(*args, **kwargs)
         instance.full_run = functools.partial(
@@ -523,28 +542,74 @@ class _PartialTaskProxy(_TaskProxy):
         return instance
 
 
+class _SuppressErrorsTaskProxy(_TaskProxy):
+    """Wrapper to suppress errors for a task."""
+
+    class suppress_decorator(contextlib.ContextDecorator, contextlib.suppress):
+        pass
+
+    def __init__(self, task_cls: TaskTypeOrProxy, *exceptions: type[Exception]):
+        self.task_cls = task_cls
+        self.exceptions = exceptions or (Exception,)
+
+    @typing.override
+    def resolve_task_cls(self, context: Context) -> TaskType:
+        task_cls = self.task_cls
+        while isinstance(task_cls, _TaskProxy):
+            task_cls = task_cls.resolve_task_cls(context)
+        return task_cls
+
+    def __call__(self, *args, **kwargs) -> TaskType:
+        """Patches full_run to ignore errors, and returns the instance."""
+        instance = super().__call__(*args, **kwargs)
+        instance.full_run = self.suppress_decorator(*self.exceptions)(instance.full_run)
+        return instance
+
+
 def lazy_task(name: str) -> TaskType:
-    """
-    Loads a task lazily by name.
+    """Loads a task lazily by name.
 
-    This is useful in cases where the task is not yet defined, or to avoid circular imports.
+    This is useful in cases where the task is not yet defined, or to avoid circular
+    imports.
 
-    Note that the task must be registered in the namespace before running it. Thus cannot lazily
-    load tasks from external unimported modules.
+    Note that the task must be registered in the namespace before running it. Thus
+    cannot lazily load tasks from external unimported modules.
+
+    Args:
+        name: The name of the task.
     """
     return _LazyTaskProxy(name)
 
 
 def partial_task(task_cls: TaskTypeOrProxy | str, *args, **kwargs) -> _PartialTaskProxy:
-    """
-    Wraps a task class with partial arguments.
+    """Wraps a task class with partial arguments.
 
-    This is useful when you want to inject arguments to a task without subclassing or modifying the original task class.
-    """
+    This is useful when you want to inject arguments to a task without subclassing or
+    modifying the original task class.
 
+    Args:
+        task_cls: The task class or lazy task to wrap.
+        *args: The arguments to inject.
+        **kwargs: The keyword arguments to inject.
+    """
     if isinstance(task_cls, str):
         task_cls = lazy_task(task_cls)
     return _PartialTaskProxy(task_cls, *args, **kwargs)
+
+
+def suppressed_task(
+    task_cls: TaskTypeOrProxy | str, *exceptions: Exception
+) -> _SuppressErrorsTaskProxy:
+    """Wraps a task class to silently suppress errors.
+
+    Args:
+        task_cls: The task class or lazy task to wrap.
+        *exceptions: The exceptions to suppress. While not required, it is recommended
+            to specify the exceptions to suppress to avoid hiding unexpected errors.
+    """
+    if isinstance(task_cls, str):
+        task_cls = lazy_task(task_cls)
+    return _SuppressErrorsTaskProxy(task_cls, *exceptions)
 
 
 class _TaskGroup(Task):

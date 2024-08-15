@@ -5,6 +5,7 @@ import typing
 from frozendict import frozendict
 from rich.console import Console
 
+from quickie.config import CliConfig
 from quickie.namespace import Namespace
 
 
@@ -19,6 +20,7 @@ class Context:
         env: typing.Mapping,
         console: Console,
         namespace: Namespace,
+        config: CliConfig,
     ):
         """Initialize the context."""
         self.program_name = program_name
@@ -26,6 +28,7 @@ class Context:
         self.env = frozendict(env)
         self.console = console
         self.namespace = namespace
+        self.config = config
 
     def copy(self):
         """Copy the context."""
@@ -35,4 +38,5 @@ class Context:
             env=self.env,
             console=self.console,
             namespace=self.namespace,
+            config=self.config,
         )

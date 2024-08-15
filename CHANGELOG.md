@@ -8,9 +8,15 @@
 
 ### Added
 
-- Added support for creating tasks from functions.
-- Added support for task dependencies.
+- Create tasks from functions.
+- Add arguments to the parser of tasks via decorators.
+- Define tasks that must run before or after another task.
+- Define cleanup tasks for a task.
+- Allow conditions for running tasks.
+- Define partial tasks.
+- Load from another task by name.
 
 ### Changed
 
 - Renamed classes and parameters for clarity.
+- Removed support for file-based configuration in favor of environment variables.

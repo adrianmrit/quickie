@@ -6,6 +6,7 @@ import pytest
 import quickie.namespace
 from quickie import tasks
 from quickie.factories import arg, command, group, script, task, thread_group
+from quickie.utils.conditions import condition
 
 
 class TestGlobalNamespace:
@@ -303,6 +304,57 @@ class TestTask:
         assert counter == 3  # noqa: PLR2004
         assert my_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
         assert counter == 4  # noqa: PLR2004
+
+    def test_condition(self, context):
+        result = []
+
+        a_condition = condition(lambda *args, **kwargs: a)
+        b_condition = condition(lambda *args, **kwargs: b)
+
+        @task(condition=a_condition & b_condition)
+        def a_and_b():
+            result.append("a_and_b")
+
+        @task(condition=a_condition | b_condition)
+        def a_or_b():
+            result.append("a_or_b")
+
+        @task(condition=~a_condition)
+        def not_a():
+            result.append("not_a")
+
+        @task(condition=a_condition ^ b_condition)
+        def a_xor_b():
+            result.append("a_xor_b")
+
+        def call_tasks():
+            a_and_b(context=context)()
+            a_or_b(context=context)()
+            not_a(context=context)()
+            a_xor_b(context=context)()
+
+        a = False
+        b = False
+        call_tasks()
+        assert result == ["not_a"]
+
+        a = True
+        b = False
+        result = []
+        call_tasks()
+        assert result == ["a_or_b", "a_xor_b"]
+
+        a = False
+        b = True
+        result = []
+        call_tasks()
+        assert result == ["a_or_b", "not_a", "a_xor_b"]
+
+        a = True
+        b = True
+        result = []
+        call_tasks()
+        assert result == ["a_and_b", "a_or_b"]
 
 
 class TestBaseSubprocessTask:

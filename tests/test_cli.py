@@ -8,6 +8,10 @@ from pytest import mark, raises
 
 from quickie import cli
 from quickie.argparser import ArgumentsParser
+from quickie.errors import Stop
+from quickie.factories import task
+from quickie.namespace import RootNamespace
+from quickie.tasks import suppressed_task
 
 PYTHON_PATH = sys.executable
 BIN_FOLDER = os.path.join(sys.prefix, "bin")
@@ -89,6 +93,9 @@ def test_default(capsys):
         cli.main([])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
+    # normalize spaces in out, as pytest might add extra spaces when running in vscode
+    out = re.sub(r"\s+", " ", out)
+
     assert "[-h] [-V] [-l] [-m MODULE | -g | --autocomplete {bash,zsh}]" in out
     assert not err
 
@@ -107,6 +114,8 @@ def test_main_no_args(capsys):
     assert exc_info.value.code in (0, 2)
     out, err = capsys.readouterr()
     out = out + err
+    # normalize spaces in out, as pytest might add extra spaces when running in vscode
+    out = re.sub(r"\s+", " ", out)
     assert "[-h] [-V] [-l] [-m MODULE | -g | --autocomplete {bash,zsh}]" in out
 
 
@@ -151,6 +160,47 @@ def test_suggest_autocompletion_zsh(capsys):
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     assert 'eval "$(register-python-argcomplete qck)"' in out
+
+
+def test_stop_iteration(capsys):
+    namespace = RootNamespace()
+
+    @task
+    def stop():
+        raise Stop("My message", exit_code=10)
+
+    @task
+    def stop_no_reason():
+        raise Stop(exit_code=5)
+
+    @task(before=[suppressed_task(stop), stop_no_reason])
+    def with_before():
+        pass
+
+    namespace.register(stop, "stop")
+    namespace.register(stop_no_reason, "stop_no_reason")
+    namespace.register(with_before, "with_before")
+
+    with raises(SystemExit) as exc_info:
+        cli.main(["stop"], tasks_namespace=namespace)
+    assert exc_info.value.code == 10
+    out, err = capsys.readouterr()
+    assert out == "Stopping: My message\n"
+    assert not err
+
+    with raises(SystemExit) as exc_info:
+        cli.main(["stop_no_reason"], tasks_namespace=namespace)
+    assert exc_info.value.code == 5
+    out, err = capsys.readouterr()
+    assert out == "Stopping because Stop exception was raised.\n"
+    assert not err
+
+    with raises(SystemExit) as exc_info:
+        cli.main(["with_before"], tasks_namespace=namespace)
+    assert exc_info.value.code == 5
+    out, err = capsys.readouterr()
+    assert out == "Stopping because Stop exception was raised.\n"
+    assert not err
 
 
 class TestAutocompletion:

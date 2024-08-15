@@ -2,7 +2,6 @@
 
 import os
 import sys
-import tomllib
 from pathlib import Path
 
 import argcomplete
@@ -12,21 +11,29 @@ from rich.console import Console
 from rich.theme import Theme
 
 import quickie
-from quickie import constants
+from quickie import config
 from quickie.argparser import ArgumentsParser
 from quickie.context import Context
-from quickie.errors import QuickieError
-from quickie.loader import get_default_module_path, load_tasks_from_module
+from quickie.errors import QuickieError, Stop
+from quickie.loader import load_tasks_from_module
 from quickie.namespace import RootNamespace
 from quickie.utils import imports
 
 
-def main(argv=None, *, raise_error=False):
+def main(argv=None, *, raise_error=False, tasks_namespace=None):
     """Run the CLI."""
     traceback.install(suppress=[quickie])
-    main = Main(argv=argv)
+    main = Main(argv=argv, tasks_namespace=tasks_namespace)
     try:
         main()
+    except Stop as e:
+        if e.message:
+            main.console.print(f"Stopping: [info]{e.message}[/info]", style="info")
+        else:
+            main.console.print(
+                f"Stopping because {Stop.__name__} exception was raised."
+            )
+        sys.exit(e.exit_code)
     except QuickieError as e:
         if raise_error:
             raise e
@@ -37,29 +44,23 @@ def main(argv=None, *, raise_error=False):
 class Main:
     """Represents the CLI entry of quickie."""
 
-    def __init__(self, *, argv=None):  # noqa: PLR0913
+    def __init__(self, *, argv=None, tasks_namespace=None):  # noqa: PLR0913
         """Initialize the CLI."""
-        self.settings = self.load_settings()
         if argv is None:
             argv = sys.argv[1:]
         self.argv = argv
 
-        self.console = Console(theme=Theme(self.settings["style"]))
-        self.tasks_namespace = RootNamespace()
-
-        self.global_context = Context(
-            program_name=os.path.basename(sys.argv[0]),
-            cwd=os.getcwd(),
-            env=frozendict(os.environ),
-            console=self.console,
-            namespace=self.tasks_namespace,
-        )
-
+        # TODO: Make the console theme configurable
+        self.console = Console(theme=Theme(config.CONSOLE_STYLE))
+        if tasks_namespace is None:
+            tasks_namespace = RootNamespace()
+        self.tasks_namespace = tasks_namespace
         self.parser = ArgumentsParser(main=self)
 
     def __call__(self):
         """Run the CLI."""
-        if os.environ.get("_ARGCOMPLETE"):
+        arg_complete_val = os.environ.get("_ARGCOMPLETE")
+        if arg_complete_val:
             comp_line = os.environ["COMP_LINE"]
             comp_point = int(os.environ["COMP_POINT"])
 
@@ -71,19 +72,37 @@ class Main:
             # _ARGCOMPLETE is set by the shell script to tell us where comp_words
             # should start, based on what we're completing.
             # we ignore teh program name, hence no -1
-            start = int(os.environ["_ARGCOMPLETE"])
-            comp_words = comp_words[start:]
-            namespace = self.parser.parse_args(comp_words)
+            start = int(arg_complete_val)
+            args = comp_words[start:]
+        else:
+            args = self.argv
+
+        namespace = self.parser.parse_args(args)
+        config = self.get_config(
+            tasks_module_name=namespace.module,
+            use_global=namespace.use_global,
+        )
+        context = Context(
+            program_name=os.path.basename(sys.argv[0]),
+            cwd=os.getcwd(),
+            env=frozendict(os.environ),
+            console=self.console,
+            namespace=self.tasks_namespace,
+            config=config,
+        )
+        self.load_tasks(path=config.TASKS_MODULE_PATH)
+
+        if arg_complete_val:
             if namespace.task:
-                self.load_tasks_from_namespace(namespace)
-                task = self.get_task(namespace.task)
-                os.environ["_ARGCOMPLETE"] = str(comp_words.index(namespace.task))
+                task = self.get_task(namespace.task, context=context)
+                # Upddate _ARGCOMPLETE to the index of the task, so that completion
+                # only considers the task arguments
+                os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
                 argcomplete.autocomplete(task.parser)
             else:
                 argcomplete.autocomplete(self.parser)
+            sys.exit(0)
 
-        namespace = self.parser.parse_args(self.argv)
-        self.load_tasks_from_namespace(namespace)
         if namespace.suggest_auto_completion:
             if namespace.suggest_auto_completion == "bash":
                 self.suggest_autocompletion_bash()
@@ -92,10 +111,18 @@ class Main:
         elif namespace.list:
             self.list_tasks()
         elif namespace.task is not None:
-            self.run_task(task_name=namespace.task, args=namespace.args)
+            self.run_task(
+                task_name=namespace.task,
+                args=namespace.args,
+                context=context,
+            )
         else:
             self.console.print(self.get_usage())
         self.parser.exit()
+
+    def get_config(self, **kwargs):  # mostly so that we can mock it
+        """Load the configuration."""
+        return config.CliConfig(**kwargs)
 
     def suggest_autocompletion_bash(self):
         """Suggest autocompletion for bash."""
@@ -112,28 +139,6 @@ class Main:
             'eval "$(register-python-argcomplete qck)"',
             style="bold green",
         )
-
-    def load_tasks_from_namespace(self, namespace):
-        """Load tasks from the namespace."""
-        if namespace.module is not None:
-            tasks_module_path = Path(namespace.module)
-        elif namespace.use_global:
-            tasks_module_path = constants.HOME_PATH
-        else:
-            tasks_module_path = get_default_module_path()
-        self.load_tasks(path=tasks_module_path)
-
-    def load_settings(self):
-        """Load the console theme."""
-        defaults = frozendict({"style": constants.DEFAULT_CONSOLE_STYLE})
-        if constants.SETTINGS_PATH.exists():
-            with constants.SETTINGS_PATH.open("r") as f:
-                user_settings = tomllib.load(f)
-                user_settings["style"] = frozendict(
-                    defaults["style"] | user_settings.get("style", {})
-                )
-                return frozendict(user_settings)
-        return defaults
 
     def list_tasks(self):
         """List the available tasks."""
@@ -171,16 +176,16 @@ class Main:
         module = imports.import_from_path(root / path)
         load_tasks_from_module(module, namespace=self.tasks_namespace)
 
-    def get_usage(self):
+    def get_usage(self) -> str:
         """Get the usage message."""
         return self.parser.format_usage()
 
-    def get_task(self, task_name):
+    def get_task(self, task_name: str, *, context: Context) -> quickie.Task:
         """Get a task by name."""
         task_class = self.tasks_namespace.get_task_class(task_name)
-        return task_class(name=task_name, context=self.global_context)
+        return task_class(name=task_name, context=context)
 
-    def run_task(self, task_name, args):
+    def run_task(self, task_name: str, *, args, context: Context):
         """Run a task."""
-        task = self.get_task(task_name)
+        task = self.get_task(task_name, context=context)
         return task.parse_and_run(args)
