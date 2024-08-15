@@ -18,7 +18,7 @@ def patch_config(tmpdir_factory):
     m = MonkeyPatch()
     original = cli.Main.get_config
 
-    def _new_load_config(self, **kwargs):
+    def new_get_config(self, **kwargs):
         # Values can be set and be null or empty string, in which case we
         # want to override the default.
         kwargs["home_path"] = kwargs.get("home_path") or "tests/__quickie_home"
@@ -30,7 +30,7 @@ def patch_config(tmpdir_factory):
         )
         return original(self, **kwargs)
 
-    m.setattr(cli.Main, "_load_config", _new_load_config)
+    m.setattr(cli.Main, "get_config", new_get_config)
 
 
 @pytest.fixture

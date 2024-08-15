@@ -1,11 +1,11 @@
 import pytest
 
 from quickie.factories import task
-from quickie.utils.conditions import FilesNotModified, PathsExist
+from quickie.utils.conditions import FilesModified, FirstRun, PathsExist
 
 
 class TestFilesNotModified:
-    @pytest.mark.parametrize("algorithm", FilesNotModified.Algorithm)
+    @pytest.mark.parametrize("algorithm", FilesModified.Algorithm)
     def test(self, tmpdir, context, algorithm):
         @task
         def my_task():
@@ -16,23 +16,36 @@ class TestFilesNotModified:
         directory = tmpdir.mkdir("directory")
         file2 = directory.join("file2")
         file2.write("other content")
-        condition = FilesNotModified(file1, file2, algorithm=algorithm)
+        condition = FilesModified([file1, directory], algorithm=algorithm)
         t = my_task(context=context)
-        assert not condition(t)
         assert condition(t)
+        assert not condition(t)
         file1.write("new content")
-        assert not condition(t)
         assert condition(t)
+        assert not condition(t)
 
         # condition with missing files
-        missing_file = tmpdir.join("missing")
-        condition = FilesNotModified(
-            file1, file2, missing_file, algorithm=algorithm, allow_missing=False
+        missing_file = directory.join("missing")
+        condition = FilesModified(
+            [file1, directory, missing_file], algorithm=algorithm, allow_missing=False
+        )
+        assert condition(t)
+        condition = FilesModified(
+            [file1, directory, missing_file], algorithm=algorithm, allow_missing=True
         )
         assert not condition(t)
-        condition = FilesNotModified(
-            file1, file2, missing_file, algorithm=algorithm, allow_missing=True
+
+        # condition with excluded files
+        file1.write("content again")
+        file3 = directory.join("file3")
+        file3.write("other content")
+        condition = FilesModified(
+            [file1, directory], exclude=[file3], algorithm=algorithm
         )
+        assert condition(t)
+        file3.write("new content")
+        assert not condition(t)
+        condition = FilesModified([file1, directory], algorithm=algorithm)
         assert condition(t)
 
 
@@ -55,4 +68,31 @@ class TestPathsExist:
         file1.write("new content")
         assert condition(t)
         file1.remove()
+        assert not condition(t)
+
+
+class TestFirstRun:
+    def test(self, context):
+        @task
+        def my_task(*args):
+            pass
+
+        condition = FirstRun()
+        t = my_task(context=context)
+        assert condition(t)
+        assert not condition(t)
+        assert not condition(t, "value1", "value2")
+
+    def test_check_args(self, context):
+        @task
+        def my_task(*args):
+            pass
+
+        condition = FirstRun(check_args=True)
+        t = my_task(context=context)
+        assert condition(t, "value1", "value2")
+        assert not condition(t, "value1", "value2")
+        assert condition(t, "value1", "value3")
+        assert not condition(t, "value1", "value3")
+        assert condition(t)
         assert not condition(t)

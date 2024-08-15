@@ -9,16 +9,16 @@ import abc
 import typing
 
 if typing.TYPE_CHECKING:
-    from quickie.tasks import TaskType
+    from quickie.tasks import Task as TaskInstance
 else:
-    type TaskType = typing.Any
+    type TaskInstance = typing.Any
 
 
 class BaseCondition(abc.ABC):
     """Base class for all conditions."""
 
     @abc.abstractmethod
-    def __call__(self, task: TaskType, *args, **kwargs):
+    def __call__(self, task: TaskInstance, *args, **kwargs):
         """Check if the condition is met.
 
         Args:
