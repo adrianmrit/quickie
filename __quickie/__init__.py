@@ -22,5 +22,12 @@ def hello(self: Task):
 def build():
     return """
     python -m build
-    python -m build src/quickie_global
+    python -m build src/quickie_global -o dist
+    """
+
+
+@script
+def upload():
+    return """
+    python -m twine upload dist/*
     """
