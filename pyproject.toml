@@ -42,7 +42,9 @@ dev = [
     "pytest-cov",
     "pytest-mock"
 ]
-global = ["quickie-runner-global @ {root:uri}/src/quickie_global"]
+
+# TODO: Figure out how to specify the same version as the project
+global = ["quickie-runner-global==0.2.0"]
 
 [project.scripts]
 "qck" = "quickie.cli:main"
