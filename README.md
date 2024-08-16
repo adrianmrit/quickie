@@ -29,6 +29,12 @@ environment:
     qckg --help
     ```
 
+If you have any issues with the `quickie` package missing when running `qckg`, you can inject it manually:
+
+    ```sh
+    pipx inject quickie-runner-global quickie-runner
+    ```
+
 See the [pipx](https://pipx.pypa.io/stable/)
 
 ## Tab completion

@@ -10,3 +10,9 @@ It is recommended to use `pipx` to install in an isolated environment:
     pipx install quickie-runner-global
     qckg --help
     ```
+
+If you have any issues with the `quickie` package missing when running `qckg`, you can inject it manually:
+
+    ```sh
+    pipx inject quickie-runner-global quickie-runner
+    ```

@@ -17,10 +17,10 @@ class ArgumentsParser(ArgumentParser):
         super().__init__(description="A CLI tool for quick tasks.")
         self.add_argument("-V", "--version", action="version", version=version)
         self.add_argument("-l", "--list", action="store_true", help="List tasks")
-        self.add_argument.add_argument(
+        self.add_argument(
             "-m", "--module", type=str, help="The module to load tasks from"
         )
-        self.add_argument.add_argument(
+        self.add_argument(
             "--autocomplete",
             help="Suggest autocompletion for the shell",
             dest="suggest_auto_completion",

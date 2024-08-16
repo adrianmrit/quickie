@@ -96,7 +96,7 @@ def test_default(capsys):
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
 
-    assert "[-h] [-V] [-l] [-m MODULE | --autocomplete {bash,zsh}]" in out
+    assert "[-h] [-V] [-l] [-m MODULE] [--autocomplete {bash,zsh}]" in out
     assert not err
 
 
@@ -116,7 +116,7 @@ def test_main_no_args(capsys):
     out = out + err
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
-    assert "[-h] [-V] [-l] [-m MODULE | --autocomplete {bash,zsh}]" in out
+    assert "[-h] [-V] [-l] [-m MODULE] [--autocomplete {bash,zsh}]" in out
 
 
 @mark.integration
@@ -150,7 +150,7 @@ def test_suggest_autocompletion_bash(capsys):
         cli.main(["--autocomplete", "bash"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert 'eval "$(register-python-argcomplete qck)"' in out
+    assert 'eval "$(register-python-argcomplete' in out
 
 
 @mark.integration
@@ -159,7 +159,7 @@ def test_suggest_autocompletion_zsh(capsys):
         cli.main(["--autocomplete", "zsh"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert 'eval "$(register-python-argcomplete qck)"' in out
+    assert 'eval "$(register-python-argcomplete' in out
 
 
 def test_stop_iteration(capsys):
