@@ -20,10 +20,10 @@ from quickie.namespace import RootNamespace
 from quickie.utils import imports
 
 
-def main(argv=None, *, raise_error=False, tasks_namespace=None):
+def main(argv=None, *, raise_error=False, tasks_namespace=None, global_=False):
     """Run the CLI."""
     traceback.install(suppress=[quickie])
-    main = Main(argv=argv, tasks_namespace=tasks_namespace)
+    main = Main(argv=argv, tasks_namespace=tasks_namespace, global_=global_)
     try:
         main()
     except Stop as e:
@@ -41,10 +41,22 @@ def main(argv=None, *, raise_error=False, tasks_namespace=None):
         sys.exit(e.exit_code)
 
 
+def global_main(argv=None, *, raise_error=False, tasks_namespace=None):
+    """Run the CLI with the global option."""
+    main(
+        argv=argv,
+        raise_error=raise_error,
+        tasks_namespace=tasks_namespace,
+        global_=True,
+    )
+
+
 class Main:
     """Represents the CLI entry of quickie."""
 
-    def __init__(self, *, argv=None, tasks_namespace=None):  # noqa: PLR0913
+    def __init__(
+        self, *, argv=None, tasks_namespace=None, global_=False
+    ):  # noqa: PLR0913
         """Initialize the CLI."""
         if argv is None:
             argv = sys.argv[1:]
@@ -56,6 +68,7 @@ class Main:
             tasks_namespace = RootNamespace()
         self.tasks_namespace = tasks_namespace
         self.parser = ArgumentsParser(main=self)
+        self.global_ = global_
 
     def __call__(self):
         """Run the CLI."""
@@ -80,7 +93,7 @@ class Main:
         namespace = self.parser.parse_args(args)
         config = self.get_config(
             tasks_module_name=namespace.module,
-            use_global=namespace.use_global,
+            use_global=self.global_,
         )
         context = Context(
             program_name=os.path.basename(sys.argv[0]),
@@ -126,17 +139,19 @@ class Main:
 
     def suggest_autocompletion_bash(self):
         """Suggest autocompletion for bash."""
+        program = os.path.basename(sys.argv[0])
         self.console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
         self.console.print(
-            'eval "$(register-python-argcomplete qck)"',
+            f'eval "$(register-python-argcomplete {program})"',
             style="bold green",
         )
 
     def suggest_autocompletion_zsh(self):
         """Suggest autocompletion for zsh."""
+        program = os.path.basename(sys.argv[0])
         self.console.print("Add the following to ~/.zshrc:")
         self.console.print(
-            'eval "$(register-python-argcomplete qck)"',
+            f'eval "$(register-python-argcomplete {program})"',
             style="bold green",
         )
 

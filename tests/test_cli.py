@@ -96,7 +96,7 @@ def test_default(capsys):
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
 
-    assert "[-h] [-V] [-l] [-m MODULE | -g | --autocomplete {bash,zsh}]" in out
+    assert "[-h] [-V] [-l] [-m MODULE | --autocomplete {bash,zsh}]" in out
     assert not err
 
 
@@ -116,7 +116,7 @@ def test_main_no_args(capsys):
     out = out + err
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
-    assert "[-h] [-V] [-l] [-m MODULE | -g | --autocomplete {bash,zsh}]" in out
+    assert "[-h] [-V] [-l] [-m MODULE | --autocomplete {bash,zsh}]" in out
 
 
 @mark.integration

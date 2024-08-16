@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quickie-runner-global"
+dynamic = ["version"]
+description = "Run global quickie tasks."
+readme = "README.md"
+authors = [
+    { name = "Adrian Martinez Rodriguez", email = "adrianmrit@gmail.com" }
+]
+license = { file = "LICENSE" }
+# url = { "Homepage" = "https://example.com" }
+keywords = ["CLI", "quick", "tasks"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+]
+requires-python = ">=3.12"
+
+[project.urls]
+Homepage = "https://github.com/adrianmrit/quickie"
+Repository = "https://github.com/adrianmrit/quickie.git"
+Issues = "https://github.com/adrianmrit/quickie/issues"
+Changelog = "https://github.com/adrianmrit/quickie/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "../quickie/_meta.py"
+
+[project.scripts]
+"qckg" = "quickie.cli:global_main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quickie_global"]

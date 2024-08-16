@@ -4,32 +4,34 @@
 
 ## Getting Started
 
-### Prerequisites
-
-Some prerequisites need to be installed.
-
-- Python 3.12+
-
 ### Installing
 
-Quickie can be installed via `pip` or `pipx`. This will add the `qck` binary and add the `quickie` package to your Python environment.
+Quickie can be installed either on a per-project basis and globally.
 
-For example, if you want to run quickie for a single project, you can install it with `pip` under a virtual environment:
+For projects it is recommended to use a virtual environment and install via `pip`:
 
-```sh
-pip install quickie-runner
-```
+    ```sh
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install quickie-runner
+    qck --help
+    ```
 
-If you want to install `quickie` globally, you can either use `pip`, or `pipx` to install it in an isolated environment.
+For global installation, you can install Quickie with the `global` option. In addition to
+adding the `qck` executable to your path, it will also add a `qckg` executable, which will
+run global tasks by default. This allows us to run our global tasks from any project without
+conflicts.
 
-```sh
-pipx install quickie-runner
-```
+For global installation it is recommended to use `pipx`, as it will install Quickie in an isolated
+environment:
 
-See the [pipx installation instructions](https://pipx.pypa.io/stable/installation/)
+    ```sh
+    pipx install quickie-runner[global]
+    qck --help
+    qckg --help
+    ```
 
-You can use both installation methods, i.e. to use a version specific to a project, while running global
-commands with the global installation.
+See the [pipx](https://pipx.pypa.io/stable/)
 
 ## Tab completion
 
@@ -37,26 +39,29 @@ Tab completion is available for bash and zsh. It depends on the `argcomplete` pa
 
 To enable tab completion for `quickie`, add the following line to your `.bashrc` or `.zshrc`:
 
-```sh
-eval "$(register-python-argcomplete qck)"
-```
+    ```sh
+    eval "$(register-python-argcomplete qck)"
+    eval "$(register-python-argcomplete qckg)"
+    ```
 
 If you get the following error in the zsh shell:
 
-```sh
-complete:13: command not found: compdef
-```
+    ```sh
+    complete:13: command not found: compdef
+    ```
 
 You can fix it by adding the following line to your `.zshrc` (before the line that registers the completion):
 
-```sh
-autoload -Uz compinit && compinit
-```
+    ```sh
+    autoload -Uz compinit && compinit
+    ```
 
 ## Usage
 
-Tasks are configured under a `__quickie.py` or `__quickie` python module in the current directory.
-If using a `__quickie` directory, the tasks are defined in the `__quickie/__init__.py` file.
+Per-project tasks are configured under a `__quickie.py` or `__quickie` python module in the current directory.
+If using a `__quickie` directory, the tasks should be defined in the `__quickie/__init__.py` file.
+
+Global tasks on the other hand should be defined in the `Quickie` module in the user's directory.
 
 Tasks are defined as classes, though factory functions are also supported.
 
@@ -73,33 +78,33 @@ While many existing similar tools use YAML, TOML or custom formats to define tas
 
 Here is a simple example of a `__quickie.py` file:
 
-```python
-from quickie import arg, script, task
+    ```python
+    from quickie import arg, script, task
 
-@task(name=["hello", "greet"])
-@arg("name", help="The name to greet")
-def hello(name):
-    """Greet someone"""  # added as the task help
-    print(f"Hello, {name}!")
+    @task(name=["hello", "greet"])
+    @arg("name", help="The name to greet")
+    def hello(name):
+        """Greet someone"""  # added as the task help
+        print(f"Hello, {name}!")
 
 
-@script(extra_args=True, help="Echo the given arguments")
-def echo():
-    return " ".join(["echo", *args])
-```
+    @script(extra_args=True, help="Echo the given arguments")
+    def echo():
+        return " ".join(["echo", *args])
+    ```
 
 You can run the `hello` task with the following command:
 
-```sh
-$ qck hello world
-Hello, world!
-$ qck greet world
-Hello, world!
-```
+    ```sh
+    $ qck hello world
+    Hello, world!
+    $ qck greet world
+    Hello, world!
+    ```
 
 And the `script` task with:
 
-```sh
-$ qck echo Hello there
-Hello there
-```
+    ```sh
+    $ qck echo Hello there
+    Hello there
+    ```

@@ -75,7 +75,7 @@ class CliConfig:
         # This should not be set through the environment, as it would defeat the purpose
         # of the tasks being shared across different projects. I.e. would need to specify
         # the module every time.
-        if use_global:
+        if use_global and not tasks_module_name:
             object.__setattr__(self, "TASKS_MODULE_PATH", self.HOME_PATH)
         else:
             if tasks_module_name:

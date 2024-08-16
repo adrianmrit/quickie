@@ -1,4 +1,4 @@
-from quickie import Task, task
+from quickie import Task, script, task
 
 from . import install, test
 
@@ -16,3 +16,11 @@ def hello(self: Task):
     self.print_error("This is an error message.")
     self.print_warning("This is a warning message.")
     self.print_success("This is a success message.")
+
+
+@script
+def build():
+    return """
+    python -m build
+    python -m build src/quickie_global
+    """

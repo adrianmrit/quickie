@@ -20,3 +20,4 @@
 
 - Renamed classes and parameters for clarity.
 - Removed support for file-based configuration in favor of environment variables.
+- Removed `-g` argument in favor of separate global runner.

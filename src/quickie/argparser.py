@@ -15,20 +15,12 @@ class ArgumentsParser(ArgumentParser):
     @typing.override
     def __init__(self, main):
         super().__init__(description="A CLI tool for quick tasks.")
-        module_or_global_group = self.add_mutually_exclusive_group()
         self.add_argument("-V", "--version", action="version", version=version)
         self.add_argument("-l", "--list", action="store_true", help="List tasks")
-        module_or_global_group.add_argument(
+        self.add_argument.add_argument(
             "-m", "--module", type=str, help="The module to load tasks from"
         )
-        module_or_global_group.add_argument(
-            "-g",
-            "--global",
-            action="store_true",
-            help="Use global defined tasks",
-            dest="use_global",
-        )
-        module_or_global_group.add_argument(
+        self.add_argument.add_argument(
             "--autocomplete",
             help="Suggest autocompletion for the shell",
             dest="suggest_auto_completion",

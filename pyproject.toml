@@ -8,10 +8,9 @@ dynamic = ["version"]
 description = "A CLI tool for quick tasks."
 readme = "README.md"
 authors = [
-    { name = "Author Name", email = "author@example.com" }
+    { name = "Adrian Martinez Rodriguez", email = "adrianmrit@gmail.com" }
 ]
 license = { file = "LICENSE" }
-# url = { "Homepage" = "https://example.com" }
 keywords = ["CLI", "quick", "tasks"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -43,9 +42,13 @@ dev = [
     "pytest-cov",
     "pytest-mock"
 ]
+global = ["quickie-runner-global @ {root:uri}/src/quickie_global"]
 
 [project.scripts]
 "qck" = "quickie.cli:main"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/quickie"]

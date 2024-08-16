@@ -11,6 +11,6 @@ __pycache__/
 
 ### VisualStudioCode ###
 .vscode/*
-/build
-/dist
+build/
+dist/
 *.egg-info
