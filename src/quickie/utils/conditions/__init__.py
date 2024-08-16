@@ -21,6 +21,22 @@ def condition(func):
     return type(func.__name__, (BaseCondition,), {"__call__": func})()
 
 
+class All(BaseCondition):
+    """Check if all conditions are met."""
+
+    def __init__(self, *conditions: BaseCondition):
+        """Initialize the check.
+
+        Args:
+            conditions: The conditions to check.
+        """
+        self.conditions = conditions
+
+    @typing.override
+    def __call__(self, task, *args, **kwargs):
+        return all(condition(task, *args, **kwargs) for condition in self.conditions)
+
+
 class FilesModified(BaseCondition):
     """Check if files have been not being modified."""
 
