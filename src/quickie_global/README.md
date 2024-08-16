@@ -4,14 +4,9 @@ This package provides a separate binary `qckg` that allows you to run global qui
 
 ## Installing
 
-Do not install this package directly. Instead, install [quickie-runner](
-    https://pypi.org/project/quickie-runner/
-) with the `global` option. This will install both `quickie-runner` and `quickie-runner-global`.
-
 It is recommended to use `pipx` to install in an isolated environment:
 
     ```sh
-    pipx install quickie-runner[global]
-    qck --help
+    pipx install quickie-runner-global
     qckg --help
     ```

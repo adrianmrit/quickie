@@ -17,17 +17,15 @@ For projects it is recommended to use a virtual environment and install via `pip
     qck --help
     ```
 
-For global installation, you can install Quickie with the `global` option. In addition to
-adding the `qck` executable to your path, it will also add a `qckg` executable, which will
-run global tasks by default. This allows us to run our global tasks from any project without
-conflicts.
+For global installation, you can install `quickie-runner-global` instead. It will add
+`quickie-runner` as a dependency, but also add a `qckg` executable, which will run global
+tasks by default. This allows us to run our global tasks from any project without conflicts.
 
-For global installation it is recommended to use `pipx`, as it will install Quickie in an isolated
+For global installation it is recommended to use `pipx`, as it will install it in an isolated
 environment:
 
     ```sh
-    pipx install quickie-runner[global]
-    qck --help
+    pipx install quickie-runner-global
     qckg --help
     ```
 
