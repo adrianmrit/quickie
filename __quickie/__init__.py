@@ -31,3 +31,23 @@ def upload():
     return """
     python -m twine upload dist/*
     """
+
+
+@script(
+    extra_args=True,
+    after=[
+        task(bind=True)(
+            lambda self: self.print_info(
+                f"[link=file://{self.context.cwd}/docs/build/html/index.html]docs/build/html/index.html[/link]"
+            )
+        )
+    ],
+)
+def build_docs(*args):
+    """Builds the sphinx documentation."""
+    args = " ".join(args)
+    return f"""
+    rm -rf docs/build
+    rm -rf docs/source/generated
+    sphinx-build -M html docs/source docs/build {args}
+    """

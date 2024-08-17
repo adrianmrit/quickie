@@ -6,11 +6,11 @@ import sys
 import pytest
 from pytest import mark, raises
 
-from quickie import cli
-from quickie.argparser import ArgumentsParser
+from quickie import _cli
+from quickie._argparser import ArgumentsParser
+from quickie._namespace import RootNamespace
 from quickie.errors import Stop
 from quickie.factories import task
-from quickie.namespace import RootNamespace
 from quickie.tasks import suppressed_task
 
 PYTHON_PATH = sys.executable
@@ -43,7 +43,7 @@ def test_from_cli(argv):
 )
 def test_help(argv, capsys):
     with raises(SystemExit) as exc_info:
-        cli.main(argv)
+        _cli.main(argv)
     assert exc_info.value.code == 0
 
     out, err = capsys.readouterr()
@@ -61,7 +61,7 @@ def test_help(argv, capsys):
 )
 def test_task_help(argv, capsys):
     with raises(SystemExit) as exc_info:
-        cli.main(argv)
+        _cli.main(argv)
     assert exc_info.value.code == 0
 
     out, err = capsys.readouterr()
@@ -79,7 +79,7 @@ def test_task_help(argv, capsys):
 )
 def test_version(argv, capsys):
     with raises(SystemExit) as exc_info:
-        cli.main(argv)
+        _cli.main(argv)
     assert exc_info.value.code == 0
 
     out, err = capsys.readouterr()
@@ -90,7 +90,7 @@ def test_version(argv, capsys):
 @mark.integration
 def test_default(capsys):
     with raises(SystemExit) as exc_info:
-        cli.main([])
+        _cli.main([])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
@@ -102,14 +102,14 @@ def test_default(capsys):
 
 @mark.integration
 def test_fails_find_task():
-    with raises(cli.QuickieError, match="Task 'nonexistent' not found"):
-        cli.main(["nonexistent"], raise_error=True)
+    with raises(_cli.QuickieError, match="Task 'nonexistent' not found"):
+        _cli.main(["nonexistent"], raise_error=True)
 
 
 @mark.integration
 def test_main_no_args(capsys):
     with raises(SystemExit) as exc_info:
-        cli.main()
+        _cli.main()
     # Depending how we run it we might get a different exit code
     assert exc_info.value.code in (0, 2)
     out, err = capsys.readouterr()
@@ -122,7 +122,7 @@ def test_main_no_args(capsys):
 @mark.integration
 def test_task_not_found(capsys):
     with raises(SystemExit) as exc_info:
-        cli.main(["nonexistent"])
+        _cli.main(["nonexistent"])
     assert exc_info.value.code == 1
     out, err = capsys.readouterr()
     assert "Task 'nonexistent' not found" in out
@@ -131,7 +131,7 @@ def test_task_not_found(capsys):
 @mark.integration
 def test_list(capsys):
     with raises(SystemExit) as exc_info:
-        cli.main(["-l"])
+        _cli.main(["-l"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     assert out == (
@@ -147,7 +147,7 @@ def test_list(capsys):
 @mark.integration
 def test_suggest_autocompletion_bash(capsys):
     with raises(SystemExit) as exc_info:
-        cli.main(["--autocomplete", "bash"])
+        _cli.main(["--autocomplete", "bash"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     assert 'eval "$(register-python-argcomplete' in out
@@ -156,7 +156,7 @@ def test_suggest_autocompletion_bash(capsys):
 @mark.integration
 def test_suggest_autocompletion_zsh(capsys):
     with raises(SystemExit) as exc_info:
-        cli.main(["--autocomplete", "zsh"])
+        _cli.main(["--autocomplete", "zsh"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     assert 'eval "$(register-python-argcomplete' in out
@@ -182,21 +182,21 @@ def test_stop_iteration(capsys):
     namespace.register(with_before, "with_before")
 
     with raises(SystemExit) as exc_info:
-        cli.main(["stop"], tasks_namespace=namespace)
+        _cli.main(["stop"], tasks_namespace=namespace)
     assert exc_info.value.code == 10
     out, err = capsys.readouterr()
     assert out == "Stopping: My message\n"
     assert not err
 
     with raises(SystemExit) as exc_info:
-        cli.main(["stop_no_reason"], tasks_namespace=namespace)
+        _cli.main(["stop_no_reason"], tasks_namespace=namespace)
     assert exc_info.value.code == 5
     out, err = capsys.readouterr()
     assert out == "Stopping because Stop exception was raised.\n"
     assert not err
 
     with raises(SystemExit) as exc_info:
-        cli.main(["with_before"], tasks_namespace=namespace)
+        _cli.main(["with_before"], tasks_namespace=namespace)
     assert exc_info.value.code == 5
     out, err = capsys.readouterr()
     assert out == "Stopping because Stop exception was raised.\n"
@@ -229,7 +229,7 @@ class TestAutocompletion:
         add_env("COMP_POINT", "4")
         autocomplete_mock = mocker.patch("argcomplete.autocomplete")
         with raises(SystemExit) as exc_info:
-            cli.main([])
+            _cli.main([])
         assert exc_info.value.code == 0
         autocomplete_mock.assert_called_once()
         # check the args passed to the autocomplete function
@@ -244,7 +244,7 @@ class TestAutocompletion:
         add_env("COMP_POINT", "10")
         autocomplete_mock = mocker.patch("argcomplete.autocomplete")
         with raises(SystemExit) as exc_info:
-            cli.main([])
+            _cli.main([])
         assert exc_info.value.code == 0
         autocomplete_mock.assert_called_once()
         # check the args passed to the autocomplete function

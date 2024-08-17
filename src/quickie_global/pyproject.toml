@@ -37,7 +37,7 @@ Changelog = "https://github.com/adrianmrit/quickie/blob/main/CHANGELOG.md"
 path = "../quickie/_meta.py"
 
 [project.scripts]
-"qckg" = "quickie.cli:global_main"
+"qckg" = "quickie._cli:global_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/quickie_global"]

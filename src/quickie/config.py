@@ -28,17 +28,21 @@ CONSOLE_STYLE = frozendict(
 
 
 # Just so that we can mock it in tests, as we don't want to persist the changes.
-def _get_and_set_env(name: str, value: str | None, default: str):
+def _get_and_set_env(name: str, value: str | Path | None, default: str):
     """Resolves the right value for an environment variable,and updates the environment.
 
-    Args:
-        name (str): The name of the environment variable.
-        value (str): The preferred value to use. I.e. value directly passed to the CLI.
-        default (str): The default value to use if value is not given and the
-            environment variable is not set.
+    :param name: The name of the environment variable.
+    :param value: The preferred value to use. I.e. value directly passed to the CLI.
+    :param default: The default value to use if value is not given and the
+        environment variable is not set.
+
+    :return: The resolved value.
     """
     if not value:
         value = os.environ.get(name, default)
+    elif not isinstance(value, str):
+        value = str(value)
+
     os.environ[name] = value
     return value
 
@@ -48,16 +52,18 @@ class CliConfig:
     """Settings for quickie."""
 
     HOME_PATH: Path
-    TASKS_MODULE_PATH: str
-    TMP_RELATIVE_PATH: str
+    """The path to the global quickie directory. Usually `~/Quickie`"""
+
+    TASKS_MODULE_PATH: Path
+    TMP_RELATIVE_PATH: Path
     TMP_PATH: Path
 
     def __init__(  # noqa: PLR0913
         self,
         *,
-        home_path: str | None = None,
-        tasks_module_name: str | None = None,
-        tmp_relative_path: str | None = None,
+        home_path: str | Path | None = None,
+        tasks_module_name: str | Path | None = None,
+        tmp_relative_path: str | Path | None = None,
         use_global: bool,
     ):
         """Initialize the configuration."""
@@ -94,19 +100,20 @@ class CliConfig:
         object.__setattr__(
             self,
             "TMP_RELATIVE_PATH",
-            _get_and_set_env(TMP_RELATIVE_PATH_ENV, tmp_relative_path, "tmp"),
+            Path(_get_and_set_env(TMP_RELATIVE_PATH_ENV, tmp_relative_path, "tmp")),
         )
         object.__setattr__(
             self, "TMP_PATH", self.TASKS_MODULE_PATH / self.TMP_RELATIVE_PATH
         )
 
-    def _resolve_module_path(self, module_name, traverse: bool) -> Path:
+    def _resolve_module_path(self, module_name: str | Path, traverse: bool) -> Path:
         """Resolves the right path for the module.
 
-        Args:
-            module_name: The name of the module.
-            traverse: Whether to traverse the parent directories
-                to find the module. Defaults to True.
+        :param module_name: The name of the module.
+        :param traverse: Whether to traverse the parent directories
+            to find the module. Defaults to True.
+
+        :return: The resolved path.
         """
         current = Path.cwd()
         module_path = Path(module_name)
@@ -125,7 +132,7 @@ class CliConfig:
             current = current.parent
         raise TasksModuleNotFoundError(module_name)
 
-    def get_env(self):
+    def get_env(self) -> dict[str, str]:
         """Get the environment variables."""
         return {
             HOME_PATH_ENV: str(self.HOME_PATH),

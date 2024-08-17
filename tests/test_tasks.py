@@ -3,10 +3,10 @@ import io
 
 import pytest
 
-import quickie.namespace
+import quickie._namespace
 from quickie import tasks
+from quickie.conditions import condition
 from quickie.factories import arg, command, group, script, task, thread_group
-from quickie.utils.conditions import condition
 
 
 class TestGlobalNamespace:
@@ -14,7 +14,7 @@ class TestGlobalNamespace:
         class MyTask(tasks.Task):
             pass
 
-        root_namespace = quickie.namespace.RootNamespace()
+        root_namespace = quickie._namespace.RootNamespace()
         root_namespace.register(MyTask, "mytask")
         assert root_namespace.get_task_class("mytask") is MyTask
 
@@ -30,12 +30,12 @@ class TestNamespace:
         class MyTask3(tasks.Task):
             pass
 
-        root_namespace = quickie.namespace.RootNamespace()
-        namespace = quickie.namespace.Namespace("tests", parent=root_namespace)
+        root_namespace = quickie._namespace.RootNamespace()
+        namespace = quickie._namespace.Namespace("tests", parent=root_namespace)
         namespace.register(MyTask, "mytask")
         namespace.register(MyTask, "alias")
         namespace.register(MyTask2, "mytask2")
-        sub_namespace = quickie.namespace.Namespace("sub", parent=namespace)
+        sub_namespace = quickie._namespace.Namespace("sub", parent=namespace)
         sub_namespace.register(MyTask3, "mytask3")
 
         assert root_namespace.get_task_class("tests:mytask") is MyTask
@@ -58,7 +58,7 @@ class TestTask:
         result = task_instance.parse_and_run(["value1", "--arg2", "value2", "value3"])
         assert result == (("value3",), {"arg1": "value1", "arg2": "value2"})
 
-        my_task._meta.extra_args = False
+        my_task.extra_args = False  # type: ignore
 
         with pytest.raises(SystemExit) as exc_info:
             task_instance.parse_and_run(["value1", "--arg2", "value2", "value3"])
@@ -66,45 +66,6 @@ class TestTask:
 
         result = task_instance.parse_and_run(["value1", "--arg2", "value2"])
         assert result == ((), {"arg1": "value1", "arg2": "value2"})
-
-    def test_help(self, context):
-        class Task1(tasks.Task):
-            """Some documentation"""
-
-            def add_args(self, parser):
-                parser.add_argument("arg1")
-                parser.add_argument("--arg2", "-a2")
-
-        class Task2(Task1):
-            pass
-
-        task_1 = Task1("task", context=context)
-        task_2 = Task2(context=context)
-
-        assert (
-            task_1.get_help()
-            == f"usage: {context.program_name} task [-h] [--arg2 ARG2] arg1\n"
-            "\n"
-            "Some documentation\n"
-            "\n"
-            "positional arguments:\n"
-            "  arg1\n"
-            "\n"
-            "options:\n"
-            "  -h, --help            show this help message and exit\n"
-            "  --arg2 ARG2, -a2 ARG2\n"
-        )
-
-        assert task_2.get_help() == (
-            f"usage: {context.program_name} Task2 [-h] [--arg2 ARG2] arg1\n"
-            "\n"
-            "positional arguments:\n"
-            "  arg1\n"
-            "\n"
-            "options:\n"
-            "  -h, --help            show this help message and exit\n"
-            "  --arg2 ARG2, -a2 ARG2\n"
-        )
 
     def test_run_required(self, context):
         class MyTask(tasks.Task):
@@ -208,10 +169,10 @@ class TestTask:
                 tasks.partial_task(task_without_error, "cleanup"),
             ],
         )
-        def my_task():
+        def taskA():
             result.append("Task result")
 
-        task_instance = my_task(context=context)
+        task_instance = taskA(context=context)
         with pytest.raises(MyError):
             task_instance()
 
@@ -233,10 +194,10 @@ class TestTask:
                 tasks.partial_task(task_without_error, "cleanup"),
             ],
         )
-        def my_task():
+        def taskB():
             result.append("Task result")
 
-        task_instance = my_task(context=context)
+        task_instance = taskB(context=context)
         result = []
         with pytest.raises(MyError):
             task_instance()
@@ -260,10 +221,10 @@ class TestTask:
                 tasks.partial_task(task_without_error, "cleanup"),
             ],
         )
-        def my_task():
+        def taskC():
             raise MyError("An error occurred")
 
-        task_instance = my_task(context=context)
+        task_instance = taskC(context=context)
         result = []
         with pytest.raises(MyError):
             task_instance()
@@ -294,15 +255,15 @@ class TestTask:
         # should also work if bind=True
         @task(bind=True)
         @functools.cache
-        def my_task(_, a, b):
+        def my_other_task(_, a, b):
             nonlocal counter
             counter += 1
             return a + b
 
-        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
-        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        assert my_other_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        assert my_other_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
         assert counter == 3  # noqa: PLR2004
-        assert my_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
+        assert my_other_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
         assert counter == 4  # noqa: PLR2004
 
     def test_condition(self, context):
@@ -372,7 +333,7 @@ class TestBaseSubprocessTask:
     def test_cwd(self, attr, expected, context):
         context.cwd = "/example/cwd"
 
-        class MyTask(tasks.BaseSubprocessTask):
+        class MyTask(tasks._BaseSubprocessTask):
             cwd = attr
 
         task_instance = MyTask(context=context)
@@ -381,7 +342,7 @@ class TestBaseSubprocessTask:
     def test_env(self, context):
         context.env = {"MYENV": "myvalue"}
 
-        class MyTask(tasks.BaseSubprocessTask):
+        class MyTask(tasks._BaseSubprocessTask):
             env = {"OTHERENV": "othervalue"}
 
         task_instance = MyTask(context=context)

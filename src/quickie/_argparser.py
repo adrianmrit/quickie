@@ -25,10 +25,12 @@ class ArgumentsParser(ArgumentParser):
             help="Suggest autocompletion for the shell",
             dest="suggest_auto_completion",
             choices=["bash", "zsh"],
-        ).completer = argcomplete.ChoicesCompleter(["bash", "zsh"])
-        self.add_argument(
-            "task", nargs="?", help="The task to run"
-        ).completer = TaskCompleter(main)
+        ).completer = argcomplete.completers.ChoicesCompleter(  # type: ignore
+            ["bash", "zsh"]
+        )
+        self.add_argument("task", nargs="?", help="The task to run").completer = (  # type: ignore
+            TaskCompleter(main)
+        )
         # This does not need completion as it is handled by the task completer
         self.add_argument("args", nargs="*", help="The arguments to pass to the task")
 

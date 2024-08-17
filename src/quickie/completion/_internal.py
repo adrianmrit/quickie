@@ -8,7 +8,7 @@ from quickie.completion.base import BaseCompleter
 from quickie.errors import QuickieError
 
 if typing.TYPE_CHECKING:
-    from quickie.cli import Main as TMain  # pragma: no cover
+    from quickie._cli import Main as TMain  # pragma: no cover
 
 
 class TaskCompleter(BaseCompleter):
@@ -19,11 +19,11 @@ class TaskCompleter(BaseCompleter):
         self.main = main
 
     @typing.override
-    def complete(self, *, prefix, **_):
+    def complete(self, *, prefix: str, **_):
         try:
             return {
-                key: task._meta.short_help or ""
-                for key, task in self.main.tasks_namespace.items()
+                key: task.get_short_help()
+                for key, task in self.main.root_namespace.items()
                 if key.startswith(prefix)
             }
         except QuickieError:

@@ -1,7 +1,7 @@
 import pytest
 
+from quickie.conditions import FilesModified, FirstRun, PathsExist
 from quickie.factories import task
-from quickie.utils.conditions import FilesModified, FirstRun, PathsExist
 
 
 class TestFilesNotModified:

@@ -1,12 +1,12 @@
 from quickie import tasks
-from quickie.cli import Main
+from quickie._cli import Main
 from quickie.completion._internal import TaskCompleter
 from quickie.completion.python import PytestCompleter
 
 
 class TestTaskCompleter:
     def test_complete(self, mocker):
-        mocker.patch("quickie.cli.Main.load_tasks")
+        mocker.patch("quickie._cli.Main.load_tasks")
 
         class MyTask(tasks.Task):
             """My task"""
@@ -24,17 +24,17 @@ class TestTaskCompleter:
             pass
 
         main = Main(argv=[])
-        main.tasks_namespace.register(MyTask, "task")
-        main.tasks_namespace.register(TestTask2, "task2")
-        main.tasks_namespace.register(Other, "other")
+        main.root_namespace.register(MyTask, "task")
+        main.root_namespace.register(TestTask2, "task2")
+        main.root_namespace.register(Other, "other")
 
         completer = TaskCompleter(main)
 
-        completions = completer(prefix="t", action=None, parser=None, parsed_args=None)
+        completions = completer(prefix="t", action=None, parser=None, parsed_args=None)  # type: ignore
         assert completions == {"task": "My task", "task2": "My other task"}
 
         completions = completer(
-            prefix="oth", action=None, parser=None, parsed_args=None
+            prefix="oth", action=None, parser=None, parsed_args=None  # type: ignore
         )
         assert completions == {"other": "Another task"}
 
@@ -51,16 +51,14 @@ class NestedClass:
         pass
 """
         mocker.patch(
-            "quickie.completion.base.PathCompleter.get_pre_filtered_paths",
+            "quickie.completion.PathCompleter.get_pre_filtered_paths",
             return_value=["test.py", "test2.py", "other.py", "other"],
         )
         mocker.patch(
-            "quickie.completion.python.PytestCompleter.read_python_file",
+            "quickie.completion.python.PytestCompleter._read_python_file",
             return_value=python_code,
         )
         completer = PytestCompleter()
-
-        completer.read_python_file = mocker.Mock(return_value=python_code)
 
         completions = completer.complete(
             prefix="", action=None, parser=None, parsed_args=None
@@ -116,15 +114,14 @@ class NestedClass:
         pass
 """
         mocker.patch(
-            "quickie.completion.base.PathCompleter.get_pre_filtered_paths",
+            "quickie.completion.PathCompleter.get_pre_filtered_paths",
             return_value=["test.py", "test2.py", "other.py", "other"],
         )
         mocker.patch(
-            "quickie.completion.python.PytestCompleter.read_python_file",
+            "quickie.completion.python.PytestCompleter._read_python_file",
             return_value=python_code,
         )
         completer = PytestCompleter()
-        completer.read_python_file = mocker.Mock(return_value=python_code)
 
         completions = completer.complete(
             prefix="test.py::", action=None, parser=None, parsed_args=None

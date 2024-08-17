@@ -7,11 +7,8 @@ QCK_NAMESPACES = {
 }
 
 
-class HelloWorld(tasks.Task):
+class HelloWorld(tasks.Task, name="hello"):
     """Hello world task."""
-
-    class Meta:
-        name = "hello"
 
     def run(self, **kwargs):
         self.print("Hello world!")

@@ -5,7 +5,7 @@
 
 import sys
 
-from .cli import main
+from ._cli import main
 
 
 def _run_main():

@@ -1,4 +1,4 @@
-"""Contains the base class for all conditions.
+"""Contains the base classes for task conditions.
 
 Conditions are used to determine if a task should be executed or not.
 They can be combined using & (and), | (or), ^ (xor), and ~ (not) to create
@@ -21,10 +21,11 @@ class BaseCondition(abc.ABC):
     def __call__(self, task: TaskInstance, *args, **kwargs):
         """Check if the condition is met.
 
-        Args:
-            task: The task to check.
-            *args: Task arguments.
-            **kwargs: Task keyword arguments.
+        :param task: The task to check.
+        :param args: Task arguments.
+        :param kwargs: Task keyword arguments.
+
+        :returns: True if the condition is met, False otherwise.
         """
 
     def __and__(self, other: "BaseCondition"):

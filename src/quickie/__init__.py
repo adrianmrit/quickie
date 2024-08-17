@@ -10,7 +10,16 @@ from quickie.factories import (
     task,
     thread_group,
 )
-from quickie.tasks import Command, Group, Script, Task, ThreadGroup
+from quickie.tasks import (
+    Command,
+    Group,
+    Script,
+    Task,
+    ThreadGroup,
+    lazy_task,
+    partial_task,
+    suppressed_task,
+)
 
 from ._meta import __author__, __copyright__, __email__, __home__, __version__
 
@@ -32,4 +41,7 @@ __all__ = [
     "generic_task_factory",
     "group",
     "thread_group",
+    "lazy_task",
+    "partial_task",
+    "suppressed_task",
 ]

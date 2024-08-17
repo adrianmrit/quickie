@@ -1,11 +1,15 @@
-"""Task loader."""
+"""Logic for loading tasks from modules."""
 
-from quickie.namespace import Namespace
+from quickie._namespace import Namespace
 from quickie.tasks import Task
 
 
 def load_tasks_from_module(module, namespace):
-    """Load tasks from a module."""
+    """Load tasks from a module.
+
+    :param module: The module to load tasks from.
+    :param namespace: The namespace to load the tasks into.
+    """
     modules = [(module, namespace)]
     handled_modules = set()
     while modules:
@@ -27,11 +31,6 @@ def load_tasks_from_module(module, namespace):
         else:
             for obj in module.__dict__.values():
                 if isinstance(obj, type) and issubclass(obj, Task):
-                    meta = getattr(obj, "_meta")
-                    if meta.private:
-                        continue
-                    aliases = meta.name
-                    if isinstance(aliases, str):
-                        aliases = [aliases]
-                    for alias in aliases:
+                    # Private tasks do not have __qck_names
+                    for alias in obj.__qck_names:
                         namespace.register(obj, name=alias)

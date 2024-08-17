@@ -21,3 +21,20 @@
 - Renamed classes and parameters for clarity.
 - Removed support for file-based configuration in favor of environment variables.
 - Removed `-g` argument in favor of separate global runner.
+
+## Release 0.2.1
+
+Fixes for global runner.
+
+## Release 0.2.2
+
+Fixes for global runner.
+
+## Release 0.3.0
+
+### Changed
+
+- Removed Task.Meta and Task.DefaultMeta in favor of configuration in the task class.
+- Task names inferred from class name preserve the case.
+- Refactored and moved things around.
+- Task classes starting with an underscore are now considered private by default.

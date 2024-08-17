@@ -7,7 +7,7 @@ import json
 import pathlib
 import typing
 
-from quickie.utils.conditions.base import BaseCondition
+from quickie.conditions.base import BaseCondition
 
 __all__ = [
     "BaseCondition",
@@ -16,7 +16,7 @@ __all__ = [
 ]
 
 
-def condition(func):
+def condition(func: typing.Callable[..., bool]) -> BaseCondition:
     """Decorator to create a condition from a function."""
     return type(func.__name__, (BaseCondition,), {"__call__": func})()
 
@@ -27,8 +27,7 @@ class All(BaseCondition):
     def __init__(self, *conditions: BaseCondition):
         """Initialize the check.
 
-        Args:
-            conditions: The conditions to check.
+        :param conditions: The conditions to check.
         """
         self.conditions = conditions
 
@@ -58,12 +57,16 @@ class FilesModified(BaseCondition):
     ):
         """Initialize the check.
 
-        Args:
-            paths: The files to check.
-            exclude: The files to exclude from the check.
-            algorithm: The algorithm to use for checking.
-            allow_missing: If True, missing files will be treated as if they have not
-                been modified.
+        The algorithm can be one of :class:`FilesModified.Algorithm`.
+
+        :param paths: The files to check.
+        :param exclude: The files to exclude from the check.
+        :param algorithm: The algorithm to use for checking.
+        :param allow_missing: If True, missing files will be treated as if they have not
+            been modified.
+
+        :raises ValueError: If the algorithm is not supported.
+        :return: True if the files have been modified, False otherwise.
         """
         self.paths = paths
         self.exclude = exclude
@@ -85,11 +88,11 @@ class FilesModified(BaseCondition):
             / f"{task.name}.filesmodified.{self.algorithm.value}.{hash}.json"
         )
 
-        cache = self.load_cache(cache_path)
-        val_getter = getattr(self, f"get_{self.algorithm.value}")
+        cache = self._load_cache(cache_path)
+        val_getter = getattr(self, f"_get_{self.algorithm.value}")
 
         all_matches = True
-        for file in self.iter_files(files, exclude):
+        for file in self._iter_files(files, exclude):
             key = str(file)
             if not file.exists():
                 # Remove file from cache if it no longer exists
@@ -106,10 +109,10 @@ class FilesModified(BaseCondition):
                     all_matches = False
 
         if not all_matches:
-            self.write_cache(cache_path, cache)
+            self._write_cache(cache_path, cache)
         return not all_matches
 
-    def load_cache(self, cache_path: pathlib.Path):
+    def _load_cache(self, cache_path: pathlib.Path):
         """Load the cache."""
         try:
             with open(cache_path) as file:
@@ -117,16 +120,16 @@ class FilesModified(BaseCondition):
         except FileNotFoundError:
             return {}
 
-    def write_cache(self, cache_path: pathlib.Path, cache: dict):
+    def _write_cache(self, cache_path: pathlib.Path, cache: dict):
         """Write the cache."""
         # Make sure the directory exists
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         with open(cache_path, "w") as file:
             json.dump(cache, file)
 
-    def iter_files(
+    def _iter_files(
         self,
-        files: typing.Iterator[pathlib.Path],
+        files: typing.Iterable[pathlib.Path],
         exclude: set[pathlib.Path],
     ) -> typing.Iterator[pathlib.Path]:
         """Iterate over the files."""
@@ -139,19 +142,19 @@ class FilesModified(BaseCondition):
             else:
                 yield file
 
-    def get_timestamp(self, file: pathlib.Path):
+    def _get_timestamp(self, file: pathlib.Path):
         """Get the timestamp of the file."""
         return file.stat().st_mtime
 
-    def get_md5(self, file: pathlib.Path):
+    def _get_md5(self, file: pathlib.Path):
         """Get the md5 hash of the file."""
         return hashlib.md5(file.read_bytes()).hexdigest()
 
-    def get_sha1(self, file: pathlib.Path):
+    def _get_sha1(self, file: pathlib.Path):
         """Get the sha1 hash of the file."""
         return hashlib.sha1(file.read_bytes()).hexdigest()
 
-    def get_sha256(self, file: pathlib.Path):
+    def _get_sha256(self, file: pathlib.Path):
         """Get the sha256 hash of the file."""
         return hashlib.sha256(file.read_bytes()).hexdigest()
 
@@ -162,8 +165,7 @@ class PathsExist(BaseCondition):
     def __init__(self, *paths: pathlib.Path | str):
         """Initialize the check.
 
-        Args:
-            paths: The paths to check.
+        :param paths: The paths to check.
         """
         self.paths = paths
 
@@ -184,9 +186,9 @@ class FirstRun(BaseCondition):
     def __init__(self, *, check_args: bool = False):
         """Initialize the check.
 
-        Args:
-            check_args: If True, check if the task is being run for the first time
-                with the same arguments. Defaults to False.
+        :param check_args: If True, check if the task is being run for the first time
+            with the same arguments. Defaults to False. Note that the arguments must be
+            hashable.
         """
         self.check_args = check_args
         self.executed = set()

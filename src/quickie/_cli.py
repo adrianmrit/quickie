@@ -12,18 +12,18 @@ from rich.theme import Theme
 
 import quickie
 from quickie import config
-from quickie.argparser import ArgumentsParser
+from quickie._argparser import ArgumentsParser
+from quickie._loader import load_tasks_from_module
+from quickie._namespace import RootNamespace
 from quickie.context import Context
 from quickie.errors import QuickieError, Stop
-from quickie.loader import load_tasks_from_module
-from quickie.namespace import RootNamespace
 from quickie.utils import imports
 
 
 def main(argv=None, *, raise_error=False, tasks_namespace=None, global_=False):
     """Run the CLI."""
     traceback.install(suppress=[quickie])
-    main = Main(argv=argv, tasks_namespace=tasks_namespace, global_=global_)
+    main = Main(argv=argv, root_namespace=tasks_namespace, global_=global_)
     try:
         main()
     except Stop as e:
@@ -55,7 +55,7 @@ class Main:
     """Represents the CLI entry of quickie."""
 
     def __init__(
-        self, *, argv=None, tasks_namespace=None, global_=False
+        self, *, argv=None, root_namespace: RootNamespace | None = None, global_=False
     ):  # noqa: PLR0913
         """Initialize the CLI."""
         if argv is None:
@@ -64,9 +64,9 @@ class Main:
 
         # TODO: Make the console theme configurable
         self.console = Console(theme=Theme(config.CONSOLE_STYLE))
-        if tasks_namespace is None:
-            tasks_namespace = RootNamespace()
-        self.tasks_namespace = tasks_namespace
+        if root_namespace is None:
+            root_namespace = RootNamespace()
+        self.root_namespace = root_namespace
         self.parser = ArgumentsParser(main=self)
         self.global_ = global_
 
@@ -100,7 +100,7 @@ class Main:
             cwd=os.getcwd(),
             env=frozendict(os.environ),
             console=self.console,
-            namespace=self.tasks_namespace,
+            namespace=self.root_namespace,
             config=config,
         )
         self.load_tasks(path=config.TASKS_MODULE_PATH)
@@ -164,7 +164,7 @@ class Main:
             "Available tasks:", style="bold green", guide_style="info"
         )
         node_by_namespace = {}
-        for task_path, task in sorted(self.tasks_namespace.items(), key=lambda x: x[0]):
+        for task_path, task in sorted(self.root_namespace.items(), key=lambda x: x[0]):
             if ":" in task_path:
                 namespace, task_name = task_path.rsplit(":", 1)
             else:
@@ -172,8 +172,9 @@ class Main:
                 namespace = ""
 
             task_info = rich.text.Text(task_name, style="info")
-            if task._meta.short_help:
-                task_info.append(f"\n  {task._meta.short_help}", style="green")
+            short_help = task.get_short_help()
+            if short_help:
+                task_info.append(f"\n  {short_help}", style="green")
             if namespace:
                 if namespace not in node_by_namespace:
                     node_by_namespace[namespace] = tree.add(
@@ -189,7 +190,7 @@ class Main:
         """Load tasks from the tasks module."""
         root = Path.cwd()
         module = imports.import_from_path(root / path)
-        load_tasks_from_module(module, namespace=self.tasks_namespace)
+        load_tasks_from_module(module, namespace=self.root_namespace)
 
     def get_usage(self) -> str:
         """Get the usage message."""
@@ -197,7 +198,7 @@ class Main:
 
     def get_task(self, task_name: str, *, context: Context) -> quickie.Task:
         """Get a task by name."""
-        task_class = self.tasks_namespace.get_task_class(task_name)
+        task_class = self.root_namespace.get_task_class(task_name)
         return task_class(name=task_name, context=context)
 
     def run_task(self, task_name: str, *, args, context: Context):

@@ -1,9 +1,10 @@
-"""Utilities for importing modules from paths."""
+"""Utilities for importing modules."""
 
 import importlib
 import importlib.abc
 import importlib.util
 import sys
+from importlib import machinery
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -42,7 +43,7 @@ class _Finder(importlib.abc.MetaPathFinder):
             return None
 
         loader = SourceFileLoader(fullname, str(py_file))
-        return importlib.machinery.ModuleSpec(fullname, loader, origin=str(py_file))
+        return machinery.ModuleSpec(fullname, loader, origin=str(py_file))
 
     def _find_package_spec(self, fullname):
         init_path = self.module_path / "__init__.py"
@@ -50,7 +51,7 @@ class _Finder(importlib.abc.MetaPathFinder):
             return None
 
         loader = SourceFileLoader(fullname, str(init_path))
-        spec = importlib.machinery.ModuleSpec(
+        spec = machinery.ModuleSpec(
             fullname, loader, origin=str(init_path), is_package=True
         )
         spec.submodule_search_locations = [str(self.module_path)]

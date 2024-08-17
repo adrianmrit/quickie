@@ -5,8 +5,8 @@ import typing
 from frozendict import frozendict
 from rich.console import Console
 
+from quickie._namespace import NamespaceABC
 from quickie.config import CliConfig
-from quickie.namespace import Namespace
 
 
 class Context:
@@ -19,10 +19,18 @@ class Context:
         cwd: str,
         env: typing.Mapping,
         console: Console,
-        namespace: Namespace,
+        namespace: NamespaceABC,
         config: CliConfig,
     ):
-        """Initialize the context."""
+        """Initialize the context.
+
+        :param program_name: The name of the program. Usually `qck` or `qckg`.
+        :param cwd: The current working directory.
+        :param env: The environment variables.
+        :param console: A Console instance.
+        :param namespace: The namespace for the task.
+        :param config: The configuration for the CLI.
+        """
         self.program_name = program_name
         self.cwd = cwd
         self.env = frozendict(env)

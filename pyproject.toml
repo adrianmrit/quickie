@@ -21,7 +21,6 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies=[
-    "classoptions~=0.2",
     "frozendict~=2.4",
     "oslex~=0.1",
     "python-dotenv~=1.0",
@@ -37,6 +36,8 @@ Changelog = "https://github.com/adrianmrit/quickie/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
+    "sphinx",
+    "sphinx-rtd-theme",
     "mock",
     "pytest",
     "pytest-cov",
@@ -44,7 +45,7 @@ dev = [
 ]
 
 [project.scripts]
-"qck" = "quickie.cli:main"
+"qck" = "quickie._cli:main"
 
 [tool.hatch.metadata]
 allow-direct-references = true

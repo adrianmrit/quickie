@@ -30,7 +30,7 @@ class RootNamespace(NamespaceABC):
 
     @typing.override
     def __init__(self):
-        self._internal_namespace = {}
+        self._internal_namespace: dict[str, TaskType] = {}
 
     @typing.override
     def register[T: TaskType](self, cls: T, name: str) -> T:
@@ -71,11 +71,10 @@ class Namespace(NamespaceABC):
     def __init__(self, name: str, *, parent: NamespaceABC):
         """Initialize the namespace.
 
-        Args:
-            name: The namespace name.
-            separator: The separator to use when referring to tasks in the
-                namespace.
-            parent: The parent namespace.
+        :param name: The namespace name.
+        :param separator: The separator to use when referring to tasks in the
+            namespace.
+        :param parent: The parent namespace.
         """
         self._namespace = name
         self._parent = parent
@@ -91,13 +90,5 @@ class Namespace(NamespaceABC):
 
     @typing.override
     def get_task_class(self, name: str) -> "TaskType":
-        """Get a task class by name, relative to the namespace.
-
-        Args:
-            name: The name of the task.
-
-        Returns:
-            The task class.
-        """
         full_name = self.namespace_name(name)
         return self._parent.get_task_class(full_name)

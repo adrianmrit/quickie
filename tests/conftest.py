@@ -6,9 +6,9 @@ from pytest import MonkeyPatch
 from rich.console import Console
 from rich.theme import Theme
 
-from quickie import cli, config
+from quickie import _cli, config
+from quickie._namespace import RootNamespace
 from quickie.context import Context
-from quickie.namespace import RootNamespace
 
 DEFAULT_CONSOLE_THEME = Theme(config.CONSOLE_STYLE)
 
@@ -16,7 +16,7 @@ DEFAULT_CONSOLE_THEME = Theme(config.CONSOLE_STYLE)
 @pytest.fixture(autouse=True, scope="session")
 def patch_config(tmpdir_factory):
     m = MonkeyPatch()
-    original = cli.Main.get_config
+    original = _cli.Main.get_config
 
     def new_get_config(self, **kwargs):
         # Values can be set and be null or empty string, in which case we
@@ -30,7 +30,7 @@ def patch_config(tmpdir_factory):
         )
         return original(self, **kwargs)
 
-    m.setattr(cli.Main, "get_config", new_get_config)
+    m.setattr(_cli.Main, "get_config", new_get_config)
 
 
 @pytest.fixture
