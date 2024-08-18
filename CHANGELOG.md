@@ -41,3 +41,9 @@ Fixes for global runner.
 - Namespace tasks using the `NAMESPACES` attribute instead of `QCK_NAMESPACES`.
 - `NAMESPACES` (previously `QCK_NAMESPACES`) now also accepts a list of modules to load for
   a single namespace.
+
+## Release 0.3.1
+
+### Changed
+
+- fix quickie-runner-global dependencies

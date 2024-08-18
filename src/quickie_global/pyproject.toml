@@ -24,7 +24,7 @@ requires-python = ">=3.12"
 
 # TODO: Figure out how to specify the same version as the project
 dependencies=[
-    "quickie-runner~=0.2",
+    "quickie-runner~=0.3",
 ]
 
 [project.urls]
