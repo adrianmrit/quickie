@@ -1,5 +1,7 @@
 """Logic for loading tasks from modules."""
 
+import types
+
 from quickie._namespace import Namespace
 from quickie.tasks import Task
 
@@ -10,24 +12,29 @@ def load_tasks_from_module(module, namespace):
     :param module: The module to load tasks from.
     :param namespace: The namespace to load the tasks into.
     """
-    modules = [(module, namespace)]
-    handled_modules = set()
-    while modules:
-        module, namespace = modules.pop()
-        # If the module has a namespace, we handle them first. This way
-        # if their namespace name is empty, and there is a task with the same
-        # name in both the parent module and the child module, the parent
-        # module task will be registered last and will be the one that is
-        # returned when getting the task by name.
-        if hasattr(module, "QCK_NAMESPACES") and module not in handled_modules:
-            modules.append((module, namespace))
-            handled_modules.add(module)
-            for name, sub_module in module.QCK_NAMESPACES.items():
+    modules_to_load = [(module, namespace)]
+    handled = set()
+    while modules_to_load:
+        module, namespace = modules_to_load.pop()
+        # Because the last modules to pop take precedence over previous ones,
+        # we add the modules in reverse order. This way the first module will
+        # be added last, and pop first. This ensures a precedence order consistent
+        # with how Python imports work.
+        if not isinstance(module, types.ModuleType):
+            modules_to_load.extend((module, namespace) for module in reversed(module))
+            continue
+
+        if hasattr(module, "NAMESPACES") and (module, namespace) not in handled:
+            # Tasks loaded in the last modules might override earlier ones.
+            # Therefore we load the namespaces
+            modules_to_load.append(([module], namespace))
+            handled.add((module, namespace))
+            for name, value in module.NAMESPACES.items():
                 if name:
                     sub_namespace = Namespace(name=name, parent=namespace)
                 else:
                     sub_namespace = namespace
-                modules.append((sub_module, sub_namespace))
+                modules_to_load.append((value, sub_namespace))
         else:
             for obj in module.__dict__.values():
                 if isinstance(obj, type) and issubclass(obj, Task):

@@ -38,3 +38,6 @@ Fixes for global runner.
 - Task names inferred from class name preserve the case.
 - Refactored and moved things around.
 - Task classes starting with an underscore are now considered private by default.
+- Namespace tasks using the `NAMESPACES` attribute instead of `QCK_NAMESPACES`.
+- `NAMESPACES` (previously `QCK_NAMESPACES`) now also accepts a list of modules to load for
+  a single namespace.

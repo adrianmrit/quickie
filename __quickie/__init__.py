@@ -2,7 +2,7 @@ from quickie import Task, script, task
 
 from . import install, test
 
-QCK_NAMESPACES = {
+NAMESPACES = {
     "": test,
     "test": test,
     "install": install,

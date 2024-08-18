@@ -2,7 +2,7 @@ from quickie import tasks
 
 from . import nested
 
-QCK_NAMESPACES = {
+NAMESPACES = {
     "nested": nested,
 }
 
