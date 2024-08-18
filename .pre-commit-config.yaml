@@ -8,7 +8,9 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^docs/source/generated/
       - id: end-of-file-fixer
+        exclude: ^docs/source/generated/
       - id: check-json
       - id: check-toml
       - id: check-xml
