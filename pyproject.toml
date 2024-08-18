@@ -38,6 +38,7 @@ Changelog = "https://github.com/adrianmrit/quickie/blob/main/CHANGELOG.md"
 dev = [
     "sphinx",
     "sphinx-rtd-theme",
+    "sphinx_toolbox~=3.8.0",
     "mock",
     "pytest",
     "pytest-cov",

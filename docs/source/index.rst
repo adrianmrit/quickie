@@ -11,7 +11,12 @@ Welcome to Quickie Runner's documentation!
    quickstart
    How Tos <how_tos/index>
    api
+   license
 
+
+.. sidebar-links::
+   :github:
+   :pypi: quickie-runner
 
 
 Indices and tables
