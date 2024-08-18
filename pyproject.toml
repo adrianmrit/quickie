@@ -30,6 +30,7 @@ dependencies=[
 
 [project.urls]
 Homepage = "https://github.com/adrianmrit/quickie"
+Documentation = "https://quickie.readthedocs.io"
 Repository = "https://github.com/adrianmrit/quickie.git"
 Issues = "https://github.com/adrianmrit/quickie/issues"
 Changelog = "https://github.com/adrianmrit/quickie/blob/main/CHANGELOG.md"
