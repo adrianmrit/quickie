@@ -11,6 +11,7 @@ import argparse
 import contextlib
 import functools
 import os
+import re
 import typing
 
 from rich.prompt import Confirm, Prompt
@@ -83,7 +84,7 @@ class _TaskMeta(type):
             cls._qck_defined_from = None
         return cls
 
-    def _get_file_location(cls, basedir) -> str | None:
+    def _get_relative_file_location(cls, basedir) -> str | None:
         """Returns the file and line number where the class was defined."""
         import inspect
 
@@ -169,7 +170,8 @@ class Task(metaclass=_TaskMeta, private=True):
     @classmethod
     def get_short_help(cls) -> str:
         """Get the short help message of the task."""
-        summary = cls.get_help().split("\n", 1)[0].strip()
+        summary = cls.get_help().split("\n\n", 1)[0].strip()
+        summary = re.sub(r"\s+", " ", summary)
         if len(summary) > MAX_SHORT_HELP_LENGTH:
             summary = summary[: MAX_SHORT_HELP_LENGTH - 3] + "..."
         return summary

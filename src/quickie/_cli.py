@@ -157,43 +157,23 @@ class Main:
 
     def list_tasks(self):
         """List the available tasks."""
+        import rich.box
+        import rich.table
         import rich.text
-        import rich.tree
 
-        tree = rich.tree.Tree(
-            "Available tasks:", style="bold green", guide_style="info"
-        )
-        node_by_namespace = {}
-        # TODO: Do not split namespace and task name, as the namespace could be included in the task name
-        # TODO: List in a better format, i.e. a table
-        for task_path, task in sorted(self.root_namespace.items(), key=lambda x: x[0]):
-            if ":" in task_path:
-                namespace, task_name = task_path.rsplit(":", 1)
-            else:
-                task_name = task_path
-                namespace = ""
+        table = rich.table.Table(title="Available tasks", box=rich.box.SIMPLE)
+        table.add_column("Task", style="bold yellow")
+        table.add_column("Short Description", style="bold yellow")
+        table.add_column("Location", style="bold yellow")
+        for task_name, task in sorted(self.root_namespace.items(), key=lambda x: x[0]):
+            rich_task_name = rich.text.Text(task_name, style="bold")
+            task_location = rich.text.Text(
+                str(task._get_relative_file_location(os.getcwd())), style="dim"
+            )
+            short_help = rich.text.Text(task.get_short_help(), style="green")
+            table.add_row(rich_task_name, short_help, task_location)
 
-            task_location = task._get_file_location(os.getcwd())
-
-            task_info = rich.text.Text(task_name, style="info")
-            if task_location:
-                task_location = rich.text.Text(
-                    f" {task_location}", style="dim", justify="right"
-                )
-                task_info.append(task_location)
-            short_help = task.get_short_help()
-            if short_help:
-                task_info.append(f"\n  {short_help}", style="green")
-            if namespace:
-                if namespace not in node_by_namespace:
-                    node_by_namespace[namespace] = tree.add(
-                        namespace, style="bold yellow", guide_style="yellow"
-                    )
-                node = node_by_namespace[namespace]
-            else:
-                node = tree
-            node.add(task_info)
-        self.console.print(tree)
+        self.console.print(table)
 
     def load_tasks(self, *, path: Path):
         """Load tasks from the tasks module."""
