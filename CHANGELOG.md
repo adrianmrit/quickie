@@ -49,7 +49,7 @@ Fixes for global runner.
 - fix quickie-runner-global dependencies
 
 
-## Unreleased
+## Release 0.3.2
 
 ### Added
 
