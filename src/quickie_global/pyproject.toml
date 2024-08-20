@@ -24,11 +24,12 @@ requires-python = ">=3.12"
 
 # TODO: Figure out how to specify the same version as the project
 dependencies=[
-    "quickie-runner==0.3.2",
+    "quickie-runner==0.3.3",
 ]
 
 [project.urls]
 Homepage = "https://github.com/adrianmrit/quickie"
+Documentation = "https://quickie.readthedocs.io"
 Repository = "https://github.com/adrianmrit/quickie.git"
 Issues = "https://github.com/adrianmrit/quickie/issues"
 Changelog = "https://github.com/adrianmrit/quickie/blob/main/CHANGELOG.md"

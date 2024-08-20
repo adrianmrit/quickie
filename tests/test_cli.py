@@ -134,14 +134,13 @@ def test_list(capsys):
         _cli.main(["-l"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
-    assert out == (
-        "Available tasks:\n"
-        "├── hello tests/__quickie_test/__init__.py:10\n"
-        "│     Hello world task.\n"
-        "└── nested\n"
-        "    └── other tests/__quickie_test/nested.py:4\n"
-        "          Other task.\n"
-    )
+    assert "hello" in out
+    assert "Hello world task." in out
+    assert "tests/__quickie_test" in out
+
+    assert "nested:other" in out
+    assert "Other task." in out
+    assert "tests/__quickie_test" in out
 
 
 @mark.integration

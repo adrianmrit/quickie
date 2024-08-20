@@ -58,3 +58,10 @@ Fixes for global runner.
 ### Fixed
 
 - Fix bug causing tasks the help message for tasks to not include the docstring.
+
+
+## Release 0.3.3
+
+### Changed
+
+- Tasks are listed sorted by location, and grouped by class, creating a new table for aliases.

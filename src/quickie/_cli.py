@@ -163,15 +163,35 @@ class Main:
 
         table = rich.table.Table(title="Available tasks", box=rich.box.SIMPLE)
         table.add_column("Task", style="bold yellow")
+        table.add_column("Aliases", style="bold yellow")
         table.add_column("Short Description", style="bold yellow")
         table.add_column("Location", style="bold yellow")
-        for task_name, task in sorted(self.root_namespace.items(), key=lambda x: x[0]):
+        names_by_cls: dict[type[quickie.Task], list[str]] = {}
+        for task_name, task in sorted(
+            self.root_namespace.items(),
+            key=lambda x: (
+                x[1]._get_relative_file_location(os.getcwd()),
+                x[0].count(":"),
+                x[0].split(":"),
+            ),
+        ):
+            names_by_cls.setdefault(task, []).append(task_name)
+
+        # The last item registered should be the root namespace. Therefore we use that
+        # as the task name, and namespaced names as aliases.
+        for task, task_names in names_by_cls.items():
+            task_name = task_names[0]
+            if len(task_names) > 1:
+                aliases = ", ".join(sorted(task_names[1:]))
+            else:
+                aliases = ""
             rich_task_name = rich.text.Text(task_name, style="bold")
+            rich_aliases = rich.text.Text(aliases, style="dim")
             task_location = rich.text.Text(
                 str(task._get_relative_file_location(os.getcwd())), style="dim"
             )
             short_help = rich.text.Text(task.get_short_help(), style="green")
-            table.add_row(rich_task_name, short_help, task_location)
+            table.add_row(rich_task_name, rich_aliases, short_help, task_location)
 
         self.console.print(table)
 
