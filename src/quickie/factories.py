@@ -80,33 +80,39 @@ def arg(
         of `ArgumentParser` for more information.
     """
 
-    def decorator(fn):
-        if isinstance(fn, tasks._TaskMeta):
-            fn = typing.cast(type[tasks.Task], fn)
+    def decorator(obj):
+        if isinstance(obj, tasks._TaskMeta):
+            obj = typing.cast(type[tasks.Task], obj)
             # decorator appears on top of a task decorator, or directly on top of a cls
-            original_add_args = fn.add_args
+            original_add_args = obj.add_args
 
             def add_args(self, parser: ArgumentParser):
                 original_add_args(self, parser)
                 parser.add_argument(*name_or_flags, **kwargs).completer = completer  # type: ignore
 
-            return type(fn.__name__, (fn,), {"add_args": add_args})
+            return tasks._TaskMeta(
+                obj.__name__,
+                (obj,),
+                {"add_args": add_args},
+                name=obj._qck_names,
+                defined_from=obj._qck_defined_from,
+            )
         else:
             # Assume decorator appears before a task decorator
-            if not hasattr(fn, "_options"):
-                fn._options = []
-            fn._options.append((name_or_flags, completer, kwargs))
-            return fn
+            if not hasattr(obj, "_qck_options"):
+                obj._qck_options = []
+            obj._qck_options.append((name_or_flags, completer, kwargs))
+            return obj
 
     return decorator
 
 
 def _get_add_args_method(fn):
-    if not hasattr(fn, "_options"):
+    if not hasattr(fn, "_qck_options"):
         return None
 
     def add_args(self, parser: ArgumentParser):
-        for name_or_flags, completer, kwargs in fn._options:
+        for name_or_flags, completer, kwargs in fn._qck_options:
             parser.add_argument(*name_or_flags, **kwargs).completer = completer  # type: ignore
 
     return add_args
@@ -262,7 +268,7 @@ def generic_task_factory[  # noqa: PLR0913
 
     kwds[override_method] = new_fn
 
-    return tasks._TaskMeta(fn.__name__, bases, kwds, name=name)  # type: ignore
+    return tasks._TaskMeta(fn.__name__, bases, kwds, name=name, defined_from=fn)  # type: ignore
 
 
 @typing.overload

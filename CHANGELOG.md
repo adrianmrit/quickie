@@ -47,3 +47,14 @@ Fixes for global runner.
 ### Changed
 
 - fix quickie-runner-global dependencies
+
+
+## Unreleased
+
+### Added
+
+- Listing tasks also shows the file and line where the task is defined.
+
+### Fixed
+
+- Fix bug causing tasks the help message for tasks to not include the docstring.

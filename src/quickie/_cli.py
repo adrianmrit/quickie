@@ -164,6 +164,8 @@ class Main:
             "Available tasks:", style="bold green", guide_style="info"
         )
         node_by_namespace = {}
+        # TODO: Do not split namespace and task name, as the namespace could be included in the task name
+        # TODO: List in a better format, i.e. a table
         for task_path, task in sorted(self.root_namespace.items(), key=lambda x: x[0]):
             if ":" in task_path:
                 namespace, task_name = task_path.rsplit(":", 1)
@@ -171,7 +173,14 @@ class Main:
                 task_name = task_path
                 namespace = ""
 
+            task_location = task._get_file_location(os.getcwd())
+
             task_info = rich.text.Text(task_name, style="info")
+            if task_location:
+                task_location = rich.text.Text(
+                    f" {task_location}", style="dim", justify="right"
+                )
+                task_info.append(task_location)
             short_help = task.get_short_help()
             if short_help:
                 task_info.append(f"\n  {short_help}", style="green")

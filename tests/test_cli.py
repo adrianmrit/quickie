@@ -136,10 +136,10 @@ def test_list(capsys):
     out, err = capsys.readouterr()
     assert out == (
         "Available tasks:\n"
-        "├── hello\n"
+        "├── hello tests/__quickie_test/__init__.py:10\n"
         "│     Hello world task.\n"
         "└── nested\n"
-        "    └── other\n"
+        "    └── other tests/__quickie_test/nested.py:4\n"
         "          Other task.\n"
     )
 

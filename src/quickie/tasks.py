@@ -28,10 +28,19 @@ type TaskTypeOrProxy = type[Task] | _TaskProxy
 class _TaskMeta(type):
     """Metaclass for tasks."""
 
-    __qck_names: typing.Iterable[str]
+    _qck_names: typing.Iterable[str]
     """Names it can be invoked with. Empty if private."""
 
-    def __new__(
+    _qck_defined_from: type | None
+    """The class where the task was defined. None if private.
+
+    A class can reference itself.
+    """
+
+    private: bool
+    """Whether the task is private."""
+
+    def __new__(  # noqa: PLR0913
         mcs,
         cls_name,
         bases,
@@ -39,7 +48,17 @@ class _TaskMeta(type):
         *,
         name: str | typing.Iterable[str] | None = None,
         private: bool | None = None,
+        defined_from: type | None = None,
     ):
+        """Create a new task class.
+
+        :param name: The name it can be invoked with. If not provided, it defaults to
+            the class name.
+        :param defined_from: The class where the task was defined. If not provided, and
+            the task is not private, it defaults to the class itself.
+        :param private: Whether the task is private. If not provided, it is private if
+            the class name starts with an underscore.
+        """
         if private is None:
             private = cls_name.startswith("_")
 
@@ -52,8 +71,28 @@ class _TaskMeta(type):
             name = (name,)
 
         # names it can be invoked with
-        attrs["__qck_names"] = name
-        return super().__new__(mcs, cls_name, bases, attrs)
+        attrs["_qck_names"] = name
+        attrs["private"] = private
+        cls = super().__new__(mcs, cls_name, bases, attrs)
+        if not cls.private:
+            cls._qck_defined_from = defined_from or cls
+        else:
+            # Base/private tasks should not be listed.
+            # We also do this to make it easier to identify any bug
+            # causing to return the location of a private task.
+            cls._qck_defined_from = None
+        return cls
+
+    def _get_file_location(cls, basedir) -> str | None:
+        """Returns the file and line number where the class was defined."""
+        import inspect
+
+        if cls._qck_defined_from is None:
+            return None
+        file = inspect.getfile(cls._qck_defined_from)
+        source_lines = inspect.getsourcelines(cls._qck_defined_from)
+        relative_path = os.path.relpath(file, basedir)
+        return f"{relative_path}:{source_lines[1]}"
 
 
 class Task(metaclass=_TaskMeta, private=True):
@@ -121,14 +160,16 @@ class Task(metaclass=_TaskMeta, private=True):
     @classmethod
     def get_help(cls) -> str:
         """Get the help message of the task."""
-        return cls.__doc__ or ""
+        if cls.__doc__:
+            return cls.__doc__
+        if cls._qck_defined_from is not None:
+            return cls._qck_defined_from.__doc__ or ""
+        return ""
 
     @classmethod
     def get_short_help(cls) -> str:
         """Get the short help message of the task."""
-        if not cls.__doc__:
-            return ""
-        summary = cls.__doc__.split("\n", 1)[0].strip()
+        summary = cls.get_help().split("\n", 1)[0].strip()
         if len(summary) > MAX_SHORT_HELP_LENGTH:
             summary = summary[: MAX_SHORT_HELP_LENGTH - 3] + "..."
         return summary
