@@ -20,6 +20,21 @@ from quickie.errors import QuickieError, Stop
 from quickie.utils import imports
 
 
+def _clean_exit(func):
+    from functools import wraps
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except KeyboardInterrupt:
+            print("Exiting due to KeyboardInterrupt.")
+            sys.exit(1)
+
+    return wrapper
+
+
+@_clean_exit
 def main(argv=None, *, raise_error=False, tasks_namespace=None, global_=False):
     """Run the CLI."""
     traceback.install(suppress=[quickie])
@@ -41,6 +56,7 @@ def main(argv=None, *, raise_error=False, tasks_namespace=None, global_=False):
         sys.exit(e.exit_code)
 
 
+@_clean_exit
 def global_main(argv=None, *, raise_error=False, tasks_namespace=None):
     """Run the CLI with the global option."""
     main(
