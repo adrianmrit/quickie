@@ -120,8 +120,8 @@ def _get_add_args_method(fn):
 
 @typing.overload
 def generic_task_factory[
-    T: type[tasks.Task]
-](fn: typing.Callable, *, bases: tuple[T, ...], override_method: str,) -> T:
+    T: tasks.Task
+](fn: typing.Callable, *, bases: tuple[type[T], ...], override_method: str,) -> type[T]:
     ...
 
 
@@ -354,6 +354,7 @@ def script(
 def script(
     *,
     name: str | None = None,
+    executable: str | None = None,
     extra_args: bool | None = False,
     bind: bool = False,
     condition: tasks.BaseCondition | None = None,
@@ -370,6 +371,7 @@ def script(  # noqa: PLR0913
     fn: typing.Callable[..., str] | None = None,
     *,
     name: str | None = None,
+    executable: str | None = None,
     extra_args: bool | None = False,
     bind: bool = False,
     condition: tasks.BaseCondition | None = None,
@@ -418,13 +420,13 @@ def script(  # noqa: PLR0913
         cleanup=cleanup,
         bases=(tasks.Script,),
         override_method=tasks.Script.get_script.__name__,
-        extra_kwds={"env": env, "cwd": cwd},
+        extra_kwds={"env": env, "cwd": cwd, "executable": executable},
     )
 
 
 @typing.overload
 def command(
-    fn: typing.Callable[..., typing.Sequence[str]],
+    fn: typing.Callable[..., typing.Sequence[str] | str],
 ) -> type[tasks.Command]:
     ...
 

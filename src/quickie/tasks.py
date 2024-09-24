@@ -490,7 +490,7 @@ class Command(_BaseSubprocessTask, private=True):
             raise NotImplementedError("Either set program or override get_program()")
         return self.binary
 
-    def get_args(self, *args, **kwargs) -> typing.Sequence[str]:
+    def get_args(self, *args, **kwargs) -> typing.Sequence[str] | str:
         """Get the program arguments.
 
         :param args: Unknown arguments.
@@ -500,7 +500,7 @@ class Command(_BaseSubprocessTask, private=True):
         """
         return self.args or []
 
-    def get_cmd(self, *args, **kwargs) -> typing.Sequence[str]:
+    def get_cmd(self, *args, **kwargs) -> typing.Sequence[str] | str:
         """Get the full command to run, as a sequence.
 
         The first element must be the program to run, followed by the arguments.
@@ -512,12 +512,28 @@ class Command(_BaseSubprocessTask, private=True):
         """
         program = self.get_binary(*args, **kwargs)
         program_args = self.get_args(*args, **kwargs)
+        program_args = self.split_args(program_args)
         return [program, *program_args]
+
+    def split_args(self, args: str | typing.Sequence[str]) -> typing.Sequence[str]:
+        """Split the arguments string into a list of arguments.
+
+        :param args: The arguments string.
+
+        :returns: A list of arguments.
+        """
+        import shlex
+
+        if isinstance(args, str):
+            args = shlex.split(args)
+        return args
 
     @typing.final
     @typing.override
     def run(self, *args, **kwargs):
         cmd = self.get_cmd(*args, **kwargs)
+        cmd = self.split_args(cmd)
+
         if len(cmd) == 0:
             raise ValueError("No program to run")
         elif len(cmd) == 1:
@@ -555,6 +571,7 @@ class Script(_BaseSubprocessTask, private=True):
     """Base class for tasks that run a script."""
 
     script: typing.ClassVar[str | None] = None
+    executable: typing.ClassVar[str | None] = None
 
     def get_script(self, *args, **kwargs) -> str:
         """Get the script to run.
@@ -587,6 +604,7 @@ class Script(_BaseSubprocessTask, private=True):
             check=False,
             cwd=cwd,
             env=env,
+            executable=self.executable,
         )
         return result
 

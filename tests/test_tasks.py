@@ -234,7 +234,6 @@ class TestTask:
             "cleanup",
         ]
 
-    @pytest.mark.xfail(reason="Cache not supported yet when bind=True")
     def test_cache(self, context):
         counter = 0
 
@@ -252,19 +251,19 @@ class TestTask:
         assert my_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
         assert counter == 2  # noqa: PLR2004
 
-        # should also work if bind=True
-        @task(bind=True)
-        @functools.cache
-        def my_other_task(_, a, b):
-            nonlocal counter
-            counter += 1
-            return a + b
+        # Does not work because self changes every time
+        # @task(bind=True)
+        # @functools.cache
+        # def my_other_task(self, a, b):
+        #     nonlocal counter
+        #     counter += 1
+        #     return a + b
 
-        assert my_other_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
-        assert my_other_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
-        assert counter == 3  # noqa: PLR2004
-        assert my_other_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
-        assert counter == 4  # noqa: PLR2004
+        # assert my_other_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        # assert my_other_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        # assert counter == 3  # noqa: PLR2004
+        # assert my_other_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
+        # assert counter == 4  # noqa: PLR2004
 
     def test_condition(self, context):
         result = []
@@ -361,6 +360,10 @@ class TestCommand:
         def my_task():
             return ["myprogram"]
 
+        @command(cwd="../other", env={"OTHERENV": "othervalue"})
+        def task_with_string():
+            return 'myprogram arg1 arg2 "arg3 with spaces"'
+
         class TaskWithArgs(tasks.Command):
             binary = "myprogram"
             args = ["arg1", "arg2"]
@@ -371,12 +374,22 @@ class TestCommand:
             return ["myprogram", arg1]
 
         task_instance = my_task(context=context)
+        cmd_with_string_instance = task_with_string(context=context)
         task_with_args = TaskWithArgs(context=context)
         task_with_dynamic_args = dynamic_args_task(context=context)
 
         task_instance()
         subprocess_run.assert_called_once_with(
             ["myprogram"],
+            check=False,
+            cwd="/example/other",
+            env={"MYENV": "myvalue", "OTHERENV": "othervalue"},
+        )
+        subprocess_run.reset_mock()
+
+        cmd_with_string_instance()
+        subprocess_run.assert_called_once_with(
+            ["myprogram", "arg1", "arg2", "arg3 with spaces"],
             check=False,
             cwd="/example/other",
             env={"MYENV": "myvalue", "OTHERENV": "othervalue"},
@@ -438,6 +451,7 @@ class TestScriptTask:
             shell=True,
             cwd="/somedir",
             env={"VAR": "VAL"},
+            executable=None,
         )
         subprocess_run.reset_mock()
 
@@ -448,6 +462,7 @@ class TestScriptTask:
             shell=True,
             cwd="/somedir",
             env={"VAR": "VAL"},
+            executable=None,
         )
 
     def test_script_required(self, context):
