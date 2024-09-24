@@ -21,7 +21,9 @@ def load_tasks_from_module(module, namespace):
         # be added last, and pop first. This ensures a precedence order consistent
         # with how Python imports work.
         if not isinstance(module, types.ModuleType):
-            modules_to_load.extend((module, namespace) for module in reversed(module))
+            modules_to_load.extend(
+                (module, namespace) for module in reversed(module) if module is not None
+            )
             continue
 
         if hasattr(module, "NAMESPACES") and (module, namespace) not in handled:
@@ -30,6 +32,8 @@ def load_tasks_from_module(module, namespace):
             modules_to_load.append(([module], namespace))
             handled.add((module, namespace))
             for name, value in module.NAMESPACES.items():
+                if value is None:
+                    continue
                 if name:
                     sub_namespace = Namespace(name=name, parent=namespace)
                 else:
