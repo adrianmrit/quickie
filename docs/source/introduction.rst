@@ -36,7 +36,7 @@ project, and use different versions of Quickie for different projects without co
     python -m venv .venv
     source .venv/bin/activate
     pip install quickie-runner
-    qck --help
+    qk --help
 
 
 Global installation
@@ -45,7 +45,7 @@ Global installation
 While Quickie allows to run tasks defined between a project, sometimes it is useful to have tasks defined globally and run them
 from anywhere. `quickie-runner-global <https://pypi.org/project/quickie-runner-global/>`_ is a package that allows to do just that.
 
-This is a wrapper around `quickie-runner` that will add a separate `qckg` command, thus not conflicting with `qck`. Tasks in this case
+This is a wrapper around `quickie-runner` that will add a separate `qkg` command, thus not conflicting with `qk`. Tasks in this case
 need to be defined at `~/Quickie`.
 
 You can do this install for your default Python installation, or use `pipx <https://pipx.pypa.io/stable/>`_ to create an isolated
@@ -58,7 +58,7 @@ With pip
 .. code-block:: bash
 
     pip install quickie-runner-global
-    qckg --help
+    qkg --help
 
 
 With pipx
@@ -66,7 +66,7 @@ With pipx
 .. code-block:: bash
 
     pipx install quickie-runner-global
-    qckg --help
+    qkg --help
 
 .. TIP::
     If installing via PIPX and you need to add extra dependencies, you can inject them:
@@ -101,16 +101,16 @@ To enable it, you need to install `argcomplete <https://pypi.org/project/argcomp
 
 .. code-block:: bash
 
-    eval "$(register-python-argcomplete qck)"
+    eval "$(register-python-argcomplete qk)"
 
 
-This will enable auto completion for the `qck` command. If you have a global installation, you can enable auto completion for the `qckg` command as well:
+This will enable auto completion for the `qk` command. If you have a global installation, you can enable auto completion for the `qkg` command as well:
 
 .. code-block:: bash
 
-    eval "$(register-python-argcomplete qckg)"
+    eval "$(register-python-argcomplete qkg)"
 
-You can also call ``qck --autocomplete bash`` or ``qck --autocomplete zsh`` for instructions on how to enable auto completion for your shell.
+You can also call ``qk --autocomplete bash`` or ``qk --autocomplete zsh`` for instructions on how to enable auto completion for your shell.
 
 
 Quick(ie)start
@@ -147,13 +147,13 @@ Now you can run the tasks from anywhere in the project, even from a subdirectory
 
 .. code-block:: bash
 
-    $ qck hello
+    $ qk hello
     Hello, World!
 
-    $ qck hello_script --name Alice
+    $ qk hello_script --name Alice
     Hello, Alice!
 
-    $ qck some_command arg1 arg2
+    $ qk some_command arg1 arg2
     my_command arg1 arg2
 
 

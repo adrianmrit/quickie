@@ -17,11 +17,11 @@ Note that the name of the function/class is not preserved, so you will need to p
         print("Task 2")
 
     # This will run task1
-    qck my_task
+    qk my_task
 
     # These will run task2
-    qck task2
-    qck t2
+    qk task2
+    qk t2
 
 
 Equivalent to:

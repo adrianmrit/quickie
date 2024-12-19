@@ -16,6 +16,6 @@ def init(dir: str | Path):
     target_dir.mkdir()
     with open(target_dir / "__init__.py", "w") as f:
         f.write(INIT_CONTENT)
-    print("Initialized qck project")
-    print("Run `qck hello` to test it out")
-    print("Run `qck --help` for more information")
+    print("Initialized Quickie project")
+    print("Run `qk hello` to test it out")
+    print("Run `qk --help` for more information")

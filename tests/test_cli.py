@@ -15,7 +15,7 @@ from quickie.tasks import suppressed_task
 
 PYTHON_PATH = sys.executable
 BIN_FOLDER = os.path.join(sys.prefix, "bin")
-BIN_LOCATION = os.path.join(BIN_FOLDER, "qck")
+BIN_LOCATION = os.path.join(BIN_FOLDER, "qk")
 
 
 @mark.integration
@@ -96,7 +96,9 @@ def test_default(capsys):
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
 
-    assert "[-h] [-V] [-l] [-m MODULE] [--autocomplete {bash,zsh}]" in out
+    assert (
+        "[-h] [-V] [-l] [-m MODULE] [--init [DIR]] [--autocomplete {bash,zsh}]" in out
+    )
     assert not err
 
 
@@ -116,7 +118,9 @@ def test_main_no_args(capsys):
     out = out + err
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
-    assert "[-h] [-V] [-l] [-m MODULE] [--autocomplete {bash,zsh}]" in out
+    assert (
+        "[-h] [-V] [-l] [-m MODULE] [--init [DIR]] [--autocomplete {bash,zsh}]" in out
+    )
 
 
 @mark.integration
@@ -224,7 +228,7 @@ class TestAutocompletion:
     @mark.integration
     def test_autocompletion(self, add_env, mocker):
         add_env("_ARGCOMPLETE", "1")
-        add_env("COMP_LINE", "qck test ")
+        add_env("COMP_LINE", "qk test ")
         add_env("COMP_POINT", "4")
         autocomplete_mock = mocker.patch("argcomplete.autocomplete")
         with raises(SystemExit) as exc_info:
@@ -239,7 +243,7 @@ class TestAutocompletion:
     @mark.integration
     def test_task_autocompletion(self, add_env, mocker):
         add_env("_ARGCOMPLETE", "1")
-        add_env("COMP_LINE", "qck hello ")
+        add_env("COMP_LINE", "qk hello ")
         add_env("COMP_POINT", "10")
         autocomplete_mock = mocker.patch("argcomplete.autocomplete")
         with raises(SystemExit) as exc_info:

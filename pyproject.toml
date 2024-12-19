@@ -47,7 +47,7 @@ dev = [
 ]
 
 [project.scripts]
-"qck" = "quickie._cli:main"
+"qk" = "quickie._cli:main"
 
 [tool.hatch.metadata]
 allow-direct-references = true

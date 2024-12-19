@@ -42,6 +42,6 @@ def load_tasks_from_module(module, namespace):
         else:
             for obj in module.__dict__.values():
                 if isinstance(obj, type) and issubclass(obj, Task):
-                    # Private tasks do not have _qck_names
-                    for alias in obj._qck_names:
+                    # Private tasks do not have _qk_names
+                    for alias in obj._qk_names:
                         namespace.register(obj, name=alias)

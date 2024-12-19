@@ -29,10 +29,10 @@ type TaskTypeOrProxy = type[Task] | _TaskProxy
 class _TaskMeta(type):
     """Metaclass for tasks."""
 
-    _qck_names: typing.Iterable[str]
+    _qk_names: typing.Iterable[str]
     """Names it can be invoked with. Empty if private."""
 
-    _qck_defined_from: type | None
+    _qk_defined_from: type | None
     """The class where the task was defined. None if private.
 
     A class can reference itself.
@@ -72,26 +72,26 @@ class _TaskMeta(type):
             name = (name,)
 
         # names it can be invoked with
-        attrs["_qck_names"] = name
+        attrs["_qk_names"] = name
         attrs["private"] = private
         cls = super().__new__(mcs, cls_name, bases, attrs)
         if not cls.private:
-            cls._qck_defined_from = defined_from or cls
+            cls._qk_defined_from = defined_from or cls
         else:
             # Base/private tasks should not be listed.
             # We also do this to make it easier to identify any bug
             # causing to return the location of a private task.
-            cls._qck_defined_from = None
+            cls._qk_defined_from = None
         return cls
 
     def _get_relative_file_location(cls, basedir) -> str | None:
         """Returns the file and line number where the class was defined."""
         import inspect
 
-        if cls._qck_defined_from is None:
+        if cls._qk_defined_from is None:
             return None
-        file = inspect.getfile(cls._qck_defined_from)
-        source_lines = inspect.getsourcelines(cls._qck_defined_from)
+        file = inspect.getfile(cls._qk_defined_from)
+        source_lines = inspect.getsourcelines(cls._qk_defined_from)
         relative_path = os.path.relpath(file, basedir)
         return f"{relative_path}:{source_lines[1]}"
 
@@ -163,8 +163,8 @@ class Task(metaclass=_TaskMeta, private=True):
         """Get the help message of the task."""
         if cls.__doc__:
             return cls.__doc__
-        if cls._qck_defined_from is not None:
-            return cls._qck_defined_from.__doc__ or ""
+        if cls._qk_defined_from is not None:
+            return cls._qk_defined_from.__doc__ or ""
         return ""
 
     @classmethod

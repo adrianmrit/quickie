@@ -75,3 +75,4 @@ Fixes for global runner.
 - Command now accepts unix style command strings.
 - Script now allows defining the executable
 - Cleaner exit on keyboard interrupt.
+- Changed command from `qck` and `qckg` to `qk` and `qkg`.

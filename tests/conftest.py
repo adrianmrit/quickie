@@ -36,7 +36,7 @@ def patch_config(tmpdir_factory):
 @pytest.fixture
 def context(tmpdir):
     return Context(
-        program_name="qck",
+        program_name="qk",
         cwd=os.getcwd(),
         env=frozendict(os.environ),
         console=Console(theme=DEFAULT_CONSOLE_THEME),

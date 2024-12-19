@@ -14,11 +14,11 @@ For projects it is recommended to use a virtual environment and install via `pip
 python -m venv .venv
 source .venv/bin/activate
 pip install quickie-runner
-qck --help
+qk --help
 ```
 
 For global installation, you can install `quickie-runner-global` instead. It will add
-`quickie-runner` as a dependency, but also add a `qckg` executable, which will run global
+`quickie-runner` as a dependency, but also add a `qkg` executable, which will run global
 tasks by default. This allows us to run our global tasks from any project without conflicts.
 
 For global installation it is recommended to use `pipx`, as it will install it in an isolated
@@ -26,10 +26,10 @@ environment:
 
 ```sh
 pipx install quickie-runner-global
-qckg --help
+qkg --help
 ```
 
-If you have any issues with the `quickie` package missing when running `qckg`, you can inject it manually:
+If you have any issues with the `quickie` package missing when running `qkg`, you can inject it manually:
 
 ```sh
 pipx inject quickie-runner-global quickie-runner
@@ -44,8 +44,8 @@ Tab completion is available for bash and zsh. It depends on the `argcomplete` pa
 To enable tab completion for `quickie`, add the following line to your `.bashrc` or `.zshrc`:
 
 ```sh
-eval "$(register-python-argcomplete qck)"
-eval "$(register-python-argcomplete qckg)"
+eval "$(register-python-argcomplete qk)"
+eval "$(register-python-argcomplete qkg)"
 ```
 
 If you get the following error in the zsh shell:
@@ -100,15 +100,15 @@ def echo():
 You can run the `hello` task with the following command:
 
 ```sh
-$ qck hello world
+$ qk hello world
 Hello, world!
-$ qck greet world
+$ qk greet world
 Hello, world!
 ```
 
 And the `script` task with:
 
 ```sh
-$ qck echo Hello there
+$ qk echo Hello there
 Hello there
 ```

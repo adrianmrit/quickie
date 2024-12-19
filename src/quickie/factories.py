@@ -94,63 +94,59 @@ def arg(
                 obj.__name__,
                 (obj,),
                 {"add_args": add_args},
-                name=obj._qck_names,
-                defined_from=obj._qck_defined_from,
+                name=obj._qk_names,
+                defined_from=obj._qk_defined_from,
             )
         else:
             # Assume decorator appears before a task decorator
-            if not hasattr(obj, "_qck_options"):
-                obj._qck_options = []
-            obj._qck_options.append((name_or_flags, completer, kwargs))
+            if not hasattr(obj, "_qk_options"):
+                obj._qk_options = []
+            obj._qk_options.append((name_or_flags, completer, kwargs))
             return obj
 
     return decorator
 
 
 def _get_add_args_method(fn):
-    if not hasattr(fn, "_qck_options"):
+    if not hasattr(fn, "_qk_options"):
         return None
 
     def add_args(self, parser: ArgumentParser):
-        for name_or_flags, completer, kwargs in fn._qck_options:
+        for name_or_flags, completer, kwargs in fn._qk_options:
             parser.add_argument(*name_or_flags, **kwargs).completer = completer  # type: ignore
 
     return add_args
 
 
 @typing.overload
-def generic_task_factory[
-    T: tasks.Task
-](fn: typing.Callable, *, bases: tuple[type[T], ...], override_method: str,) -> type[T]:
-    ...
+def generic_task_factory[T: tasks.Task](
+    fn: typing.Callable,
+    *,
+    bases: tuple[type[T], ...],
+    override_method: str,
+) -> type[T]: ...
 
 
 @typing.overload
-def generic_task_factory[
-    T: tasks.Task
-](
+def generic_task_factory[T: tasks.Task](
     fn: typing.Callable,
     *,
     bases: tuple[type[T], ...],
     override_method: str,
     extra_kwds: dict[str, typing.Any] | None = None,
     **kwargs: typing.Unpack[_CommonTaskFactoryKwargs],
-) -> type[T]:
-    ...
+) -> type[T]: ...
 
 
 @typing.overload
-def generic_task_factory[
-    T: tasks.Task
-](
+def generic_task_factory[T: tasks.Task](
     fn: None = None,
     *,
     bases: tuple[type[T], ...],
     override_method: str,
     extra_kwds: dict[str, typing.Any] | None = None,
     **kwargs: typing.Unpack[_CommonTaskFactoryKwargs],
-) -> PartialReturnType[T]:
-    ...
+) -> PartialReturnType[T]: ...
 
 
 def generic_task_factory[  # noqa: PLR0913
@@ -274,8 +270,7 @@ def generic_task_factory[  # noqa: PLR0913
 @typing.overload
 def task(
     fn: typing.Callable,
-) -> type[tasks.Task]:
-    ...
+) -> type[tasks.Task]: ...
 
 
 @typing.overload
@@ -288,8 +283,7 @@ def task(
     before: typing.Sequence[TaskTypeOrProxy] | None = None,
     after: typing.Sequence[TaskTypeOrProxy] | None = None,
     cleanup: typing.Sequence[TaskTypeOrProxy] | None = None,
-) -> PartialReturnType[tasks.Task]:
-    ...
+) -> PartialReturnType[tasks.Task]: ...
 
 
 def task(  # noqa: PLR0913
@@ -346,8 +340,7 @@ def task(  # noqa: PLR0913
 @typing.overload
 def script(
     fn: typing.Callable[..., str],
-) -> type[tasks.Script]:
-    ...
+) -> type[tasks.Script]: ...
 
 
 @typing.overload
@@ -363,8 +356,7 @@ def script(
     cleanup: typing.Sequence[TaskTypeOrProxy] | None = None,
     env: dict[str, str] | None = None,
     cwd: str | None = None,
-) -> PartialReturnType[tasks.Script]:
-    ...
+) -> PartialReturnType[tasks.Script]: ...
 
 
 def script(  # noqa: PLR0913
@@ -427,8 +419,7 @@ def script(  # noqa: PLR0913
 @typing.overload
 def command(
     fn: typing.Callable[..., typing.Sequence[str] | str],
-) -> type[tasks.Command]:
-    ...
+) -> type[tasks.Command]: ...
 
 
 @typing.overload
@@ -443,8 +434,7 @@ def command(
     cleanup: typing.Sequence[TaskTypeOrProxy] | None = None,
     env: dict[str, str] | None = None,
     cwd: str | None = None,
-) -> PartialReturnType[tasks.Command]:
-    ...
+) -> PartialReturnType[tasks.Command]: ...
 
 
 def command(  # noqa: PLR0913
@@ -505,8 +495,7 @@ def command(  # noqa: PLR0913
 @typing.overload
 def group(
     fn: typing.Callable,
-) -> type[tasks.Group]:
-    ...
+) -> type[tasks.Group]: ...
 
 
 @typing.overload
@@ -519,8 +508,7 @@ def group(  # noqa: PLR0913
     before: typing.Sequence[TaskTypeOrProxy] | None = None,
     after: typing.Sequence[TaskTypeOrProxy] | None = None,
     cleanup: typing.Sequence[TaskTypeOrProxy] | None = None,
-) -> PartialReturnType[tasks.Group]:
-    ...
+) -> PartialReturnType[tasks.Group]: ...
 
 
 def group(  # noqa: PLR0913
@@ -577,8 +565,7 @@ def group(  # noqa: PLR0913
 @typing.overload
 def thread_group(
     fn: typing.Callable,
-) -> type[tasks.ThreadGroup]:
-    ...
+) -> type[tasks.ThreadGroup]: ...
 
 
 @typing.overload
@@ -591,8 +578,7 @@ def thread_group(
     before: typing.Sequence[TaskTypeOrProxy] | None = None,
     after: typing.Sequence[TaskTypeOrProxy] | None = None,
     cleanup: typing.Sequence[TaskTypeOrProxy] | None = None,
-) -> PartialReturnType[tasks.ThreadGroup]:
-    ...
+) -> PartialReturnType[tasks.ThreadGroup]: ...
 
 
 def thread_group(  # noqa: PLR0913

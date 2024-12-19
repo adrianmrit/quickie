@@ -24,7 +24,7 @@ class Context:
     ):
         """Initialize the context.
 
-        :param program_name: The name of the program. Usually `qck` or `qckg`.
+        :param program_name: The name of the program. Usually `qk` or `qkg`.
         :param cwd: The current working directory.
         :param env: The environment variables.
         :param console: A Console instance.

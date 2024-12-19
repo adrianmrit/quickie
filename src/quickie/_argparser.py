@@ -43,8 +43,8 @@ class ArgumentsParser(ArgumentParser):
 
     @typing.override
     def parse_known_args(self, args=None, namespace=None):
-        qck_args, task_args = self._partition_args(args)
-        namespace, argv = super().parse_known_args(qck_args, namespace)
+        qk_args, task_args = self._partition_args(args)
+        namespace, argv = super().parse_known_args(qk_args, namespace)
 
         if argv:
             # Because the unknown arguments are not task arguments, we raise an error
@@ -56,19 +56,19 @@ class ArgumentsParser(ArgumentParser):
         return namespace, []
 
     def _partition_args(self, args):
-        qck_args = []
+        qk_args = []
         task_args = []
         args = iter(args)
         while arg := next(args, None):
             if arg in {"-m", "--module", "--autocomplete"}:
-                qck_args.append(arg)
-                qck_args.append(next(args))
+                qk_args.append(arg)
+                qk_args.append(next(args))
             elif arg.startswith("-"):
-                qck_args.append(arg)
+                qk_args.append(arg)
             else:
                 # Task found
-                qck_args.append(arg)
+                qk_args.append(arg)
                 # The rest of the arguments are task arguments
                 task_args = list(args)
 
-        return qck_args, task_args
+        return qk_args, task_args
