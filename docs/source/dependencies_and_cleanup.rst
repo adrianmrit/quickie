@@ -1,5 +1,5 @@
-Dependencies between tasks
-==========================
+Dependencies and Cleanup
+========================
 
 Tasks can depend on other tasks. This is useful when you want to run a task only if another task has run successfully, or if you want to run cleanup tasks.
 

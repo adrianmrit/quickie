@@ -52,6 +52,7 @@
       ~Group.condition
       ~Group.console
       ~Group.extra_args
+      ~Group.private
       ~Group.task_classes
    
    

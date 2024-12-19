@@ -21,6 +21,13 @@ class ArgumentsParser(ArgumentParser):
             "-m", "--module", type=str, help="The module to load tasks from"
         )
         self.add_argument(
+            "--init",
+            nargs="?",
+            help="Initialize a quickie project in the directory",
+            const=".",
+            metavar="DIR",
+        )
+        self.add_argument(
             "--autocomplete",
             help="Suggest autocompletion for the shell",
             dest="suggest_auto_completion",

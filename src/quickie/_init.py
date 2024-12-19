@@ -1,0 +1,21 @@
+from pathlib import Path
+
+INIT_CONTENT = """from quickie import task
+
+@task
+def hello():
+    print("Hello, World!")
+"""
+
+
+def init(dir: str | Path):
+    target_dir = Path(f"{dir}/__quickie")
+    if target_dir.exists():
+        print("Quickie project already initialized")
+        return
+    target_dir.mkdir()
+    with open(target_dir / "__init__.py", "w") as f:
+        f.write(INIT_CONTENT)
+    print("Initialized qck project")
+    print("Run `qck hello` to test it out")
+    print("Run `qck --help` for more information")

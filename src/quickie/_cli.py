@@ -132,7 +132,11 @@ class Main:
                 argcomplete.autocomplete(self.parser)
             sys.exit(0)
 
-        if namespace.suggest_auto_completion:
+        if namespace.init:
+            from quickie._init import init
+
+            init(namespace.init)
+        elif namespace.suggest_auto_completion:
             if namespace.suggest_auto_completion == "bash":
                 self.suggest_autocompletion_bash()
             elif namespace.suggest_auto_completion == "zsh":

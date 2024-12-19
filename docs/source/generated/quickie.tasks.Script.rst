@@ -55,7 +55,9 @@
       ~Script.console
       ~Script.cwd
       ~Script.env
+      ~Script.executable
       ~Script.extra_args
+      ~Script.private
       ~Script.script
    
    

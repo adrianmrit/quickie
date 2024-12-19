@@ -7,9 +7,19 @@ Welcome to Quickie Runner's documentation!
 ==========================================
 
 .. toctree::
-   installation
-   quickstart
-   How Tos <how_tos/index>
+   introduction
+   task
+   command
+   script
+   private_tasks
+   task_names_and_aliases
+   namespaces
+   accepting_arguments
+   conditions
+   running_tasks_in_sequence
+   running_tasks_in_parallel
+   dependencies_and_cleanup
+   how_tos/index
    api
    license
 

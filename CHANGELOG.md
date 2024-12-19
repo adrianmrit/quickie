@@ -65,3 +65,13 @@ Fixes for global runner.
 ### Changed
 
 - Tasks are listed sorted by location, and grouped by class, creating a new table for aliases.
+
+
+## Release 0.4.0
+
+### Changed
+
+- NAMESPACES now accepts and ignores null values.
+- Command now accepts unix style command strings.
+- Script now allows defining the executable
+- Cleaner exit on keyboard interrupt.

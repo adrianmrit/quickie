@@ -51,5 +51,6 @@
       ~Task.condition
       ~Task.console
       ~Task.extra_args
+      ~Task.private
    
    

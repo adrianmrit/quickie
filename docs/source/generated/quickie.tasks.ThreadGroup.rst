@@ -54,6 +54,7 @@
       ~ThreadGroup.console
       ~ThreadGroup.extra_args
       ~ThreadGroup.max_workers
+      ~ThreadGroup.private
       ~ThreadGroup.task_classes
    
    

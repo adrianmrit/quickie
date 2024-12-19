@@ -8,7 +8,7 @@ For example the following are equivalent:
 
 .. code-block:: python
 
-    from quickie import task
+    from quickie import task, lazy_task
 
     @task
     def task1():

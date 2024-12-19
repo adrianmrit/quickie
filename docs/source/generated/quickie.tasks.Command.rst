@@ -41,6 +41,7 @@
       ~Command.run_after
       ~Command.run_before
       ~Command.run_cleanup
+      ~Command.split_args
    
    
 
@@ -60,5 +61,6 @@
       ~Command.cwd
       ~Command.env
       ~Command.extra_args
+      ~Command.private
    
    
