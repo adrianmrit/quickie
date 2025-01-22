@@ -1,5 +1,4 @@
 import functools
-import io
 
 import pytest
 
@@ -74,28 +73,6 @@ class TestTask:
         task_instance = MyTask(context=context)
         with pytest.raises(NotImplementedError):
             task_instance.run()
-
-    def test_print(self, context):
-        class MyTask(tasks.Task):
-            pass
-
-        context.console.file = io.StringIO()
-        task_instance = MyTask(context=context)
-        task_instance.print("Hello world!")
-
-        assert context.console.file.getvalue() == "Hello world!\n"
-
-    def test_printe(self, context):
-        class MyTask(tasks.Task):
-            pass
-
-        context.console.file = io.StringIO()
-        task_instance = MyTask(context=context)
-        task_instance.print_error("Hello world!")
-
-        out = context.console.file.getvalue()
-        assert "Hello world!" in out
-        assert out.endswith("\n")
 
     def test_before_after_and_cleanup(self, context):
         result = []

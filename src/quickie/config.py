@@ -11,20 +11,16 @@ from quickie.errors import TasksModuleNotFoundError
 HOME_PATH_ENV = "QUICKIE_RUNNER_HOME_PATH"
 TMP_RELATIVE_PATH_ENV = "QUICKIE_RUNNER_TMP_RELATIVE_PATH"
 
-# TODO: Make configurable via ENV variables or CLI arguments.
-# INFO_STYLE_ENV = "QUICKIE_RUNNER_INFO_STYLE"
-# WARNING_STYLE_ENV = "QUICKIE_RUNNER_WARNING_STYLE"
-# ERROR_STYLE_ENV = "QUICKIE_RUNNER_ERROR_STYLE"
-# SUCCESS_STYLE_ENV = "QUICKIE_RUNNER_SUCCESS_STYLE"
 
 CONSOLE_STYLE = frozendict(
     {
-        "info": "cyan",
-        "warning": "yellow",
-        "error": "bold red",
-        "success": "green",
+        "info": os.environ.get("QUICKIE_RUNNER_INFO_STYLE", "cyan"),
+        "warning": os.environ.get("QUICKIE_RUNNER_WARNING_STYLE", "yellow"),
+        "error": os.environ.get("QUICKIE_RUNNER_ERROR_STYLE", "red"),
+        "success": os.environ.get("QUICKIE_RUNNER_SUCCESS_STYLE", "green"),
     }
 )
+"""Default console styles."""
 
 
 # Just so that we can mock it in tests, as we don't want to persist the changes.

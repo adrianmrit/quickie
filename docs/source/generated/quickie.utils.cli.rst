@@ -1,18 +1,18 @@
-quickie.config
-==============
+quickie.utils.cli
+=================
 
-.. automodule:: quickie.config
+.. automodule:: quickie.utils.cli
 
    
    .. rubric:: Module Attributes
 
    .. autosummary::
    
-      CONSOLE_STYLE
+      console
    
    .. rubric:: Classes
 
    .. autosummary::
    
-      CliConfig
+      QkConsole
    

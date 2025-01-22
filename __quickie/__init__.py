@@ -1,4 +1,5 @@
-from quickie import Task, script, task
+from quickie import script, task
+from quickie import console
 
 from . import install, test
 
@@ -9,13 +10,13 @@ NAMESPACES = {
 }
 
 
-@task(bind=True)
-def hello(self: Task):
-    self.print("Hello world!")
-    self.print_info("This is an info message.")
-    self.print_error("This is an error message.")
-    self.print_warning("This is a warning message.")
-    self.print_success("This is a success message.")
+@task
+def hello():
+    console.print("Hello world!")
+    console.print_info("This is an info message.")
+    console.print_error("This is an error message.")
+    console.print_warning("This is a warning message.")
+    console.print_success("This is a success message.")
 
 
 @script
@@ -37,7 +38,7 @@ def upload():
     extra_args=True,
     after=[
         task(bind=True)(
-            lambda self: self.print_info(
+            lambda self: console.print_info(
                 f"[link=file://{self.context.cwd}/docs/build/html/index.html]docs/build/html/index.html[/link]"
             )
         )

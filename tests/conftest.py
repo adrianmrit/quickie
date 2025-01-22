@@ -3,7 +3,6 @@ import os
 import pytest
 from frozendict import frozendict
 from pytest import MonkeyPatch
-from rich.console import Console
 from rich.theme import Theme
 
 from quickie import _cli, config
@@ -39,7 +38,6 @@ def context(tmpdir):
         program_name="qk",
         cwd=os.getcwd(),
         env=frozendict(os.environ),
-        console=Console(theme=DEFAULT_CONSOLE_THEME),
         namespace=RootNamespace(),
         config=config.CliConfig(
             home_path="tests/__quickie_home",

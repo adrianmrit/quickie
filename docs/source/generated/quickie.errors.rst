@@ -9,6 +9,7 @@ quickie.errors
    .. autosummary::
    
       QuickieError
+      Skip
       Stop
       TaskNotFoundError
       TasksModuleNotFoundError

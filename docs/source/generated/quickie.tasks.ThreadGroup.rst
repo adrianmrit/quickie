@@ -16,7 +16,6 @@
       ~ThreadGroup.__init__
       ~ThreadGroup.add_args
       ~ThreadGroup.condition_passes
-      ~ThreadGroup.confirm
       ~ThreadGroup.full_run
       ~ThreadGroup.get_after
       ~ThreadGroup.get_before
@@ -28,12 +27,6 @@
       ~ThreadGroup.get_tasks
       ~ThreadGroup.parse_and_run
       ~ThreadGroup.parse_args
-      ~ThreadGroup.print
-      ~ThreadGroup.print_error
-      ~ThreadGroup.print_info
-      ~ThreadGroup.print_success
-      ~ThreadGroup.print_warning
-      ~ThreadGroup.prompt
       ~ThreadGroup.run
       ~ThreadGroup.run_after
       ~ThreadGroup.run_before
@@ -51,7 +44,6 @@
       ~ThreadGroup.before
       ~ThreadGroup.cleanup
       ~ThreadGroup.condition
-      ~ThreadGroup.console
       ~ThreadGroup.extra_args
       ~ThreadGroup.max_workers
       ~ThreadGroup.private

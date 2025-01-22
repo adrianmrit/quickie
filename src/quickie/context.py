@@ -3,7 +3,6 @@
 import typing
 
 from frozendict import frozendict
-from rich.console import Console
 
 from quickie._namespace import NamespaceABC
 from quickie.config import CliConfig
@@ -18,7 +17,6 @@ class Context:
         program_name,
         cwd: str,
         env: typing.Mapping,
-        console: Console,
         namespace: NamespaceABC,
         config: CliConfig,
     ):
@@ -34,7 +32,6 @@ class Context:
         self.program_name = program_name
         self.cwd = cwd
         self.env = frozendict(env)
-        self.console = console
         self.namespace = namespace
         self.config = config
 
@@ -44,7 +41,6 @@ class Context:
             program_name=self.program_name,
             cwd=self.cwd,
             env=self.env,
-            console=self.console,
             namespace=self.namespace,
             config=self.config,
         )

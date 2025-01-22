@@ -7,8 +7,6 @@ from pathlib import Path
 import argcomplete
 from frozendict import frozendict
 from rich import traceback
-from rich.console import Console
-from rich.theme import Theme
 
 import quickie
 from quickie import config
@@ -16,8 +14,9 @@ from quickie._argparser import ArgumentsParser
 from quickie._loader import load_tasks_from_module
 from quickie._namespace import RootNamespace
 from quickie.context import Context
-from quickie.errors import QuickieError, Stop
+from quickie.errors import QuickieError, Skip, Stop
 from quickie.utils import imports
+from quickie import console
 
 
 def _clean_exit(func):
@@ -43,16 +42,19 @@ def main(argv=None, *, raise_error=False, tasks_namespace=None, global_=False):
         main()
     except Stop as e:
         if e.message:
-            main.console.print(f"Stopping: [info]{e.message}[/info]", style="info")
+            console.print(f"Stopping: [info]{e.message}[/info]", style="info")
         else:
-            main.console.print(
-                f"Stopping because {Stop.__name__} exception was raised."
-            )
+            console.print(f"Stopping because {Stop.__name__} exception was raised.")
         sys.exit(e.exit_code)
+    except Skip as e:
+        if e.message:
+            console.print(f"Skipping: [info]{e.message}[/info]", style="info")
+        else:
+            console.print(f"Skipping because {Skip.__name__} exception was raised.")
     except QuickieError as e:
         if raise_error:
             raise e
-        main.console.print(f"Error: [error]{e}[/error]", style="error")
+        console.print(f"Error: [error]{e}[/error]", style="error")
         sys.exit(e.exit_code)
 
 
@@ -78,8 +80,6 @@ class Main:
             argv = sys.argv[1:]
         self.argv = argv
 
-        # TODO: Make the console theme configurable
-        self.console = Console(theme=Theme(config.CONSOLE_STYLE))
         if root_namespace is None:
             root_namespace = RootNamespace()
         self.root_namespace = root_namespace
@@ -115,7 +115,6 @@ class Main:
             program_name=os.path.basename(sys.argv[0]),
             cwd=os.getcwd(),
             env=frozendict(os.environ),
-            console=self.console,
             namespace=self.root_namespace,
             config=config,
         )
@@ -150,7 +149,7 @@ class Main:
                 context=context,
             )
         else:
-            self.console.print(self.get_usage())
+            console.print(self.get_usage())
         self.parser.exit()
 
     def get_config(self, **kwargs):  # mostly so that we can mock it
@@ -160,8 +159,8 @@ class Main:
     def suggest_autocompletion_bash(self):
         """Suggest autocompletion for bash."""
         program = os.path.basename(sys.argv[0])
-        self.console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
-        self.console.print(
+        console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
+        console.print(
             f'eval "$(register-python-argcomplete {program})"',
             style="bold green",
         )
@@ -169,8 +168,8 @@ class Main:
     def suggest_autocompletion_zsh(self):
         """Suggest autocompletion for zsh."""
         program = os.path.basename(sys.argv[0])
-        self.console.print("Add the following to ~/.zshrc:")
-        self.console.print(
+        console.print("Add the following to ~/.zshrc:")
+        console.print(
             f'eval "$(register-python-argcomplete {program})"',
             style="bold green",
         )
@@ -213,7 +212,7 @@ class Main:
             short_help = rich.text.Text(task.get_short_help(), style="green")
             table.add_row(rich_task_name, rich_aliases, short_help, task_location)
 
-        self.console.print(table)
+        console.print(table)
 
     def load_tasks(self, *, path: Path):
         """Load tasks from the tasks module."""

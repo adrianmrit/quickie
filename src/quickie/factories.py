@@ -6,11 +6,11 @@ decorator.
 
 .. code-block:: python
 
-    @task(name="hello", bind=True)
+    @task(name="hello")
     @arg("number1", type=int, help="The first number.")
     @arg("number2", type=int, help="The second number.")
-    def sum(task, number1, number2):
-        task.console.print(f"The sum is {number1 + number2}.")
+    def sum(number1, number2):
+        console.print(f"The sum is {number1 + number2}.")
 
     @script
     @arg("--name", help="The name to greet.")
@@ -301,9 +301,9 @@ def task(  # noqa: PLR0913
 
     .. code-block:: python
 
-        @task(name="hello", bind=True)
-        def hello_task(task):
-            task.console.print("Hello, task!")
+        @task(name="hello")
+        def hello_task():
+            console.print("Hello, task!")
 
         @task
         def hello_world():

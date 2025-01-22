@@ -14,9 +14,9 @@ import os
 import re
 import typing
 
-from rich.prompt import Confirm, Prompt
-
 from quickie.conditions.base import BaseCondition
+from quickie.errors import Skip
+from quickie.utils.cli import console
 
 from .context import Context
 
@@ -176,76 +176,6 @@ class Task(metaclass=_TaskMeta, private=True):
             summary = summary[: MAX_SHORT_HELP_LENGTH - 3] + "..."
         return summary
 
-    @property
-    def console(self):
-        """Get the console."""
-        return self.context.console
-
-    def print(self, *args, **kwargs):
-        """Print a line."""
-        self.console.print(*args, **kwargs)
-
-    def print_error(self, *args, **kwargs):
-        """Print an error message."""
-        kwargs.setdefault("style", "error")
-        self.print(*args, **kwargs)
-
-    def print_success(self, *args, **kwargs):
-        """Print a success message."""
-        kwargs.setdefault("style", "success")
-        self.print(*args, **kwargs)
-
-    def print_warning(self, *args, **kwargs):
-        """Print a warning message."""
-        kwargs.setdefault("style", "warning")
-        self.print(*args, **kwargs)
-
-    def print_info(self, *args, **kwargs):
-        """Print an info message."""
-        kwargs.setdefault("style", "info")
-        self.print(*args, **kwargs)
-
-    def prompt(  # noqa: PLR0913
-        self,
-        prompt,
-        *,
-        password: bool = False,
-        choices: list[str] | None = None,
-        show_default: bool = True,
-        show_choices: bool = True,
-        default: typing.Any = ...,
-    ) -> str:
-        """Prompt the user for input.
-
-        :param prompt: The prompt message.
-        :param password: Whether to hide the input.
-        :param choices: List of choices.
-        :param show_default: Whether to show the default value.
-        :param show_choices: Whether to show the choices.
-        :param default: The default value.
-
-        :return: The user input.
-        """
-        return Prompt.ask(
-            prompt,
-            console=self.console,
-            password=password,
-            choices=choices,
-            show_default=show_default,
-            show_choices=show_choices,
-            default=default,
-        )
-
-    def confirm(self, prompt, default: bool = False) -> bool:
-        """Prompt the user for confirmation.
-
-        :param prompt: The prompt message.
-        :param default: The default value.
-
-        :return: True if the user confirms, False otherwise.
-        """
-        return Confirm.ask(prompt, console=self.console, default=default)
-
     def get_parser(self, **kwargs) -> argparse.ArgumentParser:
         """Get the parser for the task.
 
@@ -373,7 +303,7 @@ class Task(metaclass=_TaskMeta, private=True):
             try:
                 task_cls(context=self.context)()
             except Exception as e:
-                self.print_error(f"Error running cleanup task {task_cls}: {e}")
+                console.print_error(f"Error running cleanup task {task_cls}: {e}")
                 continue
 
     def condition_passes(self, *args, **kwargs):
@@ -427,7 +357,11 @@ class Task(metaclass=_TaskMeta, private=True):
             return
         try:
             self.run_before(*args, **kwargs)
-            result = self.run(*args, **kwargs)
+            try:
+                result = self.run(*args, **kwargs)
+            except Skip as e:
+                console.print_info(f"Skipping task {self.name}: {e.message}")
+                result = None
             self.run_after(*args, **kwargs)
             return result
         finally:

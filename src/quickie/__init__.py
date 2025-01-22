@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # PYTHON_ARGCOMPLETE_OK
 """A CLI tool for quick tasks."""
+
 from quickie.factories import (
     arg,
     command,
@@ -20,6 +21,7 @@ from quickie.tasks import (
     partial_task,
     suppressed_task,
 )
+from quickie.utils.cli import console
 
 from ._meta import __author__, __copyright__, __email__, __home__, __version__
 
@@ -44,4 +46,5 @@ __all__ = [
     "lazy_task",
     "partial_task",
     "suppressed_task",
+    "console",
 ]

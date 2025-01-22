@@ -10,4 +10,5 @@ quickie.utils
    :toctree:
    :recursive:
 
+   cli
    imports

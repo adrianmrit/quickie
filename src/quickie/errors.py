@@ -52,3 +52,15 @@ class Stop(Exception):
         self.message = message
         self.exit_code = exit_code
         super().__init__(message)
+
+
+class Skip(Exception):
+    """Raised when a task should be skipped."""
+
+    def __init__(self, message: str | None = None):
+        """Initialize the error.
+
+        :param message: An optional message to display.
+        """
+        self.message = message
+        super().__init__(message)
