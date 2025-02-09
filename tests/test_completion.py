@@ -24,9 +24,9 @@ class TestTaskCompleter:
             pass
 
         main = Main(argv=[])
-        main.root_namespace.register(MyTask, "task")
-        main.root_namespace.register(TestTask2, "task2")
-        main.root_namespace.register(Other, "other")
+        main.root_namespace.register(MyTask, namespace="task")
+        main.root_namespace.register(TestTask2, namespace="task2")
+        main.root_namespace.register(Other, namespace="other")
 
         completer = TaskCompleter(main)
 
@@ -34,7 +34,10 @@ class TestTaskCompleter:
         assert completions == {"task": "My task", "task2": "My other task"}
 
         completions = completer(
-            prefix="oth", action=None, parser=None, parsed_args=None  # type: ignore
+            prefix="oth",
+            action=None,
+            parser=None,
+            parsed_args=None,  # type: ignore
         )
         assert completions == {"other": "Another task"}
 

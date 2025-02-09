@@ -76,3 +76,15 @@ Fixes for global runner.
 - Script now allows defining the executable
 - Cleaner exit on keyboard interrupt.
 - Changed command from `qck` and `qckg` to `qk` and `qkg`.
+
+
+## UNRELEASED
+
+### Changed
+
+- Replace NAMESPACES with Namespace class.
+- Pretty printing and input can be done via a separate global console instance instead of through the task.
+
+### Added
+
+- Tasks can be skipped without stopping all pending tasks.

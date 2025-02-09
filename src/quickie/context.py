@@ -4,7 +4,7 @@ import typing
 
 from frozendict import frozendict
 
-from quickie._namespace import NamespaceABC
+from quickie._namespace import RootNamespace
 from quickie.config import CliConfig
 
 
@@ -17,7 +17,7 @@ class Context:
         program_name,
         cwd: str,
         env: typing.Mapping,
-        namespace: NamespaceABC,
+        namespace: RootNamespace,
         config: CliConfig,
     ):
         """Initialize the context.

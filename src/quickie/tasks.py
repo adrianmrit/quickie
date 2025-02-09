@@ -29,7 +29,7 @@ type TaskTypeOrProxy = type[Task] | _TaskProxy
 class _TaskMeta(type):
     """Metaclass for tasks."""
 
-    _qk_names: typing.Iterable[str]
+    _qk_names: typing.Sequence[str]
     """Names it can be invoked with. Empty if private."""
 
     _qk_defined_from: type | None
@@ -230,7 +230,7 @@ class Task(metaclass=_TaskMeta, private=True):
     def _resolve_related(self, task_cls):
         """Get the task class."""
         if isinstance(task_cls, str):
-            return self.context.namespace.get_task_class(task_cls)
+            return self.context.namespace[task_cls]
         return task_cls
 
     def get_before(self, *args, **kwargs) -> typing.Iterator[TaskType]:
@@ -569,7 +569,7 @@ class _LazyTaskProxy(_TaskProxy):
     @typing.override
     def resolve_task_cls(self, context: Context) -> TaskType:
         """Resolve the task class."""
-        return context.namespace.get_task_class(self.name)
+        return context.namespace[self.name]
 
 
 class _PartialTaskProxy(_TaskProxy):

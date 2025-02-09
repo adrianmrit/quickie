@@ -22,6 +22,7 @@ from quickie.tasks import (
     suppressed_task,
 )
 from quickie.utils.cli import console
+from quickie._namespace import Namespace
 
 from ._meta import __author__, __copyright__, __email__, __home__, __version__
 
@@ -36,6 +37,7 @@ __all__ = [
     "Command",
     "Group",
     "ThreadGroup",
+    "Namespace",
     "task",
     "script",
     "command",

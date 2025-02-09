@@ -14,34 +14,8 @@ class TestGlobalNamespace:
             pass
 
         root_namespace = quickie._namespace.RootNamespace()
-        root_namespace.register(MyTask, "mytask")
-        assert root_namespace.get_task_class("mytask") is MyTask
-
-
-class TestNamespace:
-    def test_register(self):
-        class MyTask(tasks.Task):
-            pass
-
-        class MyTask2(tasks.Task):
-            pass
-
-        class MyTask3(tasks.Task):
-            pass
-
-        root_namespace = quickie._namespace.RootNamespace()
-        namespace = quickie._namespace.Namespace("tests", parent=root_namespace)
-        namespace.register(MyTask, "mytask")
-        namespace.register(MyTask, "alias")
-        namespace.register(MyTask2, "mytask2")
-        sub_namespace = quickie._namespace.Namespace("sub", parent=namespace)
-        sub_namespace.register(MyTask3, "mytask3")
-
-        assert root_namespace.get_task_class("tests:mytask") is MyTask
-        assert root_namespace.get_task_class("tests:alias") is MyTask
-        assert root_namespace.get_task_class("tests:mytask2") is MyTask2
-        assert root_namespace.get_task_class("tests:sub:mytask3") is MyTask3
-        assert sub_namespace.get_task_class("mytask3") is MyTask3
+        root_namespace.register(MyTask, namespace="mytask")
+        assert root_namespace["mytask"] is MyTask
 
 
 class TestTask:
@@ -81,8 +55,8 @@ class TestTask:
         def other(arg):
             result.append(arg)
 
-        context.namespace.register(other, "other")
-        context.namespace.register(other, "namespaced.other")
+        context.namespace.register(other, namespace="other")
+        context.namespace.register(other, namespace="namespaced.other")
 
         @task(
             before=[
@@ -105,7 +79,7 @@ class TestTask:
         def defined_later(arg):
             result.append(f"{arg} defined later")
 
-        context.namespace.register(defined_later, "defined_later")
+        context.namespace.register(defined_later, namespace="defined_later")
 
         task_instance = my_task(context=context)
         task_instance()

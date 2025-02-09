@@ -139,12 +139,15 @@ def test_list(capsys):
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     assert "hello" in out
+    assert "other_task" in out, f"out: {out}, err: {err}"
+    assert "cls_holder:hello" in out, f"out: {out}, err: {err}"
+    assert "dict:task:hello" in out, f"out: {out}, err: {err}"
+    assert "dict:task:other_ta" in out, f"out: {out}, err: {err}"
     assert "Hello world task." in out
-    assert "tests/__quickie_test" in out
 
-    assert "nested:other" in out
+    assert "nested:other" in out, f"out: {out}, err: {err}"
+    assert "dict:nested_again" in out, f"out: {out}, err: {err}"
     assert "Other task." in out
-    assert "tests/__quickie_test" in out
 
 
 @mark.integration
@@ -180,9 +183,9 @@ def test_stop_iteration(capsys):
     def with_before():
         pass
 
-    namespace.register(stop, "stop")
-    namespace.register(stop_no_reason, "stop_no_reason")
-    namespace.register(with_before, "with_before")
+    namespace.register(stop, namespace="stop")
+    namespace.register(stop_no_reason, namespace="stop_no_reason")
+    namespace.register(with_before, namespace="with_before")
 
     with raises(SystemExit) as exc_info:
         _cli.main(["stop"], tasks_namespace=namespace)

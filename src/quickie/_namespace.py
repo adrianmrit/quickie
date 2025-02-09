@@ -1,7 +1,8 @@
 """Namespaces for tasks."""
 
-import abc
 import typing
+
+import collections.abc
 
 from quickie.errors import TaskNotFoundError
 
@@ -9,86 +10,171 @@ if typing.TYPE_CHECKING:
     from quickie.tasks import TaskType
 
 
-class NamespaceABC(abc.ABC):
-    """Abstract base class for namespaces."""
-
-    @abc.abstractmethod
-    def register[T: TaskType](self, cls: T, name: str) -> T:
-        """Register a task class."""
-
-    def namespace_name(self, name: str) -> str:
-        """Modify the name of a task."""
-        return name
-
-    @abc.abstractmethod
-    def get_task_class(self, name: str) -> "TaskType":
-        """Get a task class by name."""
+DEFAULT_SEPARATOR = ":"
 
 
-class RootNamespace(NamespaceABC):
-    """Root namespace for tasks."""
+def is_task_cls(obj) -> typing.TypeGuard["TaskType"]:
+    from quickie.tasks import Task
 
-    @typing.override
-    def __init__(self):
-        self._internal_namespace: dict[str, TaskType] = {}
-
-    @typing.override
-    def register[T: TaskType](self, cls: T, name: str) -> T:
-        self._internal_namespace[name] = cls
-        return cls
-
-    @typing.override
-    def get_task_class(self, name: str) -> "TaskType":
-        try:
-            return self._internal_namespace[name]
-        except KeyError:
-            raise TaskNotFoundError(name)
-
-    def keys(self):
-        """Return the keys of the namespace."""
-        return self._internal_namespace.keys()
-
-    def values(self):
-        """Return the values of the namespace."""
-        return self._internal_namespace.values()
-
-    def items(self):
-        """Return the items of the namespace."""
-        return self._internal_namespace.items()
+    return isinstance(obj, type) and issubclass(obj, Task)
 
 
-class Namespace(NamespaceABC):
-    """Namespace for tasks.
+def _merge_aliases(root: str, aliases: typing.Sequence[str]) -> typing.Sequence[str]:
+    if not root:
+        return aliases
+    if not aliases:
+        return [root]
+    return [
+        DEFAULT_SEPARATOR.join([root, alias]) if alias else root for alias in aliases
+    ]
 
-    Namespaces can be used to group tasks together. They can be used to
-    organize tasks by their functionality, or by the project they belong to.
 
-    Namespaces can be nested. For example, the namespace "project" can have
-    the namespace "subproject", which can have the task "task1". The task
-    can be referred to as "project.subproject.task1".
+def _merge_alias(root: str, alias: str) -> str:
+    if not root:
+        return alias
+    if not alias:
+        return root
+    return DEFAULT_SEPARATOR.join([root, alias])
+
+
+class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
+    """Root namespace for tasks.
+
+    This class is used to store tasks with their full mappings. This should
+    not be used directly, instead use the :class:`Namespace` class.
     """
 
-    def __init__(self, name: str, *, parent: NamespaceABC):
-        """Initialize the namespace.
+    def __init__(self):
+        self._mappings: dict[str, "TaskType"] = {}
 
-        :param name: The namespace name.
-        :param separator: The separator to use when referring to tasks in the
-            namespace.
-        :param parent: The parent namespace.
+    def __getitem__(self, key):
+        try:
+            return self._mappings[key]
+        except KeyError:
+            raise TaskNotFoundError(key)
+
+    def __iter__(self) -> typing.Iterator[str]:
+        return iter(self._mappings)
+
+    def __len__(self) -> int:
+        return len(self._mappings)
+
+    def register(self, obj: "TaskType", *, namespace: str | typing.Sequence[str] = ""):
+        """Register an object to a namespace.
+
+        :param module: The object to register.
+        :param namespace: The namespace or namespaces to register the obj under.
         """
-        self._namespace = name
-        self._parent = parent
+        if isinstance(namespace, str):
+            namespace = [namespace]
 
-    @typing.override
-    def namespace_name(self, name: str) -> str:
-        return f"{self._namespace}:{name}"
+        for k in namespace:
+            self._mappings[k] = obj
 
-    @typing.override
-    def register[T: TaskType](self, cls: T, name: str) -> T:
-        full_name = self.namespace_name(name)
-        return self._parent.register(cls, full_name)
+    def load(self, obj):
+        """Load tasks from an object, usually a module.
 
-    @typing.override
-    def get_task_class(self, name: str) -> "TaskType":
-        full_name = self.namespace_name(name)
-        return self._parent.get_task_class(full_name)
+        :param obj: The object to load tasks from.
+        """
+        # Assume obj is a module
+        current: None | typing.Iterator[tuple[str, typing.Any]] = iter(
+            ("", obj)
+            for obj in obj.__dict__.values()
+            if is_task_cls(obj) or isinstance(obj, Namespace)
+        )
+        stack = []
+
+        # We use in-order traversal to load the tasks.
+        # This allows us to load the tasks in the order they appear in the module,
+        # with tasks loaded later overriding tasks loaded earlier.
+        # We also allow tasks to be loaded from nested namespaces, traversing the
+        # subtrees as they appear.
+        #
+        # Example:
+        #   module
+        #   ├── task1
+        #   ├── namespace1
+        #   │   ├── task2
+        #   │   └── namespace2
+        #   │       └── task3
+        #   |   └── task4
+        #   └── task5
+        #
+        # The tasks will be loaded in the order: task1, task2, task3, task4, task5
+        while current is not None or stack:
+            while current is not None:
+                try:
+                    current_path, value = next(current)
+                except StopIteration:
+                    current = None
+                else:
+                    if current in stack:
+                        if current_path:
+                            raise ValueError(
+                                "Circular reference detected when loading tasks for namespace: "
+                                + current_path
+                            )
+                        else:
+                            raise ValueError(
+                                "Circular reference detected when loading tasks for the root namespace."
+                            )
+                    stack.append(current)
+                    if isinstance(value, list):
+                        # Treat lists as subtrees and load them next
+                        current = iter((current_path, v) for v in value)
+                    elif is_task_cls(value) and value._qk_names:
+                        # private classes will have empty `_qk_names`
+                        paths = _merge_aliases(current_path, value._qk_names)
+                        for p in paths:
+                            self.register(value, namespace=p)
+                        current = None
+                    elif isinstance(value, Namespace):
+                        current = iter(value.items())
+                    elif isinstance(value, collections.abc.Mapping):
+                        value = Namespace(value, path=current_path)
+                        current = iter(value.items())
+                    elif hasattr(value, "__dict__"):
+                        current = iter(
+                            (current_path, v)
+                            for v in value.__dict__.values()
+                            if is_task_cls(v) or isinstance(v, Namespace)
+                        )
+                    else:
+                        # Should not happen, but just in case
+                        raise ValueError("Invalid object.")
+            if stack:
+                current = stack.pop()
+
+
+class Namespace:
+    """Used to group modules."""
+
+    def __init__(
+        self, mapping=None, path: str = "", separator: str = DEFAULT_SEPARATOR
+    ):
+        self._mappings: dict[str, list] = {}
+        self.path = path
+        self.separator = separator
+
+        if mapping is not None:
+            self.update(mapping)
+
+    def add(self, obj: object, path):
+        """Register an object to a namespace.
+
+        :param module: The object to register.
+        :param namespace: The namespace or namespaces to register the obj under.
+        """
+        # if is_task_cls(obj):
+        #     raise ValueError("Task classes cannot be registered directly.")
+        if not isinstance(obj, collections.abc.Sequence):
+            obj = [obj]
+        path = _merge_alias(self.path, path)
+        self._mappings.setdefault(path, []).extend(obj)
+
+    def update(self, mapping: dict):
+        for k, v in mapping.items():
+            self.add(v, path=k)
+
+    def items(self):
+        return self._mappings.items()

@@ -1,4 +1,4 @@
-from quickie import tasks
+from quickie import tasks, console
 
 
 class Other(tasks.Script, name="other"):
@@ -9,5 +9,5 @@ class Other(tasks.Script, name="other"):
     def get_script(self, *args) -> str:
         args = " ".join(args)
         script = f"echo {args}"
-        self.print(f"Running: {script}")
+        console.print(f"Running: {script}")
         return script

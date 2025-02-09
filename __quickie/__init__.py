@@ -1,13 +1,15 @@
-from quickie import script, task
+from quickie import script, task, Namespace
 from quickie import console
 
 from . import install, test
 
-NAMESPACES = {
-    "": test,
-    "test": test,
-    "install": install,
-}
+namespace = Namespace(
+    {
+        "": [install, test],
+        "test": test,
+        "install": install,
+    }
+)
 
 
 @task

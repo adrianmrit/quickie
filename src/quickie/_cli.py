@@ -11,7 +11,6 @@ from rich import traceback
 import quickie
 from quickie import config
 from quickie._argparser import ArgumentsParser
-from quickie._loader import load_tasks_from_module
 from quickie._namespace import RootNamespace
 from quickie.context import Context
 from quickie.errors import QuickieError, Skip, Stop
@@ -189,7 +188,7 @@ class Main:
         for task_name, task in sorted(
             self.root_namespace.items(),
             key=lambda x: (
-                x[1]._get_relative_file_location(os.getcwd()),
+                x[1]._get_relative_file_location(os.getcwd()) or "",
                 x[0].count(":"),
                 x[0].split(":"),
             ),
@@ -207,7 +206,7 @@ class Main:
             rich_task_name = rich.text.Text(task_name, style="bold")
             rich_aliases = rich.text.Text(aliases, style="dim")
             task_location = rich.text.Text(
-                str(task._get_relative_file_location(os.getcwd())), style="dim"
+                task._get_relative_file_location(os.getcwd()) or "", style="dim"
             )
             short_help = rich.text.Text(task.get_short_help(), style="green")
             table.add_row(rich_task_name, rich_aliases, short_help, task_location)
@@ -218,7 +217,7 @@ class Main:
         """Load tasks from the tasks module."""
         root = Path.cwd()
         module = imports.import_from_path(root / path)
-        load_tasks_from_module(module, namespace=self.root_namespace)
+        self.root_namespace.load(module)
 
     def get_usage(self) -> str:
         """Get the usage message."""
@@ -226,7 +225,7 @@ class Main:
 
     def get_task(self, task_name: str, *, context: Context) -> quickie.Task:
         """Get a task by name."""
-        task_class = self.root_namespace.get_task_class(task_name)
+        task_class = self.root_namespace[task_name]
         return task_class(name=task_name, context=context)
 
     def run_task(self, task_name: str, *, args, context: Context):
