@@ -35,7 +35,7 @@ API
     quickie.conditions.base
     quickie.conditions.base.BaseCondition
     quickie.config
-    quickie.config.CliConfig
+    quickie.config.App
     quickie.context
     quickie.context.Context
     quickie.errors

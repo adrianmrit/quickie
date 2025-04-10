@@ -28,6 +28,8 @@
       ~Command.get_help
       ~Command.get_parser
       ~Command.get_short_help
+      ~Command.log_task_execution
+      ~Command.log_task_execution_details
       ~Command.parse_and_run
       ~Command.parse_args
       ~Command.run

@@ -23,6 +23,8 @@
       ~Task.get_help
       ~Task.get_parser
       ~Task.get_short_help
+      ~Task.log_task_execution
+      ~Task.log_task_execution_details
       ~Task.parse_and_run
       ~Task.parse_args
       ~Task.run

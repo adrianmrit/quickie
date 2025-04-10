@@ -9,12 +9,35 @@ from quickie._meta import __version__ as version
 from quickie.completion._internal import TaskCompleter
 
 
-class ArgumentsParser(ArgumentParser):
+class AppArgumentParser(ArgumentParser):
     """Custom argument parser for quickie."""
 
     @typing.override
     def __init__(self, main):
         super().__init__(description="A CLI tool for quick tasks.")
+        # argument for logging level
+        self.add_argument(
+            "-v",
+            "--verbose",
+            action="count",
+            dest="verbosity",
+            default=0,
+            help="Increase verbosity (repeat for increased verbosity)",
+        )
+        self.add_argument(
+            "-q",
+            "--quiet",
+            action="store_const",
+            const=-1,
+            default=0,
+            dest="verbosity",
+            help="Decrease verbosity (show errors only)",
+        )
+        self.add_argument(
+            "--log-file",
+            type=str,
+            help="The file to log to. If not set, logs to stdout.",
+        )
         self.add_argument("-V", "--version", action="version", version=version)
         self.add_argument("-l", "--list", action="store_true", help="List tasks")
         self.add_argument(
@@ -36,7 +59,7 @@ class ArgumentsParser(ArgumentParser):
             ["bash", "zsh"]
         )
         self.add_argument("task", nargs="?", help="The task to run").completer = (  # type: ignore
-            TaskCompleter(main)
+            TaskCompleter()
         )
         # This does not need completion as it is handled by the task completer
         self.add_argument("args", nargs="*", help="The arguments to pass to the task")

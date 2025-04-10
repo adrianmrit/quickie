@@ -1,9 +1,10 @@
 import functools
+import os
 
 import pytest
 
 import quickie._namespace
-from quickie import tasks
+from quickie import tasks, app
 from quickie.conditions import condition
 from quickie.factories import arg, command, group, script, task, thread_group
 
@@ -55,8 +56,8 @@ class TestTask:
         def other(arg):
             result.append(arg)
 
-        context.namespace.register(other, namespace="other")
-        context.namespace.register(other, namespace="namespaced.other")
+        app.tasks.register(other, namespace="other")
+        app.tasks.register(other, namespace="namespaced.other")
 
         @task(
             before=[
@@ -79,7 +80,7 @@ class TestTask:
         def defined_later(arg):
             result.append(f"{arg} defined later")
 
-        context.namespace.register(defined_later, namespace="defined_later")
+        app.tasks.register(defined_later, namespace="defined_later")
 
         task_instance = my_task(context=context)
         task_instance()
@@ -290,13 +291,17 @@ class TestBaseSubprocessTask:
         assert task_instance.get_cwd() == expected
 
     def test_env(self, context):
-        context.env = {"MYENV": "myvalue"}
+        context.env.update({"MYENV": "myvalue", **os.environ})
 
         class MyTask(tasks._BaseSubprocessTask):
             env = {"OTHERENV": "othervalue"}
 
         task_instance = MyTask(context=context)
-        assert task_instance.get_env() == {"MYENV": "myvalue", "OTHERENV": "othervalue"}
+        assert task_instance.get_env() == {
+            "MYENV": "myvalue",
+            "OTHERENV": "othervalue",
+            **os.environ,
+        }
 
 
 class TestCommand:
@@ -305,7 +310,7 @@ class TestCommand:
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
         context.cwd = "/example/cwd"
-        context.env = {"MYENV": "myvalue"}
+        context.env.update({"MYENV": "myvalue"})
 
         @command(cwd="../other", env={"OTHERENV": "othervalue"})
         def my_task():
@@ -330,39 +335,42 @@ class TestCommand:
         task_with_dynamic_args = dynamic_args_task(context=context)
 
         task_instance()
-        subprocess_run.assert_called_once_with(
-            ["myprogram"],
-            check=False,
-            cwd="/example/other",
-            env={"MYENV": "myvalue", "OTHERENV": "othervalue"},
-        )
+        assert subprocess_run.call_count == 1
+        assert subprocess_run.call_args[0][0] == ["myprogram"]
+        assert subprocess_run.call_args[1]["check"] is False
+        assert subprocess_run.call_args[1]["cwd"] == "/example/other"
+        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
+        assert subprocess_run.call_args[1]["env"]["OTHERENV"] == "othervalue"
         subprocess_run.reset_mock()
 
         cmd_with_string_instance()
-        subprocess_run.assert_called_once_with(
-            ["myprogram", "arg1", "arg2", "arg3 with spaces"],
-            check=False,
-            cwd="/example/other",
-            env={"MYENV": "myvalue", "OTHERENV": "othervalue"},
-        )
+        assert subprocess_run.call_count == 1
+        assert subprocess_run.call_args[0][0] == [
+            "myprogram",
+            "arg1",
+            "arg2",
+            "arg3 with spaces",
+        ]
+        assert subprocess_run.call_args[1]["check"] is False
+        assert subprocess_run.call_args[1]["cwd"] == "/example/other"
+        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
+        assert subprocess_run.call_args[1]["env"]["OTHERENV"] == "othervalue"
         subprocess_run.reset_mock()
 
         task_with_args([])
-        subprocess_run.assert_called_once_with(
-            ["myprogram", "arg1", "arg2"],
-            check=False,
-            cwd="/example/cwd",
-            env={"MYENV": "myvalue"},
-        )
+        assert subprocess_run.call_count == 1
+        assert subprocess_run.call_args[0][0] == ["myprogram", "arg1", "arg2"]
+        assert subprocess_run.call_args[1]["check"] is False
+        assert subprocess_run.call_args[1]["cwd"] == "/example/cwd"
+        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
         subprocess_run.reset_mock()
 
         task_with_dynamic_args.parse_and_run(["--arg1", "value1"])
-        subprocess_run.assert_called_once_with(
-            ["myprogram", "value1"],
-            check=False,
-            cwd="/full/path",
-            env={"MYENV": "myvalue"},
-        )
+        assert subprocess_run.call_count == 1
+        assert subprocess_run.call_args[0][0] == ["myprogram", "value1"]
+        assert subprocess_run.call_args[1]["check"] is False
+        assert subprocess_run.call_args[1]["cwd"] == "/full/path"
+        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
         subprocess_run.reset_mock()
 
     def test_program_required(self, context):
@@ -382,7 +390,7 @@ class TestScriptTask:
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
         context.cwd = "/somedir"
-        context.env = {"VAR": "VAL"}
+        context.env.update({"VAR": "VAL"})
 
         class MyTask(tasks.Script):
             script = "myscript"
@@ -401,7 +409,7 @@ class TestScriptTask:
             check=False,
             shell=True,
             cwd="/somedir",
-            env={"VAR": "VAL"},
+            env={"VAR": "VAL", **os.environ},
             executable=None,
         )
         subprocess_run.reset_mock()
@@ -412,7 +420,7 @@ class TestScriptTask:
             check=False,
             shell=True,
             cwd="/somedir",
-            env={"VAR": "VAL"},
+            env={"VAR": "VAL", **os.environ},
             executable=None,
         )
 

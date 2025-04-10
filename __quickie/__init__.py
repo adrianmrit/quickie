@@ -1,15 +1,21 @@
 from quickie import script, task, Namespace
 from quickie import console
+from quickie.errors import Skip, Stop
 
 from . import install, test
 
-namespace = Namespace(
+_ = Namespace(
     {
         "": [install, test],
         "test": test,
         "install": install,
     }
 )
+
+
+def print_name():
+    print(__name__)
+    print(__file__)
 
 
 @task
@@ -19,6 +25,18 @@ def hello():
     console.print_error("This is an error message.")
     console.print_warning("This is a warning message.")
     console.print_success("This is a success message.")
+
+
+@script(
+    env={"OTHER": "Other"},
+    bind=True,
+)
+def script_example(task):
+    """Example script that runs a command."""
+    # print(task.context.env["MY_VAR"])
+    return """
+    echo $MY_VAR $OTHER
+    """
 
 
 @script
@@ -54,3 +72,17 @@ def build_docs(*args):
     rm -rf docs/source/generated
     sphinx-build -M html docs/source docs/build {args}
     """
+
+
+@task
+def skip_example():
+    """Example task that skips."""
+    console.print("This task will be skipped.")
+    raise Skip("Skipping this task.")
+
+
+@task
+def stop_example():
+    """Example task that stops all tasks."""
+    console.print("This task will stop all tasks.")
+    raise Stop("Stopping all tasks.")

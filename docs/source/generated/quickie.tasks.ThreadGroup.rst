@@ -25,6 +25,8 @@
       ~ThreadGroup.get_parser
       ~ThreadGroup.get_short_help
       ~ThreadGroup.get_tasks
+      ~ThreadGroup.log_task_execution
+      ~ThreadGroup.log_task_execution_details
       ~ThreadGroup.parse_and_run
       ~ThreadGroup.parse_args
       ~ThreadGroup.run

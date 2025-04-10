@@ -26,6 +26,8 @@
       ~Script.get_parser
       ~Script.get_script
       ~Script.get_short_help
+      ~Script.log_task_execution
+      ~Script.log_task_execution_details
       ~Script.parse_and_run
       ~Script.parse_args
       ~Script.run

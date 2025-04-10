@@ -6,4 +6,3 @@ How Tos:
    task_inheritance
    task_autocompletion
    lazy_task_references
-   namespacing_tasks

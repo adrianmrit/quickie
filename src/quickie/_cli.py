@@ -2,20 +2,14 @@
 
 import os
 import sys
-from pathlib import Path
 
 import argcomplete
-from frozendict import frozendict
 from rich import traceback
 
 import quickie
-from quickie import config
-from quickie._argparser import ArgumentsParser
-from quickie._namespace import RootNamespace
-from quickie.context import Context
+from quickie import app
+from quickie._argparser import AppArgumentParser
 from quickie.errors import QuickieError, Skip, Stop
-from quickie.utils import imports
-from quickie import console
 
 
 def _clean_exit(func):
@@ -33,37 +27,36 @@ def _clean_exit(func):
 
 
 @_clean_exit
-def main(argv=None, *, raise_error=False, tasks_namespace=None, global_=False):
+def main(argv=None, *, raise_error=False, global_=False):
     """Run the CLI."""
     traceback.install(suppress=[quickie])
-    main = Main(argv=argv, root_namespace=tasks_namespace, global_=global_)
+    main = Main(argv=argv, global_=global_)
     try:
         main()
     except Stop as e:
         if e.message:
-            console.print(f"Stopping: [info]{e.message}[/info]", style="info")
+            app.logger.info(f"Stopping: [info]{e.message}[/info]")
         else:
-            console.print(f"Stopping because {Stop.__name__} exception was raised.")
+            app.logger.info(f"Stopping because {Stop.__name__} exception was raised.")
         sys.exit(e.exit_code)
     except Skip as e:
         if e.message:
-            console.print(f"Skipping: [info]{e.message}[/info]", style="info")
+            app.logger.info(f"Skipping: [info]{e.message}[/info]")
         else:
-            console.print(f"Skipping because {Skip.__name__} exception was raised.")
+            app.logger.info(f"Skipping because {Skip.__name__} exception was raised.")
     except QuickieError as e:
         if raise_error:
             raise e
-        console.print(f"Error: [error]{e}[/error]", style="error")
+        app.logger.error(f"[error]{e}[/error]")
         sys.exit(e.exit_code)
 
 
 @_clean_exit
-def global_main(argv=None, *, raise_error=False, tasks_namespace=None):
+def global_main(argv=None, *, raise_error=False):
     """Run the CLI with the global option."""
     main(
         argv=argv,
         raise_error=raise_error,
-        tasks_namespace=tasks_namespace,
         global_=True,
     )
 
@@ -71,18 +64,12 @@ def global_main(argv=None, *, raise_error=False, tasks_namespace=None):
 class Main:
     """Represents the CLI entry of quickie."""
 
-    def __init__(
-        self, *, argv=None, root_namespace: RootNamespace | None = None, global_=False
-    ):  # noqa: PLR0913
+    def __init__(self, *, argv=None, global_=False):  # noqa: PLR0913
         """Initialize the CLI."""
         if argv is None:
             argv = sys.argv[1:]
         self.argv = argv
-
-        if root_namespace is None:
-            root_namespace = RootNamespace()
-        self.root_namespace = root_namespace
-        self.parser = ArgumentsParser(main=self)
+        self.parser = AppArgumentParser(main=self)
         self.global_ = global_
 
     def __call__(self):
@@ -106,23 +93,18 @@ class Main:
             args = self.argv
 
         namespace = self.parser.parse_args(args)
-        config = self.get_config(
-            tasks_module_name=namespace.module,
-            use_global=self.global_,
-        )
-        context = Context(
-            program_name=os.path.basename(sys.argv[0]),
-            cwd=os.getcwd(),
-            env=frozendict(os.environ),
-            namespace=self.root_namespace,
-            config=config,
-        )
-        self.load_tasks(path=config.TASKS_MODULE_PATH)
+        app.set_verbosity(namespace.verbosity)
+        app.set_log_file(namespace.log_file)
+        if not self.global_ and namespace.module:
+            app.set_project_path(namespace.module)
+        app.set_use_global(self.global_)
+        # Loads tasks before completion
 
         if arg_complete_val:
+            app.load_tasks()
             if namespace.task:
-                task = self.get_task(namespace.task, context=context)
-                # Upddate _ARGCOMPLETE to the index of the task, so that completion
+                task = self.get_task(namespace.task)
+                # Update _ARGCOMPLETE to the index of the task, so that completion
                 # only considers the task arguments
                 os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
                 argcomplete.autocomplete(task.parser)
@@ -130,6 +112,7 @@ class Main:
                 argcomplete.autocomplete(self.parser)
             sys.exit(0)
 
+        app.logger.info(f"Running quickie {quickie.__version__}")
         if namespace.init:
             from quickie._init import init
 
@@ -140,26 +123,23 @@ class Main:
             elif namespace.suggest_auto_completion == "zsh":
                 self.suggest_autocompletion_zsh()
         elif namespace.list:
+            app.load_tasks()
             self.list_tasks()
         elif namespace.task is not None:
+            app.load_tasks()
             self.run_task(
                 task_name=namespace.task,
                 args=namespace.args,
-                context=context,
             )
         else:
-            console.print(self.get_usage())
+            app.console.print(self.get_usage())
         self.parser.exit()
-
-    def get_config(self, **kwargs):  # mostly so that we can mock it
-        """Load the configuration."""
-        return config.CliConfig(**kwargs)
 
     def suggest_autocompletion_bash(self):
         """Suggest autocompletion for bash."""
         program = os.path.basename(sys.argv[0])
-        console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
-        console.print(
+        app.console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
+        app.console.print(
             f'eval "$(register-python-argcomplete {program})"',
             style="bold green",
         )
@@ -167,8 +147,8 @@ class Main:
     def suggest_autocompletion_zsh(self):
         """Suggest autocompletion for zsh."""
         program = os.path.basename(sys.argv[0])
-        console.print("Add the following to ~/.zshrc:")
-        console.print(
+        app.console.print("Add the following to ~/.zshrc:")
+        app.console.print(
             f'eval "$(register-python-argcomplete {program})"',
             style="bold green",
         )
@@ -186,7 +166,7 @@ class Main:
         table.add_column("Location", style="bold yellow")
         names_by_cls: dict[type[quickie.Task], list[str]] = {}
         for task_name, task in sorted(
-            self.root_namespace.items(),
+            app.tasks.items(),
             key=lambda x: (
                 x[1]._get_relative_file_location(os.getcwd()) or "",
                 x[0].count(":"),
@@ -211,24 +191,18 @@ class Main:
             short_help = rich.text.Text(task.get_short_help(), style="green")
             table.add_row(rich_task_name, rich_aliases, short_help, task_location)
 
-        console.print(table)
-
-    def load_tasks(self, *, path: Path):
-        """Load tasks from the tasks module."""
-        root = Path.cwd()
-        module = imports.import_from_path(root / path)
-        self.root_namespace.load(module)
+        app.console.print(table)
 
     def get_usage(self) -> str:
         """Get the usage message."""
         return self.parser.format_usage()
 
-    def get_task(self, task_name: str, *, context: Context) -> quickie.Task:
+    def get_task(self, task_name: str) -> quickie.Task:
         """Get a task by name."""
-        task_class = self.root_namespace[task_name]
-        return task_class(name=task_name, context=context)
+        task_class = app.tasks[task_name]
+        return task_class(name=task_name)
 
-    def run_task(self, task_name: str, *, args, context: Context):
+    def run_task(self, task_name: str, *, args):
         """Run a task."""
-        task = self.get_task(task_name, context=context)
+        task = self.get_task(task_name)
         return task.parse_and_run(args)

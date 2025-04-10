@@ -1,5 +1,5 @@
 from quickie import tasks, Namespace, task
-from quickie.utils.cli import console
+from quickie import app
 
 from . import nested
 
@@ -11,16 +11,16 @@ class HelloWorld(tasks.Task, name="hello"):
     """Hello world task."""
 
     def run(self, **kwargs):
-        console.print("Hello world!")
-        console.print_info("This is an info message.")
-        console.print_error("This is an error message.")
-        console.print_warning("This is a warning message.")
-        console.print_success("This is a success message.")
+        app.console.print("Hello world!")
+        app.console.print_info("This is an info message.")
+        app.console.print_error("This is an error message.")
+        app.console.print_warning("This is a warning message.")
+        app.console.print_success("This is a success message.")
 
 
 @task
 def other_task():
-    console.print("Other task.")
+    app.console.print("Other task.")
 
 
 namespace.add(

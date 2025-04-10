@@ -15,9 +15,10 @@ Namespaces are defined by creating an instance of the `Namespace` class and addi
 .. WARNING::
     Simply creating a `Namespace` instance will not load the tasks. The namespace is discovered at the time of
     loading tasks, by going through the attributes of the module. Therefore it is important to define the namespace
-    as a global variable in the module, or nested withing other namespaces.
+    as a global variable in the module, or nested within other namespaces.
 
 For example:
+
 .. code-block:: python
 
     # MyProject/__quickie/__init__.py

@@ -12,11 +12,12 @@ import contextlib
 import functools
 import os
 import re
+import shlex
 import typing
 
 from quickie.conditions.base import BaseCondition
 from quickie.errors import Skip
-from quickie.utils.cli import console
+from quickie.config import app
 
 from .context import Context
 
@@ -139,7 +140,7 @@ class Task(metaclass=_TaskMeta, private=True):
         self,
         name=None,
         *,
-        context: Context,
+        context: Context | None = None,
     ):
         """Initialize the task.
 
@@ -153,7 +154,10 @@ class Task(metaclass=_TaskMeta, private=True):
         # We default to the class name in case the task was not called
         # from the CLI
         self.name = name or self.__class__.__name__
-        self.context = context.copy()
+        if context is None:
+            self.context = Context.default()
+        else:
+            self.context = context.copy()
 
         self.parser = self.get_parser()
         self.add_args(self.parser)
@@ -187,7 +191,7 @@ class Task(metaclass=_TaskMeta, private=True):
 
         :return: The parser.
         """
-        kwargs.setdefault("prog", f"{self.context.program_name} {self.name}")
+        kwargs.setdefault("prog", f"{app.program_name} {self.name}")
         kwargs.setdefault("description", self.get_help())
         parser = argparse.ArgumentParser(**kwargs)
         return parser
@@ -230,7 +234,7 @@ class Task(metaclass=_TaskMeta, private=True):
     def _resolve_related(self, task_cls):
         """Get the task class."""
         if isinstance(task_cls, str):
-            return self.context.namespace[task_cls]
+            return app.tasks[task_cls]
         return task_cls
 
     def get_before(self, *args, **kwargs) -> typing.Iterator[TaskType]:
@@ -303,7 +307,7 @@ class Task(metaclass=_TaskMeta, private=True):
             try:
                 task_cls(context=self.context)()
             except Exception as e:
-                console.print_error(f"Error running cleanup task {task_cls}: {e}")
+                app.logger.error(f"Error running cleanup task {task_cls}: {e}")
                 continue
 
     def condition_passes(self, *args, **kwargs):
@@ -343,24 +347,39 @@ class Task(metaclass=_TaskMeta, private=True):
         """
         raise NotImplementedError
 
+    def log_task_execution(self, *args, **kwargs):
+        """Log information about the task execution."""
+        from quickie import app
+
+        # Log task name and arguments
+        app.logger.info(f"Executing task: [info]{self.name}[/info]")
+
+    def log_task_execution_details(self, *args, **kwargs):
+        """Log details about the task execution."""
+        pass
+
     # not implemented in __call__ so that we can override it at the instance level
     @typing.final
     def full_run(self, *args, **kwargs):
         """Call the task, including before, after, and cleanup tasks.
 
         :param args: Unknown arguments.
-        param kwargs: Parsed known arguments.
+        :param kwargs: Parsed known arguments.
 
         :returns: The result of the task.
         """
+        from quickie import app
+
         if not self.condition_passes(*args, **kwargs):
+            app.logger.info(f"Skipping task {self.name}: conditions not met.")
             return
         try:
             self.run_before(*args, **kwargs)
             try:
+                self.log_task_execution(*args, **kwargs)
                 result = self.run(*args, **kwargs)
             except Skip as e:
-                console.print_info(f"Skipping task {self.name}: {e.message}")
+                app.logger.info(f"Skipping task {self.name}: {e.message}")
                 result = None
             self.run_after(*args, **kwargs)
             return result
@@ -462,6 +481,14 @@ class Command(_BaseSubprocessTask, private=True):
             args = shlex.split(args)
         return args
 
+    @typing.override
+    def log_task_execution_details(self, program, args):
+        """Log details about the task execution."""
+        from quickie import app
+
+        command = shlex.join([program, *args])
+        app.logger.debug(f"Execute command: {command}")
+
     @typing.final
     @typing.override
     def run(self, *args, **kwargs):
@@ -491,7 +518,7 @@ class Command(_BaseSubprocessTask, private=True):
         """
         import subprocess
 
-        # TODO: Raise error if code is not 0, or expected value
+        self.log_task_execution_details(program, args)
         result = subprocess.run(
             [program, *args],
             check=False,
@@ -527,11 +554,23 @@ class Script(_BaseSubprocessTask, private=True):
         env = self.get_env(*args, **kwargs)
         self._run_script(script, cwd=cwd, env=env)
 
+    @typing.override
+    def log_task_execution_details(self, script):
+        """Log details about the task execution."""
+        from quickie import app
+
+        # TODO: Highlight syntax
+        if self.executable:
+            app.logger.info(f"Execute script: [info]{self.executable} {script}[/info]")
+        else:
+            app.logger.info(f"Execute script: [info]{script}[/info]")
+
     def _run_script(self, script: str, *, cwd, env):
         """Run the script."""
         import subprocess
 
         # TODO: Raise error if code is not 0, or expected value
+        self.log_task_execution_details(script)
         result = subprocess.run(
             script,
             shell=True,
@@ -547,17 +586,17 @@ class _TaskProxy(abc.ABC):
     """A proxy for tasks that resolves the task class when called."""
 
     @abc.abstractmethod
-    def resolve_task_cls(self, context: Context) -> TaskType:
+    def resolve_task_cls(self) -> TaskType:
         """Resolve the task class."""
         pass  # pragma: no cover
 
-    def __call__(self, *args, context: Context, **kwargs) -> Task:
+    def __call__(self, *args, **kwargs) -> Task:
         """Resolves and initializes the task class.
 
         This allows to use the same interface as when initializing a task class.
         """
-        task_cls = self.resolve_task_cls(context)
-        return task_cls(*args, context=context, **kwargs)
+        task_cls = self.resolve_task_cls()
+        return task_cls(*args, **kwargs)
 
 
 class _LazyTaskProxy(_TaskProxy):
@@ -567,9 +606,11 @@ class _LazyTaskProxy(_TaskProxy):
         self.name = name
 
     @typing.override
-    def resolve_task_cls(self, context: Context) -> TaskType:
+    def resolve_task_cls(self) -> TaskType:
         """Resolve the task class."""
-        return context.namespace[self.name]
+        from quickie import app
+
+        return app.tasks[self.name]
 
 
 class _PartialTaskProxy(_TaskProxy):
@@ -581,10 +622,10 @@ class _PartialTaskProxy(_TaskProxy):
         self.kwargs = kwargs
 
     @typing.override
-    def resolve_task_cls(self, context: Context) -> TaskType:
+    def resolve_task_cls(self) -> TaskType:
         task_cls = self.task_cls
         while isinstance(task_cls, _TaskProxy):
-            task_cls = task_cls.resolve_task_cls(context)
+            task_cls = task_cls.resolve_task_cls()
         return task_cls
 
     def __call__(self, *args, **kwargs) -> Task:
@@ -612,10 +653,10 @@ class _SuppressErrorsTaskProxy(_TaskProxy):
         self.exceptions = exceptions or (Exception,)
 
     @typing.override
-    def resolve_task_cls(self, context: Context) -> TaskType:
+    def resolve_task_cls(self) -> TaskType:
         task_cls = self.task_cls
         while isinstance(task_cls, _TaskProxy):
-            task_cls = task_cls.resolve_task_cls(context)
+            task_cls = task_cls.resolve_task_cls()
         return task_cls  # type: ignore
 
     def __call__(self, *args, **kwargs) -> Task:
@@ -740,3 +781,37 @@ class ThreadGroup(_TaskGroup, private=True):
             futures = [executor.submit(self._run_task, task) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
                 future.result()
+
+
+class _SuppressLogsTaskProxy(_TaskProxy):
+    """Wrapper to suppress logs for a task."""
+
+    def __init__(self, task_cls: TaskTypeOrProxy):
+        self.task_cls = task_cls
+
+    @typing.override
+    def resolve_task_cls(self) -> TaskType:
+        task_cls = self.task_cls
+        while isinstance(task_cls, _TaskProxy):
+            task_cls = task_cls.resolve_task_cls()
+        return task_cls  # type: ignore
+
+    def __call__(self, *args, **kwargs) -> Task:
+        """Patches the task to suppress logs and returns the instance."""
+        instance = super().__call__(*args, **kwargs)
+        instance.log_task_execution_details = lambda *args, **kwargs: None
+        return instance
+
+
+def suppress_logs(task_cls: TaskTypeOrProxy) -> _SuppressLogsTaskProxy:
+    """Wraps a task class to suppress logs.
+
+    This is useful for tasks that may log sensitive information, such as
+    passwords or tokens.
+
+    :param task_cls: The task class or lazy task to wrap.
+    :returns: An instance of _SuppressLogsTaskProxy wrapping the task class.
+    """
+    if isinstance(task_cls, str):
+        task_cls = lazy_task(task_cls)
+    return _SuppressLogsTaskProxy(task_cls)

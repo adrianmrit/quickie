@@ -1,48 +1,32 @@
 import os
+from pathlib import Path
 
 import pytest
-from frozendict import frozendict
-from pytest import MonkeyPatch
-from rich.theme import Theme
 
-from quickie import _cli, config
 from quickie._namespace import RootNamespace
 from quickie.context import Context
 
-DEFAULT_CONSOLE_THEME = Theme(config.CONSOLE_STYLE)
 
+@pytest.fixture(autouse=True)
+def patch_config(tmpdir_factory, mocker):
+    """Patch the config module to use a temporary directory for the home path."""
+    # Patch the configure method
+    mocker.patch("quickie.app._home_path", Path("tests/__quickie_home"), create=True)
+    mocker.patch("quickie.app._project_path", Path("tests/__quickie_test"), create=True)
+    mocker.patch(
+        "quickie.app._tmp_relative_path",
+        Path(tmpdir_factory.mktemp("quickie_tmp")),
+        create=True,
+    )
 
-@pytest.fixture(autouse=True, scope="session")
-def patch_config(tmpdir_factory):
-    m = MonkeyPatch()
-    original = _cli.Main.get_config
-
-    def new_get_config(self, **kwargs):
-        # Values can be set and be null or empty string, in which case we
-        # want to override the default.
-        kwargs["home_path"] = kwargs.get("home_path") or "tests/__quickie_home"
-        kwargs["tasks_module_name"] = (
-            kwargs.get("tasks_module_name") or "tests/__quickie_test"
-        )
-        kwargs["tmp_relative_path"] = kwargs.get("tmp_relative_path") or str(
-            tmpdir_factory.mktemp("quickie_tmp")
-        )
-        return original(self, **kwargs)
-
-    m.setattr(_cli.Main, "get_config", new_get_config)
+    # Reset the namespace every time
+    mocker.patch("quickie.app._tasks", RootNamespace(), create=True)
+    mocker.patch("quickie.app.program_name", "qk")
 
 
 @pytest.fixture
 def context(tmpdir):
     return Context(
-        program_name="qk",
         cwd=os.getcwd(),
-        env=frozendict(os.environ),
-        namespace=RootNamespace(),
-        config=config.CliConfig(
-            home_path="tests/__quickie_home",
-            tasks_module_name="tests/__quickie_test",
-            tmp_relative_path=str(tmpdir),
-            use_global=False,
-        ),
+        env={},
     )

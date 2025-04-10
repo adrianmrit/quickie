@@ -24,6 +24,8 @@
       ~Group.get_parser
       ~Group.get_short_help
       ~Group.get_tasks
+      ~Group.log_task_execution
+      ~Group.log_task_execution_details
       ~Group.parse_and_run
       ~Group.parse_args
       ~Group.run

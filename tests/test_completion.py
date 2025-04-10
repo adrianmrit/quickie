@@ -1,12 +1,12 @@
-from quickie import tasks
-from quickie._cli import Main
+from quickie import tasks, app
+from quickie._namespace import RootNamespace
 from quickie.completion._internal import TaskCompleter
 from quickie.completion.python import PytestCompleter
 
 
 class TestTaskCompleter:
     def test_complete(self, mocker):
-        mocker.patch("quickie._cli.Main.load_tasks")
+        mocker.patch("quickie.app._tasks", RootNamespace(), create=True)
 
         class MyTask(tasks.Task):
             """My task"""
@@ -23,12 +23,11 @@ class TestTaskCompleter:
 
             pass
 
-        main = Main(argv=[])
-        main.root_namespace.register(MyTask, namespace="task")
-        main.root_namespace.register(TestTask2, namespace="task2")
-        main.root_namespace.register(Other, namespace="other")
+        app.tasks.register(MyTask, namespace="task")
+        app.tasks.register(TestTask2, namespace="task2")
+        app.tasks.register(Other, namespace="other")
 
-        completer = TaskCompleter(main)
+        completer = TaskCompleter()
 
         completions = completer(prefix="t", action=None, parser=None, parsed_args=None)  # type: ignore
         assert completions == {"task": "My task", "task2": "My other task"}

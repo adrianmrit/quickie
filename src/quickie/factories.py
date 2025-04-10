@@ -49,18 +49,8 @@ class _OptionKwargs(typing.TypedDict, total=False):
     version: str
 
 
-class _CommonTaskFactoryKwargs(typing.TypedDict):
-    name: str | typing.Sequence[str] | None
-    extra_args: bool | None
-    bind: bool
-    condition: tasks.BaseCondition | None
-    before: typing.Sequence[TaskTypeOrProxy] | None
-    after: typing.Sequence[TaskTypeOrProxy] | None
-    cleanup: typing.Sequence[TaskTypeOrProxy] | None
-
-
 type PartialReturnType[T: tasks.Task] = typing.Callable[[typing.Callable], type[T]]
-type DecoratorReturnType[T: tasks.Task] = type[T] | PartialReturnType
+type DecoratorReturnType[T: tasks.Task] = type[T] | PartialReturnType[T]
 
 
 def arg(
@@ -131,10 +121,16 @@ def generic_task_factory[T: tasks.Task](
 def generic_task_factory[T: tasks.Task](
     fn: typing.Callable,
     *,
+    name: str | typing.Sequence[str] | None,
+    extra_args: bool | None,
+    bind: bool,
+    condition: tasks.BaseCondition | None,
+    before: typing.Sequence[TaskTypeOrProxy] | None,
+    after: typing.Sequence[TaskTypeOrProxy] | None,
+    cleanup: typing.Sequence[TaskTypeOrProxy] | None,
     bases: tuple[type[T], ...],
     override_method: str,
     extra_kwds: dict[str, typing.Any] | None = None,
-    **kwargs: typing.Unpack[_CommonTaskFactoryKwargs],
 ) -> type[T]: ...
 
 
@@ -145,8 +141,31 @@ def generic_task_factory[T: tasks.Task](
     bases: tuple[type[T], ...],
     override_method: str,
     extra_kwds: dict[str, typing.Any] | None = None,
-    **kwargs: typing.Unpack[_CommonTaskFactoryKwargs],
+    extra_args: bool | None,
+    bind: bool,
+    condition: tasks.BaseCondition | None,
+    before: typing.Sequence[TaskTypeOrProxy] | None,
+    after: typing.Sequence[TaskTypeOrProxy] | None,
+    cleanup: typing.Sequence[TaskTypeOrProxy] | None,
 ) -> PartialReturnType[T]: ...
+
+
+@typing.overload
+def generic_task_factory[T: tasks.Task](
+    fn: typing.Callable | None = None,
+    *,
+    name: str | typing.Sequence[str] | None = None,
+    extra_args: bool | None = None,
+    bind: bool = False,
+    condition: tasks.BaseCondition | None = None,
+    before: typing.Sequence[TaskTypeOrProxy] | None = None,
+    after: typing.Sequence[TaskTypeOrProxy] | None = None,
+    cleanup: typing.Sequence[TaskTypeOrProxy] | None = None,
+    bases: tuple[type[T], ...],
+    override_method: str,
+    extra_kwds: dict[str, typing.Any] | None = None,
+) -> DecoratorReturnType[T]:
+    pass
 
 
 def generic_task_factory[  # noqa: PLR0913
@@ -218,7 +237,7 @@ def generic_task_factory[  # noqa: PLR0913
         used as a decorator for a function.
     '''
     if fn is None:
-        return functools.partial(  # type: ignore
+        return functools.partial(
             generic_task_factory,
             name=name,
             extra_args=extra_args,

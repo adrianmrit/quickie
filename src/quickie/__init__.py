@@ -21,8 +21,8 @@ from quickie.tasks import (
     partial_task,
     suppressed_task,
 )
-from quickie.utils.cli import console
 from quickie._namespace import Namespace
+from quickie.config import app, console, logger
 
 from ._meta import __author__, __copyright__, __email__, __home__, __version__
 
@@ -32,6 +32,9 @@ __all__ = [
     "__email__",
     "__home__",
     "__version__",
+    "app",
+    "console",
+    "logger",
     "Task",
     "Script",
     "Command",
@@ -48,5 +51,4 @@ __all__ = [
     "lazy_task",
     "partial_task",
     "suppressed_task",
-    "console",
 ]

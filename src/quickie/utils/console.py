@@ -1,12 +1,10 @@
-"""CLI utilities for Quickie."""
+"""Console utilities for Quickie."""
 
 import typing as t
 
 import rich.console
 from rich.theme import Theme
 from rich.prompt import Prompt, Confirm
-
-from quickie import config
 
 
 class QkConsole(rich.console.Console):
@@ -15,7 +13,9 @@ class QkConsole(rich.console.Console):
     def __init__(self, *args, **kwargs):
         """Initialize the console."""
         if "theme" not in kwargs:
-            console_theme = Theme(config.CONSOLE_STYLE)
+            from quickie import app
+
+            console_theme = Theme(app.console_style)
             kwargs["theme"] = console_theme
         super().__init__(*args, **kwargs)
 
@@ -79,7 +79,3 @@ class QkConsole(rich.console.Console):
         :return: True if the user confirms, False otherwise.
         """
         return Confirm.ask(prompt, console=self, default=default)
-
-
-console = QkConsole()
-"""Default console instance."""

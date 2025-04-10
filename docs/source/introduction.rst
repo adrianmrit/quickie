@@ -3,11 +3,11 @@ Introduction
 
 Quickie is a simple task runner, inspired on tools like `cargo-make <https://github.com/sagiegurari/cargo-make>`_,
 `Task <https://taskfile.dev>`_, and `invoke <https://www.pyinvoke.org>`_.
-It aims to be simple to use, easy to extend, and to provide a good experience for teams and individuals.
+It aims to be simple to use, easy to extend, and to provide a good experience for developers and teams.
 
 Unlike other task runners that define tasks in YAML, TOML or specialized formats, Quickie uses the Python programming language
 directly, leveraging the power of the language and the ecosystem around it. This means for example, that syntax highlighting,
-errors, and auto completion in most code editors will work out of the box.
+errors, and auto completion in most code editors will work out of the box. Still, Quickie is not limited to Python projects.
 
 Some features include:
 

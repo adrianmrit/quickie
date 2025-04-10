@@ -1,11 +1,8 @@
 """Task context."""
 
+from collections import ChainMap
+import os
 import typing
-
-from frozendict import frozendict
-
-from quickie._namespace import RootNamespace
-from quickie.config import CliConfig
 
 
 class Context:
@@ -14,33 +11,38 @@ class Context:
     def __init__(  # noqa: PLR0913
         self,
         *,
-        program_name,
         cwd: str,
         env: typing.Mapping,
-        namespace: RootNamespace,
-        config: CliConfig,
     ):
         """Initialize the context.
 
-        :param program_name: The name of the program. Usually `qk` or `qkg`.
         :param cwd: The current working directory.
         :param env: The environment variables.
-        :param console: A Console instance.
-        :param namespace: The namespace for the task.
-        :param config: The configuration for the CLI.
         """
-        self.program_name = program_name
         self.cwd = cwd
-        self.env = frozendict(env)
-        self.namespace = namespace
-        self.config = config
+        self._env = ChainMap(
+            # Modifications will be made to this dictionary
+            {},
+            env,  # type: ignore
+            os.environ,
+        )
+
+    @property
+    def env(self):
+        """Environment variables."""
+        return self._env
+
+    @classmethod
+    def default(cls):
+        """Create a context from the environment."""
+        return Context(
+            cwd=os.getcwd(),
+            env={},
+        )
 
     def copy(self):
         """Copy the context."""
         return Context(
-            program_name=self.program_name,
             cwd=self.cwd,
-            env=self.env,
-            namespace=self.namespace,
-            config=self.config,
+            env=self.env.new_child(),
         )

@@ -15,9 +15,16 @@
    
       ~Context.__init__
       ~Context.copy
+      ~Context.default
    
    
 
    
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~Context.env
    
    

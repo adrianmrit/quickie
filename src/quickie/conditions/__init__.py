@@ -75,7 +75,9 @@ class FilesModified(BaseCondition):
 
     @typing.override
     def __call__(self, task, *args, **kwargs):
-        project_path = task.context.config.TASKS_MODULE_PATH.parent
+        from quickie import app
+
+        project_path = app.tasks_path.parent
         files = [project_path / pathlib.Path(file) for file in self.paths]
         exclude = {project_path / pathlib.Path(file) for file in self.exclude}
         # This way the file does not clash with other cache files, and can even be
@@ -84,7 +86,7 @@ class FilesModified(BaseCondition):
         # hash the name to make it shorter
         hash = hashlib.md5(string.encode()).hexdigest()
         cache_path = (
-            task.context.config.TMP_PATH
+            app.tmp_path
             / f"{task.name}.filesmodified.{self.algorithm.value}.{hash}.json"
         )
 
@@ -171,8 +173,9 @@ class PathsExist(BaseCondition):
 
     @typing.override
     def __call__(self, task, *args, **kwargs):
-        tasks_module_path = task.context.config.TASKS_MODULE_PATH
-        paths = (tasks_module_path / pathlib.Path(path) for path in self.paths)
+        from quickie import app
+
+        paths = (app.tasks_path / pathlib.Path(path) for path in self.paths)
         return all(path.exists() for path in paths)
 
 

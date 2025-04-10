@@ -14,7 +14,7 @@ Logical operators:
 
     from quickie import task, conditions
 
-    @task(condition[conditions.FirstRun() & conditions.PathsExist("file1", "file2"))
+    @task(condition=conditions.FirstRun() & conditions.PathsExist("file1", "file2"))
     def some_task():
         print("This task will run only the first time and if both files exist.")
 

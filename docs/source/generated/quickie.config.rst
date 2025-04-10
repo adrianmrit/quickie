@@ -8,11 +8,14 @@ quickie.config
 
    .. autosummary::
    
-      CONSOLE_STYLE
+      app
+      console
+      error_console
+      logger
    
    .. rubric:: Classes
 
    .. autosummary::
    
-      CliConfig
+      App
    

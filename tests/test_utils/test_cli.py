@@ -1,7 +1,7 @@
 import io
 
 import pytest
-from quickie.utils.cli import QkConsole
+from quickie.utils.console import QkConsole
 
 
 class TestQkConsole:
@@ -54,9 +54,9 @@ class TestQkConsole:
         assert "\x1b" in out
 
     def test_prompt(self, mocker, console):
-        mocker.patch("quickie.utils.cli.Prompt.ask", return_value="yes")
+        mocker.patch("quickie.utils.console.Prompt.ask", return_value="yes")
         assert console.prompt("Prompt") == "yes"
 
     def test_confirm(self, mocker, console):
-        mocker.patch("quickie.utils.cli.Confirm.ask", return_value=True)
+        mocker.patch("quickie.utils.console.Confirm.ask", return_value=True)
         assert console.confirm("Prompt") is True

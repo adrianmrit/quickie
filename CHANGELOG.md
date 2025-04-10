@@ -84,7 +84,11 @@ Fixes for global runner.
 
 - Replace NAMESPACES with Namespace class.
 - Pretty printing and input can be done via a separate global console instance instead of through the task.
+- Improved configuration.
+- Parent process env variables are now passed to the child process even if some variables are overwritten.
 
 ### Added
 
 - Tasks can be skipped without stopping all pending tasks.
+- Can skip logging for a task, to exclude sensitive information.
+- Add logging and logging levels

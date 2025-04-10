@@ -1,4 +1,4 @@
-from frozendict import frozendict
+from collections import ChainMap
 
 
 class TestContext:
@@ -6,5 +6,5 @@ class TestContext:
         context_copy = context.copy()
         assert context is not context_copy
         assert context.cwd == context_copy.cwd
-        assert context.env is context_copy.env
-        assert isinstance(context.env, frozendict)
+        assert context.env == context_copy.env
+        assert isinstance(context.env, ChainMap)
