@@ -39,13 +39,36 @@ class All(BaseCondition):
 class FilesModified(BaseCondition):
     """Check if files have been not being modified."""
 
-    class Algorithm(enum.Enum):
+    _params_identifier: str
+    """Unique identifier for the parameters."""
+
+    class _KwargsJsonEncoder(json.JSONEncoder):
+        """Custom JSON encoder for the kwargs."""
+
+        def default(self, obj):
+            if isinstance(obj, (pathlib.PurePath)):
+                return str(obj)
+            return super().default(obj)
+
+    class Algorithm(enum.StrEnum):
         """Algorithm to use for checking."""
 
         MD5 = "md5"
         SHA1 = "sha1"
         SHA256 = "sha256"
         TIMESTAMP = "timestamp"
+
+    def __new__(cls, *args, **kwargs):
+        """Create a new instance of the class.
+
+        This is needed to make the class hashable.
+        """
+        # Hash args and kwargs to create a unique key
+        key = (args, json.dumps(kwargs, sort_keys=True, cls=cls._KwargsJsonEncoder))
+        instance = super().__new__(cls)
+        instance.__init__(*args, **kwargs)
+        instance._params_identifier = hashlib.md5(str(key).encode()).hexdigest()
+        return instance
 
     def __init__(
         self,
@@ -73,6 +96,16 @@ class FilesModified(BaseCondition):
         self.algorithm = self.Algorithm(algorithm)
         self.allow_missing = allow_missing
 
+    def get_cache_file_name(self, task):
+        """Return the name of the cache file."""
+        return f"{task.name}.filesmodified.{self.algorithm.value}.{self._params_identifier}.json"
+
+    def get_cache_file_path(self, task):
+        """Return the path of the cache file."""
+        from quickie import app
+
+        return app.tmp_path / self.get_cache_file_name(task)
+
     @typing.override
     def __call__(self, task, *args, **kwargs):
         from quickie import app
@@ -80,15 +113,9 @@ class FilesModified(BaseCondition):
         project_path = app.tasks_path.parent
         files = [project_path / pathlib.Path(file) for file in self.paths]
         exclude = {project_path / pathlib.Path(file) for file in self.exclude}
-        # This way the file does not clash with other cache files, and can even be
-        # reused by other tasks with the same files and algorithm.
-        string = "\n".join(str(f) for f in files)
+
         # hash the name to make it shorter
-        hash = hashlib.md5(string.encode()).hexdigest()
-        cache_path = (
-            app.tmp_path
-            / f"{task.name}.filesmodified.{self.algorithm.value}.{hash}.json"
-        )
+        cache_path = self.get_cache_file_path(task)
 
         cache = self._load_cache(cache_path)
         val_getter = getattr(self, f"_get_{self.algorithm.value}")

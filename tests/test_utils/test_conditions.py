@@ -1,10 +1,11 @@
+from pathlib import Path
 import pytest
 
 from quickie.conditions import FilesModified, FirstRun, PathsExist
 from quickie.factories import task
 
 
-class TestFilesNotModified:
+class TestFilesModified:
     @pytest.mark.parametrize("algorithm", FilesModified.Algorithm)
     def test(self, tmpdir, context, algorithm):
         @task
@@ -26,21 +27,34 @@ class TestFilesNotModified:
 
         # condition with missing files
         missing_file = directory.join("missing")
+        missing_file.write("missing content")
         condition = FilesModified(
             [file1, directory, missing_file], algorithm=algorithm, allow_missing=False
         )
         assert condition(t)
+        # Delete the missing file to test the cache
+        missing_file.remove()
+        assert condition(t)  # second call should be true since allow_missing is False
+        assert condition(t)  # While file is missing the condition will pass
+        missing_file.write("missing content")
+        assert condition(t)  # file is back, but files still changed, so condition holds
+        assert not condition(t)  # nothing changed, so condition is false
+
+        # condition with missing files
         condition = FilesModified(
             [file1, directory, missing_file], algorithm=algorithm, allow_missing=True
         )
-        assert not condition(t)
+        assert condition(t)  # params changed, so cache is invalidated
+        # Delete the missing file to test the cache
+        missing_file.remove()
+        assert not condition(t)  # File is missing but otherwise nothing changed
 
         # condition with excluded files
         file1.write("content again")
         file3 = directory.join("file3")
         file3.write("other content")
         condition = FilesModified(
-            [file1, directory], exclude=[file3], algorithm=algorithm
+            [file1, directory], exclude=[Path(file3)], algorithm=algorithm
         )
         assert condition(t)
         file3.write("new content")
