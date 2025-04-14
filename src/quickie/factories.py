@@ -84,7 +84,9 @@ def arg(
                 obj.__name__,
                 (obj,),
                 {"add_args": add_args},
-                name=obj._qk_names,
+                name=obj.name,
+                aliases=obj._qk_aliases,
+                private=obj._qk_private,
                 defined_from=obj._qk_defined_from,
             )
         else:

@@ -30,17 +30,17 @@ type TaskTypeOrProxy = type[Task] | _TaskProxy
 class _TaskMeta(type):
     """Metaclass for tasks."""
 
-    _qk_names: typing.Sequence[str]
-    """Names it can be invoked with. Empty if private."""
+    _qk_name: str
+    """Name of the task."""
+
+    _qk_aliases: typing.Sequence[str] | None
+    """Alternative names of the task."""
+
+    _qk_private: bool
+    """Whether the task is private."""
 
     _qk_defined_from: type | None
-    """The class where the task was defined. None if private.
-
-    A class can reference itself.
-    """
-
-    private: bool
-    """Whether the task is private."""
+    """The class where the task was defined. None if private."""
 
     def __new__(  # noqa: PLR0913
         mcs,
@@ -48,7 +48,8 @@ class _TaskMeta(type):
         bases,
         attrs,
         *,
-        name: str | typing.Iterable[str] | None = None,
+        name: str | None = None,
+        aliases: typing.Sequence[str] | None = None,
         private: bool | None = None,
         defined_from: type | None = None,
     ):
@@ -56,6 +57,7 @@ class _TaskMeta(type):
 
         :param name: The name it can be invoked with. If not provided, it defaults to
             the class name.
+        :param aliases: Alternative names it can be invoked with. If not provided, it defaults to None.
         :param defined_from: The class where the task was defined. If not provided, and
             the task is not private, it defaults to the class itself.
         :param private: Whether the task is private. If not provided, it is private if
@@ -64,24 +66,19 @@ class _TaskMeta(type):
         if private is None:
             private = cls_name.startswith("_")
 
-        if private:
-            name = ()
-        elif not name:
+        if not name:
             name = cls_name
 
-        if isinstance(name, str):
-            name = (name,)
-
         # names it can be invoked with
-        attrs["_qk_names"] = name
-        attrs["private"] = private
+        attrs["_qk_name"] = name
+        attrs["_qk_aliases"] = aliases
+        attrs["_qk_private"] = private
         cls = super().__new__(mcs, cls_name, bases, attrs)
+
         if not cls.private:
             cls._qk_defined_from = defined_from or cls
         else:
             # Base/private tasks should not be listed.
-            # We also do this to make it easier to identify any bug
-            # causing to return the location of a private task.
             cls._qk_defined_from = None
         return cls
 
@@ -95,6 +92,21 @@ class _TaskMeta(type):
         source_lines = inspect.getsourcelines(cls._qk_defined_from)
         relative_path = os.path.relpath(file, basedir)
         return f"{relative_path}:{source_lines[1]}"
+
+    @property
+    def name(cls) -> str:
+        """Name of the task."""
+        return cls._qk_name
+
+    @property
+    def aliases(cls) -> typing.Sequence[str]:
+        """Aliases of the task."""
+        return cls._qk_aliases or []
+
+    @property
+    def private(cls) -> bool:
+        """Whether the task is private."""
+        return cls._qk_private
 
 
 class Task(metaclass=_TaskMeta, private=True):
@@ -136,9 +148,12 @@ class Task(metaclass=_TaskMeta, private=True):
     If one of the cleanup tasks fails, the remaining cleanup tasks are still run.
     """
 
+    invoked_as: str
+    """Name used to invoke the task."""
+
     def __init__(
         self,
-        name=None,
+        invoked_as=None,
         *,
         context: Context | None = None,
     ):
@@ -146,14 +161,14 @@ class Task(metaclass=_TaskMeta, private=True):
 
         This is usually not needed, unless you want to call the task directly.
 
-        :param name: The name of the task. Usually the name it was invoked with.
-            Defaults to the class name.
+        :param invoked_as: The name used to invoke the task. If not provided, it defaults to the
+            name of the task.
         :param context: The context of the task. To avoid side effects, a shallow
             copy is made.
         """
         # We default to the class name in case the task was not called
         # from the CLI
-        self.name = name or self.__class__.__name__
+        self.invoked_as = invoked_as or self.name
         if context is None:
             self.context = Context.default()
         else:
@@ -161,6 +176,21 @@ class Task(metaclass=_TaskMeta, private=True):
 
         self.parser = self.get_parser()
         self.add_args(self.parser)
+
+    @property
+    def name(self) -> str:
+        """Name of the task."""
+        return type(self).name
+
+    @property
+    def aliases(self) -> typing.Sequence[str]:
+        """Aliases of the task."""
+        return type(self).aliases
+
+    @property
+    def private(self) -> bool:
+        """Whether the task is private."""
+        return type(self).private
 
     @classmethod
     def get_help(cls) -> str:
@@ -191,7 +221,7 @@ class Task(metaclass=_TaskMeta, private=True):
 
         :return: The parser.
         """
-        kwargs.setdefault("prog", f"{app.program_name} {self.name}")
+        kwargs.setdefault("prog", f"{app.program_name} {self.invoked_as}")
         kwargs.setdefault("description", self.get_help())
         parser = argparse.ArgumentParser(**kwargs)
         return parser
@@ -335,6 +365,16 @@ class Task(metaclass=_TaskMeta, private=True):
         )
         return self.__call__(*extra, **parsed_args)
 
+    @property
+    def _log_name_desc(self) -> str:
+        """Get the name of the task for logging.
+
+        :returns: The name of the task.
+        """
+        if self.invoked_as == self.name:
+            return self.name
+        return f"{self.name} (invoked as {self.invoked_as})"
+
     def run(self, *args, **kwargs):
         """Runs work related to the task, excluding before, after, and cleanup tasks.
 
@@ -352,7 +392,7 @@ class Task(metaclass=_TaskMeta, private=True):
         from quickie import app
 
         # Log task name and arguments
-        app.logger.info(f"Executing task: [info]{self.name}[/info]")
+        app.logger.info(f"Executing task: [info]{self._log_name_desc}[/info]")
 
     def log_task_execution_details(self, *args, **kwargs):
         """Log details about the task execution."""
@@ -371,7 +411,7 @@ class Task(metaclass=_TaskMeta, private=True):
         from quickie import app
 
         if not self.condition_passes(*args, **kwargs):
-            app.logger.info(f"Skipping task {self.name}: conditions not met.")
+            app.logger.info(f"Skipping task {self._log_name_desc}: conditions not met.")
             return
         try:
             self.run_before(*args, **kwargs)
@@ -379,7 +419,7 @@ class Task(metaclass=_TaskMeta, private=True):
                 self.log_task_execution(*args, **kwargs)
                 result = self.run(*args, **kwargs)
             except Skip as e:
-                app.logger.info(f"Skipping task {self.name}: {e.message}")
+                app.logger.info(f"Skipping task {self._log_name_desc}: {e.message}")
                 result = None
             self.run_after(*args, **kwargs)
             return result

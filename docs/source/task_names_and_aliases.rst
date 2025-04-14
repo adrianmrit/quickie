@@ -1,8 +1,7 @@
 Task names and aliases
 ======================
 
-By default the task name is the function/class name. You can change the task name, or add aliases, by passing the `name` argument to the task decorator.
-Note that the name of the function/class is not preserved, so you will need to pass it explicitly if you want to use it.
+By default the task name is the function/class name. You can change the task name, or add aliases, by passing the `name` and `alias` arguments to the task decorator.
 
 .. code-block:: python
 
@@ -12,7 +11,7 @@ Note that the name of the function/class is not preserved, so you will need to p
     def task1():
         print("Task 1")
 
-    @task(name=["task2", "t2"])
+    @task(name="task2", alias=["t2"])
     def task2():
         print("Task 2")
 
@@ -33,7 +32,7 @@ Equivalent to:
     class MyTask(Task, name="my_task"):
         pass
 
-    class Task2(Task, name=["task2", "t2"]):
+    class Task2(Task, name="task2", alias=["t2"]):
         pass
 
 

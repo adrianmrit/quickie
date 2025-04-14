@@ -164,8 +164,10 @@ class Main:
         table.add_column("Aliases", style="bold yellow")
         table.add_column("Short Description", style="bold yellow")
         table.add_column("Location", style="bold yellow")
+
+        # Invert the task dictionary to group by class
         names_by_cls: dict[type[quickie.Task], list[str]] = {}
-        for task_name, task in sorted(
+        for invocation_name, task in sorted(
             app.tasks.items(),
             key=lambda x: (
                 x[1]._get_relative_file_location(os.getcwd()) or "",
@@ -173,17 +175,13 @@ class Main:
                 x[0].split(":"),
             ),
         ):
-            names_by_cls.setdefault(task, []).append(task_name)
+            names_by_cls.setdefault(task, []).append(invocation_name)
 
-        # The last item registered should be the root namespace. Therefore we use that
-        # as the task name, and namespaced names as aliases.
         for task, task_names in names_by_cls.items():
-            task_name = task_names[0]
-            if len(task_names) > 1:
-                aliases = ", ".join(sorted(task_names[1:]))
-            else:
-                aliases = ""
-            rich_task_name = rich.text.Text(task_name, style="bold")
+            aliases = ", ".join(
+                sorted(name for name in task_names if name != task.name)
+            )
+            rich_task_name = rich.text.Text(task.name, style="bold")
             rich_aliases = rich.text.Text(aliases, style="dim")
             task_location = rich.text.Text(
                 task._get_relative_file_location(os.getcwd()) or "", style="dim"
@@ -200,7 +198,7 @@ class Main:
     def get_task(self, task_name: str) -> quickie.Task:
         """Get a task by name."""
         task_class = app.tasks[task_name]
-        return task_class(name=task_name)
+        return task_class(invoked_as=task_name)
 
     def run_task(self, task_name: str, *, args):
         """Run a task."""

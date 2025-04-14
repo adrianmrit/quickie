@@ -122,9 +122,10 @@ class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
                     if isinstance(value, list):
                         # Treat lists as subtrees and load them next
                         current = iter((current_path, v) for v in value)
-                    elif is_task_cls(value) and value._qk_names:
-                        # private classes will have empty `_qk_names`
-                        paths = _merge_aliases(current_path, value._qk_names)
+                    elif is_task_cls(value) and not value.private:
+                        paths = _merge_aliases(
+                            current_path, (value.name, *value.aliases)
+                        )
                         for p in paths:
                             self.register(value, namespace=p)
                         current = None
