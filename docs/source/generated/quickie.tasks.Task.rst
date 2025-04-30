@@ -41,10 +41,13 @@
    .. autosummary::
    
       ~Task.after
+      ~Task.aliases
       ~Task.before
       ~Task.cleanup
       ~Task.condition
       ~Task.extra_args
+      ~Task.name
       ~Task.private
+      ~Task.invoked_as
    
    

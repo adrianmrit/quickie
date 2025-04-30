@@ -47,6 +47,7 @@
    .. autosummary::
    
       ~Command.after
+      ~Command.aliases
       ~Command.args
       ~Command.before
       ~Command.binary
@@ -55,6 +56,8 @@
       ~Command.cwd
       ~Command.env
       ~Command.extra_args
+      ~Command.name
       ~Command.private
+      ~Command.invoked_as
    
    

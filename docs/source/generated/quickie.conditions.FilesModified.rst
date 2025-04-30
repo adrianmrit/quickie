@@ -14,6 +14,8 @@
    .. autosummary::
    
       ~FilesModified.__init__
+      ~FilesModified.get_cache_file_name
+      ~FilesModified.get_cache_file_path
    
    
 

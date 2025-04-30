@@ -107,9 +107,10 @@ class Main:
                 # Update _ARGCOMPLETE to the index of the task, so that completion
                 # only considers the task arguments
                 os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
-                argcomplete.autocomplete(task.parser)
+                parser = task.parser
             else:
-                argcomplete.autocomplete(self.parser)
+                parser = self.parser
+            argcomplete.autocomplete(parser)
             sys.exit(0)
 
         app.logger.info(f"Running quickie {quickie.__version__}")

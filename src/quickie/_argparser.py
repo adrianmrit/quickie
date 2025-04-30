@@ -49,7 +49,7 @@ class AppArgumentParser(ArgumentParser):
             help="Initialize a quickie project in the directory",
             const=".",
             metavar="DIR",
-        )
+        ).completer = argcomplete.completers.FilesCompleter()  # type: ignore
         self.add_argument(
             "--autocomplete",
             help="Suggest autocompletion for the shell",
@@ -62,7 +62,9 @@ class AppArgumentParser(ArgumentParser):
             TaskCompleter()
         )
         # This does not need completion as it is handled by the task completer
-        self.add_argument("args", nargs="*", help="The arguments to pass to the task")
+        self.add_argument(
+            "args", nargs="*", help="The arguments to pass to the task"
+        ).completer = argcomplete.completers.SuppressCompleter()  # type: ignore
 
     @typing.override
     def parse_known_args(self, args=None, namespace=None):

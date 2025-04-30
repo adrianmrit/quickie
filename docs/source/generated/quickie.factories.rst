@@ -16,3 +16,9 @@ quickie.factories
       task
       thread_group
    
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      CommonTaskKwargs
+   

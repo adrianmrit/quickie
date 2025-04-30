@@ -42,11 +42,14 @@
    .. autosummary::
    
       ~Group.after
+      ~Group.aliases
       ~Group.before
       ~Group.cleanup
       ~Group.condition
       ~Group.extra_args
+      ~Group.name
       ~Group.private
       ~Group.task_classes
+      ~Group.invoked_as
    
    

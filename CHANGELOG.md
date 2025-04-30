@@ -89,10 +89,11 @@ Fixes for global runner.
 
 ### Fixed
 - Fix type hinting for task decorators.
+- Fix bug causing the autocomplete to suggest files when calling `qk` with no arguments.
 
 ### Added
 
 - Tasks can be skipped without stopping all pending tasks.
 - Can skip logging for a task, to exclude sensitive information.
-- Add logging and logging levels
+- Add logging and logging levels.
 - Documentation for custom task factories.
