@@ -87,8 +87,12 @@ Fixes for global runner.
 - Improved configuration.
 - Parent process env variables are now passed to the child process even if some variables are overwritten.
 
+### Fixed
+- Fix type hinting for task decorators.
+
 ### Added
 
 - Tasks can be skipped without stopping all pending tasks.
 - Can skip logging for a task, to exclude sensitive information.
 - Add logging and logging levels
+- Documentation for custom task factories.
