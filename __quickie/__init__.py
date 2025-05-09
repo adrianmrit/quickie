@@ -33,7 +33,6 @@ def hello():
 )
 def script_example(task):
     """Example script that runs a command."""
-    # print(task.context.env["MY_VAR"])
     return """
     echo $MY_VAR $OTHER
     """

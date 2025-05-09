@@ -18,6 +18,7 @@ import typing
 from quickie.conditions.base import BaseCondition
 from quickie.errors import Skip
 from quickie.config import app
+from quickie.utils.argparser import Arg
 
 from .context import Context
 
@@ -39,7 +40,7 @@ class _TaskMeta(type):
     _qk_private: bool
     """Whether the task is private."""
 
-    _qk_defined_from: type | None
+    _qk_defined_from: type | typing.Callable | None
     """The class where the task was defined. None if private."""
 
     def __new__(  # noqa: PLR0913
@@ -51,7 +52,7 @@ class _TaskMeta(type):
         name: str | None = None,
         aliases: typing.Sequence[str] | None = None,
         private: bool | None = None,
-        defined_from: type | None = None,
+        defined_from: type | typing.Callable | None = None,
     ):
         """Create a new task class.
 
@@ -112,6 +113,19 @@ class _TaskMeta(type):
 class Task(metaclass=_TaskMeta, private=True):
     """Base class for all tasks."""
 
+    args: typing.Sequence[Arg | str | typing.Sequence[str]] = ()
+    """Arguments for the task.
+
+    This is a sequence of either:
+        - strings
+        - sequence of strings
+        - :class:`~quickie.utils.argparser.Arg` objects.
+
+    If a string or a sequence of strings is provided, it is converted to an
+    :class:`~quickie.utils.argparser.Arg` object, by passing the string(s) as
+    positional arguments to the constructor.
+    """
+
     extra_args: typing.ClassVar[bool] = False
     """Whether to allow extra command line arguments.
 
@@ -169,13 +183,21 @@ class Task(metaclass=_TaskMeta, private=True):
         # We default to the class name in case the task was not called
         # from the CLI
         self.invoked_as = invoked_as or self.name
-        if context is None:
-            self.context = Context.default()
-        else:
-            self.context = context.copy()
+        self._context = context.copy() if context is not None else None
 
-        self.parser = self.get_parser()
-        self.add_args(self.parser)
+    @functools.cached_property
+    def context(self) -> Context:
+        """Context of the task."""
+        if self._context is None:
+            return Context.default()
+        return self._context
+
+    @functools.cached_property
+    def parser(self) -> argparse.ArgumentParser:
+        """Parser for the task."""
+        parser = self.get_parser()
+        self.add_args(parser)
+        return parser
 
     @property
     def name(self) -> str:
@@ -233,7 +255,16 @@ class Task(metaclass=_TaskMeta, private=True):
 
         :param parser: The parser to add arguments to.
         """
-        pass
+        for a in self.args:
+            if isinstance(a, str):
+                arg = Arg(a)
+            elif isinstance(a, typing.Sequence):
+                arg = Arg(*a)
+            elif isinstance(a, Arg):
+                arg = a
+            else:
+                raise TypeError(f"Invalid argument type: {type(arg)}")
+            arg.add(parser)
 
     def parse_args(
         self,
@@ -468,7 +499,7 @@ class Command(_BaseSubprocessTask, private=True):
     binary: typing.ClassVar[str | None] = None
     """The name or path of the program to run."""
 
-    args: typing.ClassVar[typing.Sequence[str] | None] = None
+    cmd_args: typing.ClassVar[typing.Sequence[str] | None] = None
     """The program arguments. Defaults to the task arguments."""
 
     def get_binary(self, *args, **kwargs) -> str:
@@ -483,7 +514,7 @@ class Command(_BaseSubprocessTask, private=True):
             raise NotImplementedError("Either set program or override get_program()")
         return self.binary
 
-    def get_args(self, *args, **kwargs) -> typing.Sequence[str] | str:
+    def get_cmd_args(self, *args, **kwargs) -> typing.Sequence[str] | str:
         """Get the program arguments.
 
         :param args: Unknown arguments.
@@ -491,7 +522,7 @@ class Command(_BaseSubprocessTask, private=True):
 
         :returns: The program arguments.
         """
-        return self.args or []
+        return self.cmd_args or []
 
     def get_cmd(self, *args, **kwargs) -> typing.Sequence[str] | str:
         """Get the full command to run, as a sequence.
@@ -504,11 +535,11 @@ class Command(_BaseSubprocessTask, private=True):
         :returns: A sequence in the form [program, *args].
         """
         program = self.get_binary(*args, **kwargs)
-        program_args = self.get_args(*args, **kwargs)
-        program_args = self.split_args(program_args)
+        program_args = self.get_cmd_args(*args, **kwargs)
+        program_args = self.split_cmd_args(program_args)
         return [program, *program_args]
 
-    def split_args(self, args: str | typing.Sequence[str]) -> typing.Sequence[str]:
+    def split_cmd_args(self, args: str | typing.Sequence[str]) -> typing.Sequence[str]:
         """Split the arguments string into a list of arguments.
 
         :param args: The arguments string.
@@ -533,7 +564,7 @@ class Command(_BaseSubprocessTask, private=True):
     @typing.override
     def run(self, *args, **kwargs):
         cmd = self.get_cmd(*args, **kwargs)
-        cmd = self.split_args(cmd)
+        cmd = self.split_cmd_args(cmd)
 
         if len(cmd) == 0:
             raise ValueError("No program to run")
@@ -544,9 +575,9 @@ class Command(_BaseSubprocessTask, private=True):
             program, *args = cmd
         cwd = self.get_cwd(*args, **kwargs)
         env = self.get_env(*args, **kwargs)
-        return self._run_program(program, args=args, cwd=cwd, env=env)
+        return self._run_program(program, cmd_args=args, cwd=cwd, env=env)
 
-    def _run_program(self, program: str, *, args: typing.Sequence[str], cwd, env):
+    def _run_program(self, program: str, *, cmd_args: typing.Sequence[str], cwd, env):
         """Run the program.
 
         :param program: The program to run.
@@ -558,9 +589,9 @@ class Command(_BaseSubprocessTask, private=True):
         """
         import subprocess
 
-        self.log_task_execution_details(program, args)
+        self.log_task_execution_details(program, cmd_args)
         result = subprocess.run(
-            [program, *args],
+            [program, *cmd_args],
             check=False,
             cwd=cwd,
             env=env,

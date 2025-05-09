@@ -6,14 +6,17 @@ decorator.
 
 .. code-block:: python
 
-    @task(name="hello")
-    @arg("number1", type=int, help="The first number.")
-    @arg("number2", type=int, help="The second number.")
+    @task(
+        name="hello"
+        args=[
+            Arg("number1", type=int, help="The first number."),
+            Arg("number2", type=int, help="The second number."),
+        ]
+    )
     def sum(number1, number2):
         console.print(f"The sum is {number1 + number2}.")
 
-    @script
-    @arg("--name", help="The name to greet.")
+    @script(args=["--name"])
     def sum(name="world"):
         """Docstring will be used as help text."""
         return f"echo Hello, {name}!"
@@ -24,27 +27,11 @@ decorator.
 '''
 
 import functools
-from pathlib import Path
 import typing
-from argparse import Action, ArgumentParser
-from argcomplete.completers import FilesCompleter
 
 from quickie import tasks
 from quickie.tasks import TaskTypeOrProxy
-
-
-class _OptionKwargs(typing.TypedDict, total=False):
-    action: str | type[Action]
-    nargs: int | str | None
-    const: typing.Any
-    default: typing.Any
-    type: typing.Callable | None
-    choices: typing.Iterable | None
-    required: bool
-    help: str | None
-    metavar: str | tuple[str, ...]
-    dest: str | None
-    version: str
+from quickie.utils.argparser import Arg
 
 
 # This class is used as a convenience for custom factories, and should be in sync with
@@ -53,9 +40,10 @@ class _OptionKwargs(typing.TypedDict, total=False):
 class CommonTaskKwargs(typing.TypedDict, total=False):
     """Common keyword arguments for task decorators."""
 
-    name: str | typing.Sequence[str] | None
+    name: str | None
     aliases: typing.Sequence[str] | None
     private: bool | None
+    args: typing.Sequence[Arg | str | typing.Sequence[str]] | None
     extra_args: bool | None
     bind: bool
     condition: tasks.BaseCondition | None
@@ -80,94 +68,6 @@ argument.
 """
 
 
-def _get_default_completer(action: Action):
-    """Get the completer for the action.
-
-    :param action: The action to get the completer for.
-    :return: The completer for the action.
-    """
-    if action.choices is not None:
-        return None
-
-    if action.type in (None, str, Path):
-        return FilesCompleter()
-
-    return None
-
-
-def _add_parser_argument(
-    parser: ArgumentParser,
-    *name_or_flags: str,
-    completer: typing.Callable | None = None,
-    **kwargs: typing.Unpack[_OptionKwargs],
-):
-    action = parser.add_argument(*name_or_flags, **kwargs)  # type: ignore
-    if completer is None:
-        completer = _get_default_completer(action)
-    if completer is not None:
-        action.completer = completer  # type: ignore
-    return action
-
-
-def arg(
-    *name_or_flags: str,
-    completer: typing.Callable | None = None,
-    **kwargs: typing.Unpack[_OptionKwargs],
-):
-    """Used to add arguments to the arguments parser of a task.
-
-    Arguments are the same as the `add_argument` method of `argparse.ArgumentParser`,
-    except for the `completer` argument which is a function that provides completion for
-    the argument.
-
-    :param name_or_flags: The name or flags for the argument.
-    :param completer: A function to provide completion for the argument.
-    :param kwargs: The keyword arguments for the argument. See `add_argument` method
-        of `ArgumentParser` for more information.
-    """
-
-    def decorator(obj):
-        if isinstance(obj, tasks._TaskMeta):
-            # decorator appears on top of a task decorator, or directly on top of a cls
-            obj = typing.cast(type[tasks.Task], obj)
-            original_add_args = obj.add_args
-
-            def add_args(self, parser: ArgumentParser):
-                original_add_args(self, parser)
-                _add_parser_argument(
-                    parser, *name_or_flags, completer=completer, **kwargs
-                )
-
-            return tasks._TaskMeta(
-                obj.__name__,
-                (obj,),
-                {"add_args": add_args},
-                name=obj.name,
-                aliases=obj._qk_aliases,
-                private=obj._qk_private,
-                defined_from=obj._qk_defined_from,
-            )
-        else:
-            # Assume decorator appears before a task decorator
-            if not hasattr(obj, "_qk_options"):
-                obj._qk_options = []
-            obj._qk_options.append((name_or_flags, completer, kwargs))
-            return obj
-
-    return decorator
-
-
-def _get_add_args_method(fn):
-    if not hasattr(fn, "_qk_options"):
-        return None
-
-    def add_args(self, parser: ArgumentParser):
-        for name_or_flags, completer, kwargs in fn._qk_options:
-            _add_parser_argument(parser, *name_or_flags, completer=completer, **kwargs)
-
-    return add_args
-
-
 @typing.overload
 def generic_task_factory[T: tasks.Task](
     fn: typing.Callable,
@@ -181,9 +81,10 @@ def generic_task_factory[T: tasks.Task](
 def generic_task_factory[T: tasks.Task](
     fn: typing.Callable,
     *,
-    name: str | typing.Sequence[str] | None,
+    name: str | None,
     aliases: typing.Sequence[str] | None = None,
     private: bool | None = None,
+    args: typing.Sequence[Arg | str | typing.Sequence[str]] | None = None,
     extra_args: bool | None,
     bind: bool,
     condition: tasks.BaseCondition | None,
@@ -204,6 +105,7 @@ def generic_task_factory[T: tasks.Task](
     bases: tuple[type[T], ...],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
+    args: typing.Sequence[Arg | str | typing.Sequence[str]] | None = None,
     extra_args: bool | None,
     bind: bool,
     condition: tasks.BaseCondition | None,
@@ -217,9 +119,10 @@ def generic_task_factory[T: tasks.Task](
 def generic_task_factory[T: tasks.Task](
     fn: typing.Callable | None = None,
     *,
-    name: str | typing.Sequence[str] | None = None,
+    name: str | None = None,
     aliases: typing.Sequence[str] | None = None,
     private: bool | None = None,
+    args: typing.Sequence[Arg | str | typing.Sequence[str]] | None = None,
     extra_args: bool | None = None,
     bind: bool = False,
     condition: tasks.BaseCondition | None = None,
@@ -238,9 +141,10 @@ def generic_task_factory[  # noqa: PLR0913
 ](
     fn: typing.Callable | None = None,
     *,
-    name: str | typing.Sequence[str] | None = None,
+    name: str | None = None,
     aliases: typing.Sequence[str] | None = None,
     private: bool | None = None,
+    args: typing.Sequence[Arg | str | typing.Sequence[str]] | None = None,
     extra_args: bool | None = None,
     bind: bool = False,
     condition: tasks.BaseCondition | None = None,
@@ -265,17 +169,17 @@ def generic_task_factory[  # noqa: PLR0913
             def get_binary(self):
                 return "python"
 
-            def get_extra_args(self):
+            def get_extra_cmd_args(self):
                 raise NotImplementedError
 
-            def get_args(self):
-                return ["-m", "my_module", self.get_extra_args()]
+            def get_cmd_args(self):
+                return ["-m", "my_module", self.get_extra_cmd_args()]
 
         def module_task(fn=None, **kwargs):
             return generic_task(
                 fn,
                 bases=(MyModuleTask,),
-                override_method=tasks.Command.get_extra_args.__name__,
+                override_method=tasks.Command.get_extra_cmd_args.__name__,
                 **kwargs,
             )
 
@@ -291,6 +195,10 @@ def generic_task_factory[  # noqa: PLR0913
     :param name: The name of the task.
     :param aliases: The aliases of the task.
     :param private: If true, the task is private and will not be shown in the
+    :param args: The arguments for the task. Can pass `Arg` objects, but also
+        strings or tuples of strings that will be used as a shortcut for the
+        `Arg` object. For example, `args=["--arg1", ("--name", "-n")]` is equivalent to
+        `args=[Arg("--arg1"), Arg("--name", "-n")]`.
     :param extra_args: If the task accepts extra arguments.
     :param bind: If true, the first parameter of the function will be the
         task class instance.
@@ -310,6 +218,7 @@ def generic_task_factory[  # noqa: PLR0913
             generic_task_factory,
             name=name,
             aliases=aliases,
+            args=args,
             extra_args=extra_args,
             bind=bind,
             condition=condition,
@@ -326,9 +235,8 @@ def generic_task_factory[  # noqa: PLR0913
     if attrs is not None:
         kwds.update(attrs)
 
-    add_args = _get_add_args_method(fn)
-    if add_args is not None:
-        kwds["add_args"] = add_args
+    if args is not None:  # inherited otherwise
+        kwds["args"] = args
 
     if extra_args is not None:  # inherited otherwise
         kwds["extra_args"] = extra_args
@@ -542,8 +450,7 @@ def group(  # noqa: PLR0913
 
     .. code-block:: python
 
-        @group
-        @arg("arg1")
+        @group(args=["arg1"])
         def my_group(arg1):
             return [task1, partial_task(task2, arg1)]
 
@@ -589,8 +496,7 @@ def thread_group(  # noqa: PLR0913
 
     .. code-block:: python
 
-        @thread_group
-        @arg("arg1")
+        @thread_group(args=["arg1"])
         def my_group(arg1):
             return [task1, partial_task(task2, arg1)]
 

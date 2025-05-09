@@ -1,9 +1,13 @@
-from quickie import arg, script
+from quickie import Arg, script
 
 
-@script
-@arg("--editable", "-e", action="store_true", help="Install in editable mode.")
-@arg("--dev", action="store_true", help="Install development dependencies.")
+@script(
+    args=[
+        Arg("--editable", "-e", action="store_true", help="Install in editable mode."),
+        Arg("--dev", action="store_true", help="Install development dependencies."),
+    ],
+    extra_args=True,
+)
 def install(editable=False, dev=False):
     editable = "-e" if editable else ""
     dev = "[dev]" if dev else ""

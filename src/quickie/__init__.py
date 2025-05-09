@@ -3,7 +3,6 @@
 """A CLI tool for quick tasks."""
 
 from quickie.factories import (
-    arg,
     command,
     generic_task_factory,
     group,
@@ -23,6 +22,7 @@ from quickie.tasks import (
 )
 from quickie._namespace import Namespace
 from quickie.config import app, console, logger
+from quickie.utils.argparser import Arg
 
 from ._meta import __author__, __copyright__, __email__, __home__, __version__
 
@@ -44,7 +44,7 @@ __all__ = [
     "task",
     "script",
     "command",
-    "arg",
+    "Arg",
     "generic_task_factory",
     "group",
     "thread_group",

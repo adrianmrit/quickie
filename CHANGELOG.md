@@ -86,6 +86,9 @@ Fixes for global runner.
 - Pretty printing and input can be done via a separate global console instance instead of through the task.
 - Improved configuration.
 - Parent process env variables are now passed to the child process even if some variables are overwritten.
+- Changed the way command line arguments are defined in the task.
+- Some task properties are now cached and evaluated when needed instead of at task initialization time, potentially
+  improving performance in some cases.
 
 ### Fixed
 - Fix type hinting for task decorators.

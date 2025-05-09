@@ -6,7 +6,7 @@ import pytest
 import quickie._namespace
 from quickie import tasks, app
 from quickie.conditions import condition
-from quickie.factories import arg, command, group, script, task, thread_group
+from quickie.factories import command, group, script, task, thread_group
 
 
 class TestGlobalNamespace:
@@ -21,9 +21,13 @@ class TestGlobalNamespace:
 
 class TestTask:
     def test_parser(self, context):
-        @task(extra_args=True)
-        @arg("arg1")
-        @arg("--arg2", "-a2")
+        @task(
+            args=[
+                "arg1",
+                ("--arg2", "-a2"),
+            ],
+            extra_args=True,
+        )
         def my_task(*args, **kwargs):
             return args, kwargs
 
@@ -322,10 +326,9 @@ class TestCommand:
 
         class TaskWithArgs(tasks.Command):
             binary = "myprogram"
-            args = ["arg1", "arg2"]
+            cmd_args = ["arg1", "arg2"]
 
-        @command(cwd="/full/path", env={"MYENV": "myvalue"})
-        @arg("--arg1")
+        @command(cwd="/full/path", env={"MYENV": "myvalue"}, args=["--arg1"])
         def dynamic_args_task(arg1):
             return ["myprogram", arg1]
 
@@ -395,8 +398,7 @@ class TestScriptTask:
         class MyTask(tasks.Script):
             script = "myscript"
 
-        @arg("arg1")
-        @script
+        @script(args=["arg1"])
         def dynamic_script(*, arg1):
             return "myscript " + arg1
 
@@ -447,8 +449,7 @@ class TestSerialTaskGroup:
             def run(self):
                 result.append("Second")
 
-        @group
-        @arg("arg")
+        @group(args=["arg"])
         def my_group(arg):
             return [tasks.partial_task(task_1, arg), Task2]
 
