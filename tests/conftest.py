@@ -1,10 +1,8 @@
-import os
 from pathlib import Path
 
 import pytest
 
 from quickie._namespace import RootNamespace
-from quickie.context import Context
 
 
 @pytest.fixture(autouse=True)
@@ -22,11 +20,3 @@ def patch_config(tmpdir_factory, mocker):
     # Reset the namespace every time
     mocker.patch("quickie.app._tasks", RootNamespace(), create=True)
     mocker.patch("quickie.app.program_name", "qk")
-
-
-@pytest.fixture
-def context(tmpdir):
-    return Context(
-        cwd=os.getcwd(),
-        env={},
-    )

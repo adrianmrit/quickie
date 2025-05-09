@@ -1,11 +1,11 @@
 import functools
-import os
 
 import pytest
 
 import quickie._namespace
 from quickie import tasks, app
 from quickie.conditions import condition
+from quickie.context import Context
 from quickie.factories import command, group, script, task, thread_group
 
 
@@ -20,7 +20,7 @@ class TestGlobalNamespace:
 
 
 class TestTask:
-    def test_parser(self, context):
+    def test_parser(self):
         @task(
             args=[
                 "arg1",
@@ -31,7 +31,7 @@ class TestTask:
         def my_task(*args, **kwargs):
             return args, kwargs
 
-        task_instance = my_task(context=context)
+        task_instance = my_task()
 
         result = task_instance.parse_and_run(["value1", "--arg2", "value2", "value3"])
         assert result == (("value3",), {"arg1": "value1", "arg2": "value2"})
@@ -45,15 +45,15 @@ class TestTask:
         result = task_instance.parse_and_run(["value1", "--arg2", "value2"])
         assert result == ((), {"arg1": "value1", "arg2": "value2"})
 
-    def test_run_required(self, context):
+    def test_run_required(self):
         class MyTask(tasks.Task):
             pass
 
-        task_instance = MyTask(context=context)
+        task_instance = MyTask()
         with pytest.raises(NotImplementedError):
             task_instance.run()
 
-    def test_before_after_and_cleanup(self, context):
+    def test_before_after_and_cleanup(self):
         result = []
 
         @task
@@ -86,7 +86,7 @@ class TestTask:
 
         app.tasks.register(defined_later, namespace="defined_later")
 
-        task_instance = my_task(context=context)
+        task_instance = my_task()
         task_instance()
 
         assert result == [
@@ -99,7 +99,7 @@ class TestTask:
             "cleanup2",
         ]
 
-    def test_cleanup_on_errors(self, context):
+    def test_cleanup_on_errors(self):
         class MyError(Exception):
             pass
 
@@ -128,7 +128,7 @@ class TestTask:
         def taskA():
             result.append("Task result")
 
-        task_instance = taskA(context=context)
+        task_instance = taskA()
         with pytest.raises(MyError):
             task_instance()
 
@@ -153,7 +153,7 @@ class TestTask:
         def taskB():
             result.append("Task result")
 
-        task_instance = taskB(context=context)
+        task_instance = taskB()
         result = []
         with pytest.raises(MyError):
             task_instance()
@@ -180,7 +180,7 @@ class TestTask:
         def taskC():
             raise MyError("An error occurred")
 
-        task_instance = taskC(context=context)
+        task_instance = taskC()
         result = []
         with pytest.raises(MyError):
             task_instance()
@@ -190,7 +190,7 @@ class TestTask:
             "cleanup",
         ]
 
-    def test_cache(self, context):
+    def test_cache(self):
         counter = 0
 
         @task
@@ -201,10 +201,10 @@ class TestTask:
             return a + b
 
         # initialize multiple times, as this is what might happen in practice
-        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
-        assert my_task(context=context).__call__(1, 2) == 3  # noqa: PLR2004
+        assert my_task().__call__(1, 2) == 3  # noqa: PLR2004
+        assert my_task().__call__(1, 2) == 3  # noqa: PLR2004
         assert counter == 1
-        assert my_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
+        assert my_task().__call__(2, 3) == 5  # noqa: PLR2004
         assert counter == 2  # noqa: PLR2004
 
         # Does not work because self changes every time
@@ -221,7 +221,7 @@ class TestTask:
         # assert my_other_task(context=context).__call__(2, 3) == 5  # noqa: PLR2004
         # assert counter == 4  # noqa: PLR2004
 
-    def test_condition(self, context):
+    def test_condition(self):
         result = []
 
         a_condition = condition(lambda *args, **kwargs: a)
@@ -244,10 +244,10 @@ class TestTask:
             result.append("a_xor_b")
 
         def call_tasks():
-            a_and_b(context=context)()
-            a_or_b(context=context)()
-            not_a(context=context)()
-            a_xor_b(context=context)()
+            a_and_b()()
+            a_or_b()()
+            not_a()()
+            a_xor_b()()
 
         a = False
         b = False
@@ -285,36 +285,43 @@ class TestBaseSubprocessTask:
             (None, "/example/cwd"),
         ],
     )
-    def test_cwd(self, attr, expected, context):
-        context.cwd = "/example/cwd"
+    def test_cwd(self, attr, expected, mocker):
+        mocker.patch(
+            "quickie.context.Context.default",
+            return_value=Context(cwd="/example/cwd", env={}),
+        )
 
         class MyTask(tasks._BaseSubprocessTask):
             cwd = attr
 
-        task_instance = MyTask(context=context)
+        task_instance = MyTask()
         assert task_instance.get_cwd() == expected
 
-    def test_env(self, context):
-        context.env.update({"MYENV": "myvalue", **os.environ})
+    def test_env(self, mocker):
+        mocker.patch(
+            "quickie.context.Context.default",
+            return_value=Context(cwd="", env={"MYENV": "myvalue"}, inherit_env=False),
+        )
 
         class MyTask(tasks._BaseSubprocessTask):
             env = {"OTHERENV": "othervalue"}
 
-        task_instance = MyTask(context=context)
+        task_instance = MyTask()
         assert task_instance.get_env() == {
             "MYENV": "myvalue",
             "OTHERENV": "othervalue",
-            **os.environ,
         }
 
 
 class TestCommand:
-    def test_run(self, mocker, context):
+    def test_run(self, mocker):
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        context.cwd = "/example/cwd"
-        context.env.update({"MYENV": "myvalue"})
+        mocker.patch(
+            "quickie.context.Context.default",
+            return_value=Context(cwd="/example/cwd", env={}, inherit_env=False),
+        )
 
         @command(cwd="../other", env={"OTHERENV": "othervalue"})
         def my_task():
@@ -332,18 +339,17 @@ class TestCommand:
         def dynamic_args_task(arg1):
             return ["myprogram", arg1]
 
-        task_instance = my_task(context=context)
-        cmd_with_string_instance = task_with_string(context=context)
-        task_with_args = TaskWithArgs(context=context)
-        task_with_dynamic_args = dynamic_args_task(context=context)
+        task_instance = my_task()
+        cmd_with_string_instance = task_with_string()
+        task_with_args = TaskWithArgs()
+        task_with_dynamic_args = dynamic_args_task()
 
         task_instance()
         assert subprocess_run.call_count == 1
         assert subprocess_run.call_args[0][0] == ["myprogram"]
         assert subprocess_run.call_args[1]["check"] is False
         assert subprocess_run.call_args[1]["cwd"] == "/example/other"
-        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
-        assert subprocess_run.call_args[1]["env"]["OTHERENV"] == "othervalue"
+        assert subprocess_run.call_args[1]["env"] == {"OTHERENV": "othervalue"}
         subprocess_run.reset_mock()
 
         cmd_with_string_instance()
@@ -356,8 +362,7 @@ class TestCommand:
         ]
         assert subprocess_run.call_args[1]["check"] is False
         assert subprocess_run.call_args[1]["cwd"] == "/example/other"
-        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
-        assert subprocess_run.call_args[1]["env"]["OTHERENV"] == "othervalue"
+        assert subprocess_run.call_args[1]["env"] == {"OTHERENV": "othervalue"}
         subprocess_run.reset_mock()
 
         task_with_args([])
@@ -365,7 +370,7 @@ class TestCommand:
         assert subprocess_run.call_args[0][0] == ["myprogram", "arg1", "arg2"]
         assert subprocess_run.call_args[1]["check"] is False
         assert subprocess_run.call_args[1]["cwd"] == "/example/cwd"
-        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
+        assert subprocess_run.call_args[1]["env"] == {}
         subprocess_run.reset_mock()
 
         task_with_dynamic_args.parse_and_run(["--arg1", "value1"])
@@ -373,14 +378,14 @@ class TestCommand:
         assert subprocess_run.call_args[0][0] == ["myprogram", "value1"]
         assert subprocess_run.call_args[1]["check"] is False
         assert subprocess_run.call_args[1]["cwd"] == "/full/path"
-        assert subprocess_run.call_args[1]["env"]["MYENV"] == "myvalue"
+        assert subprocess_run.call_args[1]["env"] == {"MYENV": "myvalue"}
         subprocess_run.reset_mock()
 
-    def test_program_required(self, context):
+    def test_program_required(self):
         class MyTask(tasks.Command):
             pass
 
-        task_instance = MyTask(context=context)
+        task_instance = MyTask()
         with pytest.raises(
             NotImplementedError, match="Either set program or override get_program()"
         ):
@@ -388,22 +393,24 @@ class TestCommand:
 
 
 class TestScriptTask:
-    def test_run(self, mocker, context):
+    def test_run(self, mocker):
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        context.cwd = "/somedir"
-        context.env.update({"VAR": "VAL"})
+        mocker.patch(
+            "quickie.context.Context.default",
+            return_value=Context(cwd="/somedir", env={}, inherit_env=False),
+        )
 
         class MyTask(tasks.Script):
             script = "myscript"
 
-        @script(args=["arg1"])
+        @script(args=["arg1"], env={"VAR": "VAL"})
         def dynamic_script(*, arg1):
             return "myscript " + arg1
 
-        task_instance = MyTask(context=context)
-        dynamic_task = dynamic_script(context=context)
+        task_instance = MyTask()
+        dynamic_task = dynamic_script()
 
         task_instance([])
         subprocess_run.assert_called_once_with(
@@ -411,7 +418,7 @@ class TestScriptTask:
             check=False,
             shell=True,
             cwd="/somedir",
-            env={"VAR": "VAL", **os.environ},
+            env={},
             executable=None,
         )
         subprocess_run.reset_mock()
@@ -422,15 +429,15 @@ class TestScriptTask:
             check=False,
             shell=True,
             cwd="/somedir",
-            env={"VAR": "VAL", **os.environ},
+            env={"VAR": "VAL"},
             executable=None,
         )
 
-    def test_script_required(self, context):
+    def test_script_required(self):
         class MyTask(tasks.Script):
             pass
 
-        task_instance = MyTask(context=context)
+        task_instance = MyTask()
         with pytest.raises(
             NotImplementedError, match="Either set script or override get_script()"
         ):
@@ -438,7 +445,7 @@ class TestScriptTask:
 
 
 class TestSerialTaskGroup:
-    def test_run(self, context):
+    def test_run(self):
         result = []
 
         @task(bind=True)
@@ -453,14 +460,14 @@ class TestSerialTaskGroup:
         def my_group(arg):
             return [tasks.partial_task(task_1, arg), Task2]
 
-        task_instance = my_group(context=context)
+        task_instance = my_group()
         task_instance.parse_and_run(["First"])
 
         assert result == ["First", "Second"]
 
 
 class TestThreadTaskGroup:
-    def test_run(self, context):
+    def test_run(self):
         result = []
 
         class Task1(tasks.Task):
@@ -480,6 +487,6 @@ class TestThreadTaskGroup:
         def my_task():
             return [Task1, tasks.partial_task(task2, "Third")]
 
-        task_instance = my_task(context=context)
+        task_instance = my_task()
         task_instance()
         assert result == ["First", "Second", "Third"]

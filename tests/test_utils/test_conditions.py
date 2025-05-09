@@ -7,7 +7,7 @@ from quickie.factories import task
 
 class TestFilesModified:
     @pytest.mark.parametrize("algorithm", FilesModified.Algorithm)
-    def test(self, tmpdir, context, algorithm):
+    def test(self, tmpdir, algorithm):
         @task
         def my_task():
             pass
@@ -18,7 +18,7 @@ class TestFilesModified:
         file2 = directory.join("file2")
         file2.write("other content")
         condition = FilesModified([file1, directory], algorithm=algorithm)
-        t = my_task(context=context)
+        t = my_task()
         assert condition(t)
         assert not condition(t)
         file1.write("new content")
@@ -64,7 +64,7 @@ class TestFilesModified:
 
 
 class TestPathsExist:
-    def test(self, tmpdir, context):
+    def test(self, tmpdir):
         @task
         def my_task():
             pass
@@ -75,7 +75,7 @@ class TestPathsExist:
         file2 = directory.join("file2")
         file2.write("other content")
         condition = PathsExist(file1, file2)
-        t = my_task(context=context)
+        t = my_task()
         assert condition(t)
         file1.remove()
         assert not condition(t)
@@ -86,24 +86,24 @@ class TestPathsExist:
 
 
 class TestFirstRun:
-    def test(self, context):
+    def test(self):
         @task
         def my_task(*args):
             pass
 
         condition = FirstRun()
-        t = my_task(context=context)
+        t = my_task()
         assert condition(t)
         assert not condition(t)
         assert not condition(t, "value1", "value2")
 
-    def test_check_args(self, context):
+    def test_check_args(self):
         @task
         def my_task(*args):
             pass
 
         condition = FirstRun(check_args=True)
-        t = my_task(context=context)
+        t = my_task()
         assert condition(t, "value1", "value2")
         assert not condition(t, "value1", "value2")
         assert condition(t, "value1", "value3")

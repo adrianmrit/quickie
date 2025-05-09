@@ -199,7 +199,7 @@ class Main:
     def get_task(self, task_name: str) -> quickie.Task:
         """Get a task by name."""
         task_class = app.tasks[task_name]
-        return task_class(invoked_as=task_name)
+        return task_class()
 
     def run_task(self, task_name: str, *, args):
         """Run a task."""

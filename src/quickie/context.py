@@ -13,19 +13,28 @@ class Context:
         *,
         cwd: str,
         env: typing.Mapping,
+        inherit_env: bool = True,
     ):
         """Initialize the context.
 
         :param cwd: The current working directory.
         :param env: The environment variables.
+        :param inherit_env: Whether to inherit the environment variables from the parent process.
         """
         self.cwd = cwd
-        self._env = ChainMap(
-            # Modifications will be made to this dictionary
-            {},
-            env,  # type: ignore
-            os.environ,
-        )
+        # By using ChainMap we can avoid copying the environment variables
+        # dictionary every we copy the context or create a new one, but
+        # still prevent modifying the original environment variables.
+        if env:
+            if isinstance(env, ChainMap):
+                self._env = ChainMap(*env.maps)
+            else:
+                self._env = ChainMap({}, typing.cast(dict, env))
+        else:
+            self._env = ChainMap({})
+
+        if inherit_env:
+            self._env.maps.append(os.environ)
 
     @property
     def env(self):
@@ -34,7 +43,8 @@ class Context:
 
     @classmethod
     def default(cls):
-        """Create a context from the environment."""
+        """Returns the default context."""
+        # Context should be cheap to create, so we don't need to cache it
         return Context(
             cwd=os.getcwd(),
             env={},
@@ -44,5 +54,6 @@ class Context:
         """Copy the context."""
         return Context(
             cwd=self.cwd,
-            env=self.env.new_child(),
+            env=self.env,
+            inherit_env=False,
         )

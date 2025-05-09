@@ -162,36 +162,6 @@ class Task(metaclass=_TaskMeta, private=True):
     If one of the cleanup tasks fails, the remaining cleanup tasks are still run.
     """
 
-    invoked_as: str
-    """Name used to invoke the task."""
-
-    def __init__(
-        self,
-        invoked_as=None,
-        *,
-        context: Context | None = None,
-    ):
-        """Initialize the task.
-
-        This is usually not needed, unless you want to call the task directly.
-
-        :param invoked_as: The name used to invoke the task. If not provided, it defaults to the
-            name of the task.
-        :param context: The context of the task. To avoid side effects, a shallow
-            copy is made.
-        """
-        # We default to the class name in case the task was not called
-        # from the CLI
-        self.invoked_as = invoked_as or self.name
-        self._context = context.copy() if context is not None else None
-
-    @functools.cached_property
-    def context(self) -> Context:
-        """Context of the task."""
-        if self._context is None:
-            return Context.default()
-        return self._context
-
     @functools.cached_property
     def parser(self) -> argparse.ArgumentParser:
         """Parser for the task."""
@@ -232,7 +202,9 @@ class Task(metaclass=_TaskMeta, private=True):
             summary = summary[: MAX_SHORT_HELP_LENGTH - 3] + "..."
         return summary
 
-    def get_parser(self, **kwargs) -> argparse.ArgumentParser:
+    def get_parser(
+        self, *, name: str | None = None, **kwargs
+    ) -> argparse.ArgumentParser:
         """Get the parser for the task.
 
         The following keyword arguments are passed to the parser by default:
@@ -243,7 +215,11 @@ class Task(metaclass=_TaskMeta, private=True):
 
         :return: The parser.
         """
-        kwargs.setdefault("prog", f"{app.program_name} {self.invoked_as}")
+        if "prog" not in kwargs:
+            if name is None:
+                name = self.name
+            prog = f"{app.program_name} {name}"
+            kwargs["prog"] = prog
         kwargs.setdefault("description", self.get_help())
         parser = argparse.ArgumentParser(**kwargs)
         return parser
@@ -347,7 +323,7 @@ class Task(metaclass=_TaskMeta, private=True):
         :param kwargs: Parsed known arguments.
         """
         for task_cls in self.get_before(*args, **kwargs):
-            task_cls(context=self.context)()
+            task_cls()()
 
     def run_after(self, *args, **kwargs):
         """Run the tasks after this task.
@@ -356,7 +332,7 @@ class Task(metaclass=_TaskMeta, private=True):
         :param kwargs: Parsed known arguments.
         """
         for task_cls in self.get_after(*args, **kwargs):
-            task_cls(context=self.context)()
+            task_cls()()
 
     def run_cleanup(self, *args, **kwargs):
         """Run the tasks after this task, even if it fails.
@@ -366,7 +342,7 @@ class Task(metaclass=_TaskMeta, private=True):
         """
         for task_cls in self.get_cleanup(*args, **kwargs):
             try:
-                task_cls(context=self.context)()
+                task_cls()()
             except Exception as e:
                 app.logger.error(f"Error running cleanup task {task_cls}: {e}")
                 continue
@@ -396,16 +372,6 @@ class Task(metaclass=_TaskMeta, private=True):
         )
         return self.__call__(*extra, **parsed_args)
 
-    @property
-    def _log_name_desc(self) -> str:
-        """Get the name of the task for logging.
-
-        :returns: The name of the task.
-        """
-        if self.invoked_as == self.name:
-            return self.name
-        return f"{self.name} (invoked as {self.invoked_as})"
-
     def run(self, *args, **kwargs):
         """Runs work related to the task, excluding before, after, and cleanup tasks.
 
@@ -423,7 +389,7 @@ class Task(metaclass=_TaskMeta, private=True):
         from quickie import app
 
         # Log task name and arguments
-        app.logger.info(f"Executing task: [info]{self._log_name_desc}[/info]")
+        app.logger.info(f"Executing task: [info]{self.name}[/info]")
 
     def log_task_execution_details(self, *args, **kwargs):
         """Log details about the task execution."""
@@ -442,7 +408,7 @@ class Task(metaclass=_TaskMeta, private=True):
         from quickie import app
 
         if not self.condition_passes(*args, **kwargs):
-            app.logger.info(f"Skipping task {self._log_name_desc}: conditions not met.")
+            app.logger.info(f"Skipping task {self.name}: conditions not met.")
             return
         try:
             self.run_before(*args, **kwargs)
@@ -450,7 +416,7 @@ class Task(metaclass=_TaskMeta, private=True):
                 self.log_task_execution(*args, **kwargs)
                 result = self.run(*args, **kwargs)
             except Skip as e:
-                app.logger.info(f"Skipping task {self._log_name_desc}: {e.message}")
+                app.logger.info(f"Skipping task {self.name}: {e.message}")
                 result = None
             self.run_after(*args, **kwargs)
             return result
@@ -480,7 +446,15 @@ class _BaseSubprocessTask(Task, private=True):
 
         :returns: The current working directory.
         """
-        return os.path.abspath(os.path.join(self.context.cwd, self.cwd or ""))
+        if self.cwd is None:
+            path = Context.default().cwd
+        elif not os.path.isabs(self.cwd):
+            # If the path is relative, join it with the current working directory
+            # to get the absolute path.
+            path = os.path.join(Context.default().cwd, self.cwd)
+        else:
+            path = self.cwd
+        return os.path.abspath(path)
 
     def get_env(self, *args, **kwargs) -> typing.Mapping[str, str]:
         """Get the environment.
@@ -490,7 +464,10 @@ class _BaseSubprocessTask(Task, private=True):
 
         :returns: A mapping of environment variables.
         """
-        return self.context.env | (self.env or {})
+        # Chain maps are supposed to use dicts, but we won't do any updates
+        # to this dictionary. So we can allow it to be any sort of mapping.
+        env = typing.cast(dict, self.env)
+        return Context.default().env.new_child(env).new_child()
 
 
 class Command(_BaseSubprocessTask, private=True):
@@ -808,7 +785,7 @@ class _TaskGroup(Task, private=True):
         """Run a task."""
         # This is safer than passing the parent arguments. If need to pass
         # extra arguments, can override get_tasks and use partial_task
-        return task_cls(context=self.context).__call__()
+        return task_cls().__call__()
 
 
 class Group(_TaskGroup, private=True):
