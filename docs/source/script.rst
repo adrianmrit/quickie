@@ -45,10 +45,11 @@ To pass arguments you can simply use string formatting:
 
 .. code-block:: python
 
-    from quickie import script, arg
+    from quickie import script, Arg
 
-    @script
-    @arg("name")
+    @script(args=[
+        Arg("name"),
+    ])
     def hello_script(name):
         return f"echo 'Hello, {name}!'"
 

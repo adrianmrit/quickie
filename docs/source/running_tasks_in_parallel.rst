@@ -6,9 +6,8 @@ The simplest way is to use the :func:`quickie.thread_group` decorator to define 
 
 .. code-block:: python
 
-    from quickie import thread_group, lazy_task
+    from quickie import thread_group
 
-    @task
     def task1():
         print("Task 1")
 
@@ -18,10 +17,7 @@ The simplest way is to use the :func:`quickie.thread_group` decorator to define 
 
     @thread_group
     def my_thread_group():
-        return [
-            lazy_task("task1"),
-            task2,
-        ]
+        return [task1, task2]
 
 
 This will return a :class:`quickie.tasks.ThreadGroup` instance, equivalent to:
@@ -30,12 +26,12 @@ This will return a :class:`quickie.tasks.ThreadGroup` instance, equivalent to:
 
     from quickie import ThreadGroup
 
-    class MyThreadGroup(ThreadGroup):
+    ...
+
+    @task
+    class my_thread_group(ThreadGroup):
         def get_tasks(self):
-            return [
-                lazy_task("task1"),
-                task2,
-            ]
+            return [task1, task2]
 
 If one of these tasks fails, the other tasks will continue to run.
 

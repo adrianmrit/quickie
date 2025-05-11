@@ -8,12 +8,11 @@ quickie.factories
 
    .. autosummary::
    
-      arg
       command
-      generic_task_factory
       group
       script
       task
+      task_factory_helper
       thread_group
    
    .. rubric:: Classes

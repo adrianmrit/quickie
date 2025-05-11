@@ -6,7 +6,7 @@ The simplest way is to use the :func:`quickie.group` decorator to define a group
 
 .. code-block:: python
 
-    from quickie import group, lazy_task
+    from quickie import group
 
     @task
     def task1():
@@ -18,10 +18,7 @@ The simplest way is to use the :func:`quickie.group` decorator to define a group
 
     @group
     def my_group():
-        return [
-            lazy_task("task1"),
-            task2,
-        ]
+        return [task1, task2]
 
 
 This will return a :class:`quickie.tasks.Group` instance, equivalent to:
@@ -30,11 +27,11 @@ This will return a :class:`quickie.tasks.Group` instance, equivalent to:
 
     from quickie import Group
 
+    ...
+
+    @task
     class MyGroup(Group):
         def get_tasks(self):
-            return [
-                lazy_task("task1"),
-                task2,
-            ]
+            return [task1, task2]
 
 If one of these tasks fails, no further tasks will be run.

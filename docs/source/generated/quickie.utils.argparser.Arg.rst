@@ -1,7 +1,7 @@
-﻿quickie.Arg
-===========
+﻿quickie.utils.argparser.Arg
+===========================
 
-.. currentmodule:: quickie
+.. currentmodule:: quickie.utils.argparser
 
 .. autoclass:: Arg
 

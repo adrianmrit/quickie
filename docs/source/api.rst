@@ -10,13 +10,11 @@ API
     quickie.task
     quickie.script
     quickie.command
-    quickie.arg
-    quickie.generic_task_factory
+    quickie.Arg
+    quickie.Namespace
+    quickie.task_factory_helper
     quickie.group
     quickie.thread_group
-    quickie.lazy_task
-    quickie.partial_task
-    quickie.suppressed_task
     quickie.tasks.Task
     quickie.tasks.Script
     quickie.tasks.Command
@@ -44,10 +42,16 @@ API
     quickie.errors.TaskNotFoundError
     quickie.errors.TasksModuleNotFoundError
     quickie.factories
-    quickie.factories.arg
     quickie.factories.command
-    quickie.factories.generic_task_factory
+    quickie.factories.task_factory_helper
     quickie.factories.group
     quickie.factories.script
     quickie.factories.task
     quickie.factories.thread_group
+    quickie.utils
+    quickie.utils.argparser
+    quickie.utils.argparser.Arg
+    quickie.utils.console
+    quickie.utils.console.QkConsole
+    quickie.utils.imports
+    quickie.utils.imports.import_from_path

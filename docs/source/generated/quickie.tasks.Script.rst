@@ -44,7 +44,7 @@
    .. autosummary::
    
       ~Script.after
-      ~Script.aliases
+      ~Script.args
       ~Script.before
       ~Script.cleanup
       ~Script.condition
@@ -52,9 +52,7 @@
       ~Script.env
       ~Script.executable
       ~Script.extra_args
-      ~Script.name
-      ~Script.private
+      ~Script.parser
       ~Script.script
-      ~Script.invoked_as
    
    

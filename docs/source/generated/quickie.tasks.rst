@@ -4,15 +4,6 @@ quickie.tasks
 .. automodule:: quickie.tasks
 
    
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      lazy_task
-      partial_task
-      suppress_logs
-      suppressed_task
-   
    .. rubric:: Classes
 
    .. autosummary::

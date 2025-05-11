@@ -18,7 +18,8 @@ This will return a :class:`quickie.tasks.Task` instance, equivalent to:
 
     from quickie import Task
 
-    class Task(Task):
+    @task
+    class hello(Task):
         def run(self):
             print("Hello, World!")
 

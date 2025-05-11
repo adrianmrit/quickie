@@ -46,7 +46,7 @@ While Quickie allows to run tasks defined between a project, sometimes it is use
 from anywhere. `quickie-runner-global <https://pypi.org/project/quickie-runner-global/>`_ is a package that allows to do just that.
 
 This is a wrapper around `quickie-runner` that will add a separate `qkg` command, thus not conflicting with `qk`. Tasks in this case
-need to be defined at `~/Quickie`.
+need to be defined at `~/_qkg`.
 
 You can do this install for your default Python installation, or use `pipx <https://pipx.pypa.io/stable/>`_ to create an isolated
 environment.
@@ -104,7 +104,7 @@ To enable it, you need to install `argcomplete <https://pypi.org/project/argcomp
     eval "$(register-python-argcomplete qk)"
 
 
-This will enable auto completion for the `qk` command. If you have a global installation, you can enable auto completion for the `qkg` command as well:
+This will enable auto completion for the ``qk`` command. If you have a global installation, you can enable auto completion for the ``qkg`` command as well:
 
 .. code-block:: bash
 
@@ -119,23 +119,26 @@ Quick(ie)start
 Defining tasks
 ^^^^^^^^^^^^^^
 
-Tasks can be defined in a ``__quickie`` Python module, be it a single file or a package, usually at the
-root of the project. For global tasks they can be defined in the same way at ``~/Quickie``. They can also
-be defined at an arbitrary Python module, and passed to the runner using the `--module` or `-m` argument.
+Tasks can be defined in a `_qk` Python module, be it a single file or a package, usually at the
+root of the project. For global tasks they can be defined in the same way at `~/_qkg`. They can also
+be defined at an arbitrary Python module, and passed to the runner using the ``--module`` or ``-m`` argument.
 
 For example:
 
 .. code-block:: python
 
-    # MyProject/__quickie.py
-    from quickie import arg, task, script, command
+    # MyProject/_qk.py
+    from quickie import Arg, task, script, command
 
     @task
     def hello():
         print("Hello, World!")
 
-    @script
-    @arg("--name", help="Your name")
+    @script(
+        args=[
+            Arg("--name", help="Your name"),
+        ],
+    )
     def hello_script(name):
         return f"echo 'Hello, {name}!'"
 
@@ -169,7 +172,7 @@ For example:
 .. code-block:: bash
 
     MyProject/
-    ├── __quickie
+    ├── _qk
     │   ├── __init__.py
     │   ├── public.py
     │   ├── private.py  # might not exist
@@ -181,7 +184,7 @@ Then in the ``__init__.py`` file you can import the tasks from the other files.
 
 .. code-block:: python
 
-    # MyProject/__quickie/__init__.py
+    # MyProject/_qk/__init__.py
     from quickie import Namespace
     from . import public
 

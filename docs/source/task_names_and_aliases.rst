@@ -23,22 +23,19 @@ By default the task name is the function/class name. You can change the task nam
     qk t2
 
 
-Equivalent to:
+Or with task classes.
 
 .. code-block:: python
 
     from quickie import Task
 
-    class MyTask(Task, name="my_task"):
+    @task(name="my_task")
+    class MyTask(Task):
         pass
 
-    class Task2(Task, name="task2", alias=["t2"]):
+    @task(name="task2", alias=["t2"])
+    class Task2(Task):
         pass
 
-
 .. WARNING::
-    Inheriting from a task does not preserve the name or aliases. You will need add them again for each subclass.
-    This way we avoid accidentally overwriting the name of the task.
-
-.. WARNING::
-    The last loaded tasks will take precedence. This means that if you have two tasks with the same name, the last one will be used.
+    The last loaded tasks will take precedence.

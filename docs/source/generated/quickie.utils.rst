@@ -10,5 +10,6 @@ quickie.utils
    :toctree:
    :recursive:
 
+   argparser
    console
    imports

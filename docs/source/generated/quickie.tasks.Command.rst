@@ -18,11 +18,11 @@
       ~Command.condition_passes
       ~Command.full_run
       ~Command.get_after
-      ~Command.get_args
       ~Command.get_before
       ~Command.get_binary
       ~Command.get_cleanup
       ~Command.get_cmd
+      ~Command.get_cmd_args
       ~Command.get_cwd
       ~Command.get_env
       ~Command.get_help
@@ -36,7 +36,7 @@
       ~Command.run_after
       ~Command.run_before
       ~Command.run_cleanup
-      ~Command.split_args
+      ~Command.split_cmd_args
    
    
 
@@ -47,17 +47,15 @@
    .. autosummary::
    
       ~Command.after
-      ~Command.aliases
       ~Command.args
       ~Command.before
       ~Command.binary
       ~Command.cleanup
+      ~Command.cmd_args
       ~Command.condition
       ~Command.cwd
       ~Command.env
       ~Command.extra_args
-      ~Command.name
-      ~Command.private
-      ~Command.invoked_as
+      ~Command.parser
    
    

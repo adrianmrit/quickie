@@ -21,7 +21,7 @@ For example:
 
 .. code-block:: python
 
-    # MyProject/__quickie/__init__.py
+    # MyProject/_qk/__init__.py
     from quickie import Namespace
     from . import public, private, test
     try:
@@ -54,7 +54,7 @@ It might also be useful to add the tasks directly to the namespace instance.
 
 .. code-block:: python
 
-    # MyProject/__quickie/__init__.py
+    # MyProject/_qk/__init__.py
     from quickie import Namespace, task
     try:
         from . import private
@@ -80,7 +80,7 @@ Namespaces can be nested, allowing for a hierarchical structure.
 
 .. code-block:: python
 
-    # MyProject/__quickie/__init__.py
+    # MyProject/_qk/__init__.py
     from quickie import Namespace
     from . import module1, module2, module3
 
@@ -105,7 +105,7 @@ Multiple namespace instances can also be defined.
 
 .. code-block:: python
 
-    # MyProject/__quickie/__init__.py
+    # MyProject/_qk/__init__.py
     from quickie import Namespace
     from . import module1, module2, module3
 

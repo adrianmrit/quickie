@@ -43,15 +43,13 @@
    .. autosummary::
    
       ~ThreadGroup.after
-      ~ThreadGroup.aliases
+      ~ThreadGroup.args
       ~ThreadGroup.before
       ~ThreadGroup.cleanup
       ~ThreadGroup.condition
       ~ThreadGroup.extra_args
       ~ThreadGroup.max_workers
-      ~ThreadGroup.name
-      ~ThreadGroup.private
-      ~ThreadGroup.task_classes
-      ~ThreadGroup.invoked_as
+      ~ThreadGroup.parser
+      ~ThreadGroup.tasks
    
    
