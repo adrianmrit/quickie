@@ -96,10 +96,10 @@ class App:
 
     @property
     def home_path(self) -> Path:
-        """The path to the global quickie directory. Usually `~/Quickie`."""
+        """The path to the global quickie directory. Usually `~._qkg`."""
         if not hasattr(self, "_home_path"):
             self.set_home_path(
-                Path(os.environ.get(HOME_PATH_ENV, str(Path.home() / "Quickie")))
+                Path(os.environ.get(HOME_PATH_ENV, str(Path.home() / "_qkg")))
             )
         return self._home_path
 
@@ -109,7 +109,7 @@ class App:
         if not hasattr(self, "_project_path"):
             # Traversing should not occur unless project_path is not set and is accessed
             self.set_project_path(
-                self._resolve_module_path(module_name="__quickie", traverse=True)
+                self._resolve_module_path(module_name="_qk", traverse=True)
             )
         return self._project_path
 

@@ -9,7 +9,7 @@ def hello():
 
 
 def init(dir: str | Path):
-    target_dir = Path(f"{dir}/__quickie")
+    target_dir = Path(f"{dir}/_qk")
     if target_dir.exists():
         print("Quickie project already initialized")
         return

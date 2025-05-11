@@ -50,7 +50,7 @@ packages = ["src/quickie"]
 path = "src/quickie/_meta.py"
 
 [tool.hatch.build]
-exclude = ["__quickie"]
+exclude = ["_qk"]
 
 [tool.pytest.ini_options]
 addopts = ["-vv"]
@@ -65,7 +65,7 @@ mock_use_standalone_module = true
 source = ["src/quickie"]
 omit = [
     "tests/*",
-    "__quickie/*"
+    "_qk/*"
 ]
 
 [tool.ruff]

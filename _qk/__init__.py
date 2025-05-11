@@ -1,5 +1,6 @@
 from quickie import script, task, Namespace
 from quickie import console
+from quickie.context import Context
 from quickie.errors import Skip, Stop
 
 from . import install, test
@@ -56,10 +57,8 @@ def upload():
 @script(
     extra_args=True,
     after=[
-        task(bind=True)(
-            lambda self: console.print_info(
-                f"[link=file://{self.context.cwd}/docs/build/html/index.html]docs/build/html/index.html[/link]"
-            )
+        lambda: console.print_info(
+            f"[link=file://{Context.default().cwd}/docs/build/html/index.html]docs/build/html/index.html[/link]"
         )
     ],
 )
