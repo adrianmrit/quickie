@@ -9,6 +9,7 @@ import sys
 
 from frozendict import frozendict
 
+from quickie.context import Context
 from quickie.utils import imports
 from quickie.utils.console import QkConsole
 from rich.theme import Theme
@@ -73,6 +74,7 @@ class App:
                 show_time=False,
             )
         )
+        self.context = Context.default()
 
     @cached_property
     def console(self):
@@ -140,6 +142,14 @@ class App:
     def tmp_path(self) -> Path:
         """The path to the temporary directory."""
         return self.tasks_path / self.tmp_relative_path
+
+    def set_context(self, context: Context):
+        """Set the context for the application.
+
+        :param context: The context to set.
+        """
+        self.context = context
+        self.logger.debug(f"Context set to: {self.context}")
 
     def set_home_path(self, value: str | Path):
         """Set the home path for the application.
@@ -299,3 +309,6 @@ error_console = app.error_console
 
 logger = app.logger
 """Default logger."""
+
+context = app.context
+"""Default context."""

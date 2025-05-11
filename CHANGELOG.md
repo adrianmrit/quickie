@@ -109,3 +109,4 @@ Fixes for global runner.
 - Can skip logging for a task, to exclude sensitive information.
 - Add logging and logging levels.
 - Documentation for custom task factories.
+- Can define the working directory for a command or script to be the parent of the tasks directory.

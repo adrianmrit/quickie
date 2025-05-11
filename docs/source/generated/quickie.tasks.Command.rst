@@ -23,7 +23,7 @@
       ~Command.get_cleanup
       ~Command.get_cmd
       ~Command.get_cmd_args
-      ~Command.get_cwd
+      ~Command.get_wd
       ~Command.get_env
       ~Command.get_help
       ~Command.get_parser
@@ -53,7 +53,7 @@
       ~Command.cleanup
       ~Command.cmd_args
       ~Command.condition
-      ~Command.cwd
+      ~Command.wd
       ~Command.env
       ~Command.extra_args
       ~Command.parser

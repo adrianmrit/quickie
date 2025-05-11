@@ -324,7 +324,7 @@ def script(
     *,
     executable: str | None = None,
     env: dict[str, str] | None = None,
-    cwd: str | None = None,
+    wd: str | None = None,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Script]: ...
 
@@ -334,7 +334,7 @@ def script(  # noqa: PLR0913
     *,
     executable: str | None = None,
     env: dict[str, str] | None = None,
-    cwd: str | None = None,
+    wd: str | None = None,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Script]:
     '''Create a script from a function.
@@ -353,14 +353,14 @@ def script(  # noqa: PLR0913
     :param obj: The function to create the script from.
     :param executable: The executable to use for the script.
     :param env: The environment variables for the script.
-    :param cwd: The working directory for the script.
+    :param wd: The working directory for the script.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
     :returns: The task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
-    attrs = {"executable": executable, "env": env, "cwd": cwd}
+    attrs = {"executable": executable, "env": env, "wd": wd}
     return task_factory_helper(
         obj,
         base=tasks.Script,
@@ -381,7 +381,7 @@ def command(
 def command(
     *,
     env: dict[str, str] | None = None,
-    cwd: str | None = None,
+    wd: str | None = None,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Command]: ...
 
@@ -390,7 +390,7 @@ def command(  # noqa: PLR0913
     obj: typing.Callable[..., typing.Sequence[str]] | None = None,
     *,
     env: dict[str, str] | None = None,
-    cwd: str | None = None,
+    wd: str | None = None,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Command]:
     '''Create a command task from a function.
@@ -410,12 +410,12 @@ def command(  # noqa: PLR0913
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
     :param env: The environment variables for the command task.
-    :param cwd: The working directory for the command task.
+    :param wd: The working directory for the command task.
 
     :returns: The command task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
-    attrs = {"env": env, "cwd": cwd}
+    attrs = {"env": env, "wd": wd}
     return task_factory_helper(
         obj,
         base=tasks.Command,

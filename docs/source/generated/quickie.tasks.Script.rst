@@ -20,7 +20,7 @@
       ~Script.get_after
       ~Script.get_before
       ~Script.get_cleanup
-      ~Script.get_cwd
+      ~Script.get_wd
       ~Script.get_env
       ~Script.get_help
       ~Script.get_parser
@@ -48,7 +48,7 @@
       ~Script.before
       ~Script.cleanup
       ~Script.condition
-      ~Script.cwd
+      ~Script.wd
       ~Script.env
       ~Script.executable
       ~Script.extra_args

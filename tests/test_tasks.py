@@ -3,7 +3,7 @@ import functools
 import pytest
 
 import quickie._namespace
-from quickie import tasks
+from quickie import tasks, app
 from quickie.conditions import condition
 from quickie.context import Context
 from quickie.factories import command, group, script, task, thread_group
@@ -15,8 +15,8 @@ class TestGlobalNamespace:
             pass
 
         root_namespace = quickie._namespace.RootNamespace()
-        root_namespace.register(MyTask, namespace="mytask")
-        assert root_namespace["mytask"] is MyTask
+        root_namespace.register(MyTask(), namespace="mytask")
+        assert isinstance(root_namespace["mytask"], MyTask)
 
 
 class TestTask:
@@ -274,22 +274,20 @@ class TestBaseSubprocessTask:
             (None, "/example/cwd"),
         ],
     )
-    def test_cwd(self, attr, expected, mocker):
-        mocker.patch(
-            "quickie.context.Context.default",
-            return_value=Context(cwd="/example/cwd", env={}),
-        )
+    def test_wd(self, attr, expected, mocker):
+        mocker.patch.object(app, "context", Context(wd="/example/cwd", env={}))
 
         class MyTask(tasks._BaseSubprocessTask):
-            cwd = attr
+            wd = attr
 
         task_instance = MyTask()
-        assert task_instance.get_cwd() == expected
+        assert task_instance.get_wd() == expected
 
     def test_env(self, mocker):
-        mocker.patch(
-            "quickie.context.Context.default",
-            return_value=Context(cwd="", env={"MYENV": "myvalue"}, inherit_env=False),
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="", env={"MYENV": "myvalue"}, inherit_env=False),
         )
 
         class MyTask(tasks._BaseSubprocessTask):
@@ -307,16 +305,17 @@ class TestCommand:
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        mocker.patch(
-            "quickie.context.Context.default",
-            return_value=Context(cwd="/example/cwd", env={}, inherit_env=False),
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
         )
 
-        @command(cwd="../other", env={"OTHERENV": "othervalue"})
+        @command(wd="../other", env={"OTHERENV": "othervalue"})
         def my_task():
             return ["myprogram"]
 
-        @command(cwd="../other", env={"OTHERENV": "othervalue"})
+        @command(wd="../other", env={"OTHERENV": "othervalue"})
         def task_with_string():
             return 'myprogram arg1 arg2 "arg3 with spaces"'
 
@@ -325,7 +324,7 @@ class TestCommand:
             binary = "myprogram"
             cmd_args = ["arg1", "arg2"]
 
-        @command(cwd="/full/path", env={"MYENV": "myvalue"}, args=["--arg1"])
+        @command(wd="/full/path", env={"MYENV": "myvalue"}, args=["--arg1"])
         def dynamic_args_task(arg1):
             return ["myprogram", arg1]
 
@@ -382,9 +381,10 @@ class TestScriptTask:
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)
 
-        mocker.patch(
-            "quickie.context.Context.default",
-            return_value=Context(cwd="/somedir", env={}, inherit_env=False),
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
         )
 
         class MyTask(tasks.Script):

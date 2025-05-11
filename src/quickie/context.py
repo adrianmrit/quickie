@@ -2,6 +2,7 @@
 
 from collections import ChainMap
 import os
+from pathlib import Path
 import typing
 
 
@@ -11,17 +12,18 @@ class Context:
     def __init__(  # noqa: PLR0913
         self,
         *,
-        cwd: str,
+        wd: str | Path,
         env: typing.Mapping,
         inherit_env: bool = True,
     ):
         """Initialize the context.
 
-        :param cwd: The current working directory.
+        :param wd: The working directory.
         :param env: The environment variables.
-        :param inherit_env: Whether to inherit the environment variables from the parent process.
+        :param inherit_env: Whether to inherit the environment variables from the parent
+            process.
         """
-        self.cwd = cwd
+        self.wd = Path(wd)
         # By using ChainMap we can avoid copying the environment variables
         # dictionary every we copy the context or create a new one, but
         # still prevent modifying the original environment variables.
@@ -46,14 +48,14 @@ class Context:
         """Returns the default context."""
         # Context should be cheap to create, so we don't need to cache it
         return Context(
-            cwd=os.getcwd(),
+            wd=os.getcwd(),
             env={},
         )
 
     def copy(self):
         """Copy the context."""
         return Context(
-            cwd=self.cwd,
+            wd=self.wd,
             env=self.env,
             inherit_env=False,
         )

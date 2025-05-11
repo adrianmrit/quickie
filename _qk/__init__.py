@@ -1,6 +1,5 @@
 from quickie import script, task, Namespace
-from quickie import console
-from quickie.context import Context
+from quickie import app, console
 from quickie.errors import Skip, Stop
 
 from . import install, test
@@ -31,6 +30,7 @@ def hello():
 @script(
     env={"OTHER": "Other"},
     bind=True,
+    wd=".",
 )
 def script_example(task):
     """Example script that runs a command."""
@@ -58,7 +58,7 @@ def upload():
     extra_args=True,
     after=[
         lambda: console.print_info(
-            f"[link=file://{Context.default().cwd}/docs/build/html/index.html]docs/build/html/index.html[/link]"
+            f"[link=file://{app.context.wd}/docs/build/html/index.html]docs/build/html/index.html[/link]"
         )
     ],
 )

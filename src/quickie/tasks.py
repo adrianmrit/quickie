@@ -9,6 +9,7 @@ together.
 import argparse
 import functools
 import os
+from pathlib import Path
 import re
 import shlex
 import typing
@@ -18,7 +19,6 @@ from quickie.errors import Skip
 from quickie.config import app
 from quickie.utils.argparser import Arg
 
-from .context import Context
 
 MAX_SHORT_HELP_LENGTH = 50
 
@@ -393,40 +393,49 @@ class Task:
 class _BaseSubprocessTask(Task):
     """Base class for tasks that run a subprocess."""
 
-    cwd: str | None = None
+    wd: str | Path | None = None
     """The current working directory."""
 
     env: typing.Mapping[str, str] | None = None
     """The environment."""
 
-    def __init__(self, *args, env=None, cwd=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        env: typing.Mapping[str, str] | None = None,
+        wd: str | Path | None = None,
+        **kwargs,
+    ):
         """Initialize the task.
 
         :param args: Task instance arguments.
         :param env: The environment to use.
-        :param cwd: The current working directory.
+        :param wd: The working directory.
         :param kwargs: Task instance keyword arguments.
         """
         super().__init__(*args, **kwargs)
-        self.cwd = cwd if cwd is not None else self.cwd
+        self.wd = wd if wd is not None else self.wd
         self.env = env if env is not None else self.env
 
-    def get_cwd(self, *args, **kwargs) -> str:
-        """Get the current working directory.
+    def get_wd(self, *args, **kwargs) -> str:
+        """Get the working directory.
 
         :param args: Unknown arguments.
         :param kwargs: Parsed known arguments.
 
-        :returns: The current working directory.
+        :returns: The working directory.
         """
-        if self.cwd is None:
-            path = Context.default().cwd
-        elif not os.path.isabs(self.cwd):
+        if self.wd is None:
+            path = app.context.wd
+        elif self.wd == ".":
+            path = app.tasks_path.parent
+            app.logger.debug(f"Using current working directory: {path}")
+        elif not os.path.isabs(self.wd):
             # If the path is relative, join it with the current working directory
             # to get the absolute path.
-            path = os.path.join(Context.default().cwd, self.cwd)
+            path = os.path.join(app.context.wd, self.wd)
         else:
-            path = self.cwd
+            path = self.wd
         return os.path.abspath(path)
 
     def get_env(self, *args, **kwargs) -> typing.Mapping[str, str]:
@@ -440,7 +449,7 @@ class _BaseSubprocessTask(Task):
         # Chain maps are supposed to use dicts, but we won't do any updates
         # to this dictionary. So we can allow it to be any sort of mapping.
         env = typing.cast(dict, self.env)
-        return Context.default().env.new_child(env).new_child()
+        return app.context.env.new_child(env).new_child()
 
 
 class Command(_BaseSubprocessTask):
@@ -539,16 +548,23 @@ class Command(_BaseSubprocessTask):
             args = []
         else:
             program, *args = cmd
-        cwd = self.get_cwd(*args, **kwargs)
+        wd = self.get_wd(*args, **kwargs)
         env = self.get_env(*args, **kwargs)
-        return self._run_program(program, cmd_args=args, cwd=cwd, env=env)
+        return self._run_program(program, cmd_args=args, wd=wd, env=env)
 
-    def _run_program(self, program: str, *, cmd_args: typing.Sequence[str], cwd, env):
+    def _run_program(
+        self,
+        program: str,
+        *,
+        cmd_args: typing.Sequence[str],
+        wd: str,
+        env: typing.Mapping[str, str],
+    ):
         """Run the program.
 
         :param program: The program to run.
         :param args: The program arguments.
-        :param cwd: The current working directory.
+        :param wd: The working directory.
         :param env: A mapping of environment variables.
 
         :returns: The result of the program.
@@ -559,7 +575,7 @@ class Command(_BaseSubprocessTask):
         result = subprocess.run(
             [program, *cmd_args],
             check=False,
-            cwd=cwd,
+            cwd=wd,
             env=env,
         )
         return result
@@ -601,9 +617,9 @@ class Script(_BaseSubprocessTask):
     @typing.override
     def run(self, *args, **kwargs):
         script = self.get_script(*args, **kwargs)
-        cwd = self.get_cwd(*args, **kwargs)
+        wd = self.get_wd(*args, **kwargs)
         env = self.get_env(*args, **kwargs)
-        self._run_script(script, cwd=cwd, env=env)
+        self._run_script(script, wd=wd, env=env)
 
     @typing.override
     def log_task_execution_details(self, script):
@@ -616,7 +632,7 @@ class Script(_BaseSubprocessTask):
         else:
             app.logger.info(f"Execute script: [info]{script}[/info]")
 
-    def _run_script(self, script: str, *, cwd, env):
+    def _run_script(self, script: str, *, wd, env):
         """Run the script."""
         import subprocess
 
@@ -626,7 +642,7 @@ class Script(_BaseSubprocessTask):
             script,
             shell=True,
             check=False,
-            cwd=cwd,
+            cwd=wd,
             env=env,
             executable=self.executable,
         )
