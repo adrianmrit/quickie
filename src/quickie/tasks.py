@@ -6,9 +6,7 @@ commands, or to run other tasks. They can also be used to group other tasks
 together.
 """
 
-import abc
 import argparse
-import contextlib
 import functools
 import os
 import re
@@ -24,7 +22,7 @@ from .context import Context
 
 MAX_SHORT_HELP_LENGTH = 50
 
-type TaskTypeOrProxy = Task | _TaskProxy
+type TaskTypeOrProxy = Task
 
 
 class _TaskMeta(type):
@@ -627,95 +625,6 @@ class Script(_BaseSubprocessTask, private=True):
         return result
 
 
-# TODO: Use an actual proxy that resolves the task class when any attribute is accessed
-class _TaskProxy(abc.ABC):
-    """A proxy for tasks that resolves the task class when called."""
-
-    @abc.abstractmethod
-    def resolve_task(self) -> "Task":
-        """Resolve the task class."""
-        pass  # pragma: no cover
-
-    def run(self, *args, **kwargs):
-        """Runs the task, excluding before, after, and cleanup tasks."""
-        task = self.resolve_task()
-        return task.run(*args, **kwargs)
-
-    def __call__(self, *args, **kwargs):
-        """Runs the task."""
-        task = self.resolve_task()
-        return task(*args, **kwargs)
-
-
-# accessed
-class _LazyTaskProxy(_TaskProxy):
-    """Used to resolve the task class lazily."""
-
-    def __init__(self, name: str):
-        self.name = name
-
-    @typing.override
-    def resolve_task(self) -> "Task":
-        """Resolve the task class."""
-        from quickie import app
-
-        return app.tasks[self.name]
-
-
-class _SuppressErrorsTaskProxy(_TaskProxy):
-    """Wrapper to suppress errors for a task."""
-
-    def __init__(self, task: TaskTypeOrProxy, *exceptions: type[Exception]):
-        self.task = task
-        self.exceptions = exceptions or (Exception,)
-
-    @typing.override
-    def resolve_task(self) -> "Task":
-        task = self.task
-        while isinstance(task, _TaskProxy):
-            task = task.resolve_task()
-        return task  # type: ignore
-
-    def __call__(self, *args, **kwargs):
-        """Patches full_run to ignore errors, and returns the instance."""
-        task = self.resolve_task()
-
-        with contextlib.suppress(*self.exceptions):
-            # We need to use the original task class, not the proxy
-            # to avoid infinite recursion
-            return task(*args, **kwargs)
-
-
-def lazy_task(name: str) -> TaskTypeOrProxy:
-    """Loads a task lazily by name.
-
-    This is useful in cases where the task is not yet defined, or to avoid circular
-    imports.
-
-    Note that the task must be registered in the namespace before running it. Thus
-    cannot lazily load tasks from external unimported modules.
-
-    :param name: The name of the task.
-
-    :returns: A lazy task proxy.
-    """
-    return _LazyTaskProxy(name)
-
-
-def suppressed_task(
-    task_cls: TaskTypeOrProxy | str, *exceptions: type[Exception]
-) -> _SuppressErrorsTaskProxy:
-    """Wraps a task class to silently suppress errors.
-
-    :param task_cls: The task class or lazy task to wrap.
-    :param exceptions: The exceptions to suppress. While not required, it is recommended
-        to specify the exceptions to suppress to avoid hiding unexpected errors.
-    """
-    if isinstance(task_cls, str):
-        task_cls = lazy_task(task_cls)
-    return _SuppressErrorsTaskProxy(task_cls, *exceptions)
-
-
 class _TaskGroup(Task, private=True):
     """Base class for tasks that run other tasks."""
 
@@ -784,41 +693,3 @@ class ThreadGroup(_TaskGroup, private=True):
             futures = [executor.submit(self._run_task, task) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
                 future.result()
-
-
-class _SuppressLogsTaskProxy(_TaskProxy):
-    """Wrapper to suppress logs for a task."""
-
-    def __init__(self, task: TaskTypeOrProxy):
-        self.task = task
-
-    @typing.override
-    def resolve_task(self) -> "Task":
-        task = self.task
-        while isinstance(task, _TaskProxy):
-            task = task.resolve_task()
-        return task  # type: ignore
-
-    def __call__(self, *args, **kwargs):
-        """Patches the task to suppress logs and returns the instance."""
-        instance = self.resolve_task()
-        old_log_task_execution = instance.log_task_execution_details
-        try:
-            instance.log_task_execution_details = lambda *_, **__: None
-            return instance(*args, **kwargs)
-        finally:
-            instance.log_task_execution_details = old_log_task_execution
-
-
-def suppress_logs(task: TaskTypeOrProxy) -> _SuppressLogsTaskProxy:
-    """Wraps a task class to suppress logs.
-
-    This is useful for tasks that may log sensitive information, such as
-    passwords or tokens.
-
-    :param task_cls: The task class or lazy task to wrap.
-    :returns: An instance of _SuppressLogsTaskProxy wrapping the task class.
-    """
-    if isinstance(task, str):
-        task = lazy_task(task)
-    return _SuppressLogsTaskProxy(task)

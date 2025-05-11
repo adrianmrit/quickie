@@ -3,7 +3,7 @@ import functools
 import pytest
 
 import quickie._namespace
-from quickie import tasks, app
+from quickie import tasks
 from quickie.conditions import condition
 from quickie.context import Context
 from quickie.factories import command, group, script, task, thread_group
@@ -58,16 +58,13 @@ class TestTask:
         def other(arg):
             result.append(arg)
 
-        app.tasks.register(other, namespace="other")
-        app.tasks.register(other, namespace="namespaced.other")
-
         @task(
             before=[
                 functools.partial(other, "before"),
-                functools.partial(tasks.lazy_task("defined_later"), "before2"),
+                lambda: defined_later("before2"),
             ],
             after=[
-                functools.partial(tasks.lazy_task("namespaced.other"), "after"),
+                lambda: other("after"),
                 functools.partial(other, "after2"),
             ],
             cleanup=[
@@ -81,8 +78,6 @@ class TestTask:
         @task
         def defined_later(arg):
             result.append(f"{arg} defined later")
-
-        app.tasks.register(defined_later, namespace="defined_later")
 
         my_task()
 

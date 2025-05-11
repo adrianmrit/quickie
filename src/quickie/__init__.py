@@ -16,8 +16,6 @@ from quickie.tasks import (
     Script,
     Task,
     ThreadGroup,
-    lazy_task,
-    suppressed_task,
 )
 from quickie._namespace import Namespace
 from quickie.config import app, console, logger
@@ -47,6 +45,4 @@ __all__ = [
     "generic_task_factory",
     "group",
     "thread_group",
-    "lazy_task",
-    "suppressed_task",
 ]

@@ -11,7 +11,6 @@ from quickie._argparser import AppArgumentParser
 from quickie._namespace import RootNamespace
 from quickie.errors import Stop
 from quickie.factories import task
-from quickie.tasks import suppressed_task
 
 PYTHON_PATH = sys.executable
 BIN_FOLDER = os.path.join(sys.prefix, "bin")
@@ -171,7 +170,7 @@ def test_stop_iteration(capsys, mocker):
     def stop_no_reason():
         raise Stop(exit_code=5)
 
-    @task(before=[suppressed_task(stop), stop_no_reason])
+    @task(before=[stop, stop_no_reason])
     def with_before():
         pass
 
@@ -198,9 +197,9 @@ def test_stop_iteration(capsys, mocker):
 
     with raises(SystemExit) as exc_info:
         _cli.main(["-v", "with_before"])
-    assert exc_info.value.code == 5
+    assert exc_info.value.code == 10
     out, err = capsys.readouterr()
-    assert "Stopping because" in err
+    assert "Stopping: My message" in err
 
 
 class TestAutocompletion:

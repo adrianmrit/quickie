@@ -82,6 +82,8 @@ Fixes for global runner.
 
 ### Removed
 - Removed `partial_task`. `functools.partial` can be used instead.
+- Removed `lazy_task`. `lambda: task()` can be used in most cases.
+- Removed other proxy task types.
 
 ### Changed
 
