@@ -325,6 +325,12 @@ class Task:
         extra, parsed_args = self.parse_args(
             parser=self.parser, args=args, extra_args=self.extra_args
         )
+        if extra and extra[0] == "--":
+            # -- Can be used to separate task args from extra arguments, but the parser
+            # does not remove it automatically.
+            # We only remove the first occurrence of --, so if there are multiple
+            # occurrences, the rest are passed to the task.
+            extra = extra[1:]
         return self.__call__(*extra, **parsed_args)
 
     def run(self, *args, **kwargs):
