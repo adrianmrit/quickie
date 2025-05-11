@@ -4,7 +4,7 @@
 
 from quickie.factories import (
     command,
-    generic_task_factory,
+    task_factory_helper,
     group,
     script,
     task,
@@ -42,7 +42,7 @@ __all__ = [
     "script",
     "command",
     "Arg",
-    "generic_task_factory",
+    "task_factory_helper",
     "group",
     "thread_group",
 ]

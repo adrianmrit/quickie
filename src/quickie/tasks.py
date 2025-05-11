@@ -22,81 +22,8 @@ from .context import Context
 
 MAX_SHORT_HELP_LENGTH = 50
 
-type TaskTypeOrProxy = Task
 
-
-class _TaskMeta(type):
-    """Metaclass for tasks."""
-
-    _qk_name: str
-    """Name of the task."""
-
-    _qk_aliases: typing.Sequence[str] | None
-    """Alternative names of the task."""
-
-    _qk_private: bool
-    """Whether the task is private."""
-
-    _qk_defined_from: type | typing.Callable | None
-    """The class where the task was defined. None if private."""
-
-    def __new__(  # noqa: PLR0913
-        mcs,
-        cls_name,
-        bases,
-        attrs,
-        *,
-        name: str | None = None,
-        aliases: typing.Sequence[str] | None = None,
-        private: bool | None = None,
-        defined_from: type | typing.Callable | None = None,
-    ):
-        """Create a new task class.
-
-        :param name: The name it can be invoked with. If not provided, it defaults to
-            the class name.
-        :param aliases: Alternative names it can be invoked with. If not provided, it defaults to None.
-        :param defined_from: The class where the task was defined. If not provided, and
-            the task is not private, it defaults to the class itself.
-        :param private: Whether the task is private. If not provided, it is private if
-            the class name starts with an underscore.
-        """
-        if private is None:
-            private = cls_name.startswith("_")
-
-        if not name:
-            name = cls_name
-
-        # names it can be invoked with
-        attrs["_qk_name"] = name
-        attrs["_qk_aliases"] = aliases
-        attrs["_qk_private"] = private
-        cls = super().__new__(mcs, cls_name, bases, attrs)
-
-        if not cls.private:
-            cls._qk_defined_from = defined_from or cls
-        else:
-            # Base/private tasks should not be listed.
-            cls._qk_defined_from = None
-        return cls
-
-    @property
-    def name(cls) -> str:
-        """Name of the task."""
-        return cls._qk_name
-
-    @property
-    def aliases(cls) -> typing.Sequence[str]:
-        """Aliases of the task."""
-        return cls._qk_aliases or []
-
-    @property
-    def private(cls) -> bool:
-        """Whether the task is private."""
-        return cls._qk_private
-
-
-class Task(metaclass=_TaskMeta, private=True):
+class Task:
     """Base class for all tasks."""
 
     args: typing.Sequence[Arg | str | typing.Sequence[str]] = ()
@@ -112,14 +39,14 @@ class Task(metaclass=_TaskMeta, private=True):
     positional arguments to the constructor.
     """
 
-    extra_args: typing.ClassVar[bool] = False
+    extra_args: bool = False
     """Whether to allow extra command line arguments.
 
     If True, any unrecognized arguments are passed to the task. Otherwise, an
     error is raised if there are unknown arguments.
     """
 
-    condition: typing.ClassVar[BaseCondition | None] = None
+    condition: BaseCondition | None = None
     """The condition to check before running the task.
 
     To check multiple conditions, chain them using the bitwise operators
@@ -128,34 +55,84 @@ class Task(metaclass=_TaskMeta, private=True):
     See :mod:`quickie.conditions` for more information.
     """
 
-    before: typing.ClassVar[typing.Sequence["Task"]] = ()
+    before: typing.Sequence[typing.Callable] = ()
     """Tasks to run before this task.
 
     These tasks are run in the order they are defined. If one of the
     tasks fails, the remaining tasks are not run, except for cleanup tasks.
     """
 
-    after: typing.ClassVar[typing.Sequence["Task"]] = ()
+    after: typing.Sequence[typing.Callable] = ()
     """Tasks to run after this task.
 
     These tasks are run in the order they are defined. If one of the
     tasks fails, the remaining tasks are not run, except for cleanup tasks.
     """
 
-    cleanup: typing.ClassVar[typing.Sequence["Task"]] = ()
+    cleanup: typing.Sequence[typing.Callable] = ()
     """Tasks to run at the end, even if the task, or before or after tasks fail.
 
     If one of the cleanup tasks fails, the remaining cleanup tasks are still run.
     """
 
+    def __init__(  # noqa: PLR0913
+        self,
+        name: str | None = None,
+        *,
+        aliases: typing.Sequence[str] | None = None,
+        private: bool = False,
+        defined_from: type | typing.Callable | None = None,
+        args: typing.Sequence[Arg | str | typing.Sequence[str]] | None = None,
+        extra_args: bool | None = None,
+        condition: BaseCondition | None = None,
+        before: typing.Sequence[typing.Callable] | None = None,
+        after: typing.Sequence[typing.Callable] | None = None,
+        cleanup: typing.Sequence[typing.Callable] | None = None,
+    ):
+        """Initialize the task.
+
+        :param name: The name it can be invoked with. If not provided, it defaults to
+            the class name.
+        :param aliases: Alternative names it can be invoked with..
+        :param defined_from: The obj (class or function) where the task was defined.
+            If not provided, and the task is not private, it defaults to the class
+            itself.
+        :param private: Whether the task is private. If not provided, it is private if
+            the class name starts with an underscore.
+        :param args: The arguments for the task. If not provided, it defaults to the
+            class attribute :attr:`args`.
+        :param extra_args: Whether to allow extra command line arguments. If not
+            provided, it defaults to the class attribute :attr:`extra_args`.
+        :param condition: The condition to check before running the task. If not
+            provided, it defaults to the class attribute :attr:`condition`.
+        :param before: The tasks to run before this task. If not provided, it defaults
+            to the class attribute :attr:`before`.
+        :param after: The tasks to run after this task. If not provided, it defaults
+            to the class attribute :attr:`after`.
+        :param cleanup: The tasks to run at the end, even if the task, or before or
+            after tasks fail. If not provided, it defaults to the class attribute
+            :attr:`cleanup`.
+        """
+        self.name = name or self.__class__.__name__
+        self.aliases = aliases or ()
+        self.private = private
+
+        self.defined_from = defined_from if defined_from is not None else self.__class__
+        self.args = args if args is not None else self.args
+        self.extra_args = extra_args if extra_args is not None else self.extra_args
+        self.condition = condition if condition is not None else self.condition
+        self.before = before if before is not None else self.before
+        self.after = after if after is not None else self.after
+        self.cleanup = cleanup if cleanup is not None else self.cleanup
+
     def _get_relative_file_location(self, basedir) -> str | None:
         """Returns the file and line number where the class was defined."""
         import inspect
 
-        if self._qk_defined_from is None:
+        if self.defined_from is None:
             return None
-        file = inspect.getfile(self._qk_defined_from)
-        source_lines = inspect.getsourcelines(self._qk_defined_from)
+        file = inspect.getfile(self.defined_from)
+        source_lines = inspect.getsourcelines(self.defined_from)
         relative_path = os.path.relpath(file, basedir)
         return f"{relative_path}:{source_lines[1]}"
 
@@ -166,34 +143,17 @@ class Task(metaclass=_TaskMeta, private=True):
         self.add_args(parser)
         return parser
 
-    @property
-    def name(self) -> str:
-        """Name of the task."""
-        return type(self).name
-
-    @property
-    def aliases(self) -> typing.Sequence[str]:
-        """Aliases of the task."""
-        return type(self).aliases
-
-    @property
-    def private(self) -> bool:
-        """Whether the task is private."""
-        return type(self).private
-
-    @classmethod
-    def get_help(cls) -> str:
+    def get_help(self) -> str:
         """Get the help message of the task."""
-        if cls.__doc__:
-            return cls.__doc__
-        if cls._qk_defined_from is not None:
-            return cls._qk_defined_from.__doc__ or ""
+        if self.__doc__:
+            return self.__doc__
+        if self.defined_from is not None:
+            return self.defined_from.__doc__ or ""
         return ""
 
-    @classmethod
-    def get_short_help(cls) -> str:
+    def get_short_help(self) -> str:
         """Get the short help message of the task."""
-        summary = cls.get_help().split("\n\n", 1)[0].strip()
+        summary = self.get_help().split("\n\n", 1)[0].strip()
         summary = re.sub(r"\s+", " ", summary)
         if len(summary) > MAX_SHORT_HELP_LENGTH:
             summary = summary[: MAX_SHORT_HELP_LENGTH - 3] + "..."
@@ -424,14 +384,26 @@ class Task(metaclass=_TaskMeta, private=True):
         return self.full_run(*args, **kwargs)
 
 
-class _BaseSubprocessTask(Task, private=True):
+class _BaseSubprocessTask(Task):
     """Base class for tasks that run a subprocess."""
 
-    cwd: typing.ClassVar[str | None] = None
+    cwd: str | None = None
     """The current working directory."""
 
-    env: typing.ClassVar[typing.Mapping[str, str] | None] = None
+    env: typing.Mapping[str, str] | None = None
     """The environment."""
+
+    def __init__(self, *args, env=None, cwd=None, **kwargs):
+        """Initialize the task.
+
+        :param args: Task instance arguments.
+        :param env: The environment to use.
+        :param cwd: The current working directory.
+        :param kwargs: Task instance keyword arguments.
+        """
+        super().__init__(*args, **kwargs)
+        self.cwd = cwd if cwd is not None else self.cwd
+        self.env = env if env is not None else self.env
 
     def get_cwd(self, *args, **kwargs) -> str:
         """Get the current working directory.
@@ -465,14 +437,30 @@ class _BaseSubprocessTask(Task, private=True):
         return Context.default().env.new_child(env).new_child()
 
 
-class Command(_BaseSubprocessTask, private=True):
+class Command(_BaseSubprocessTask):
     """Base class for tasks that run a binary."""
 
-    binary: typing.ClassVar[str | None] = None
+    binary: str | None = None
     """The name or path of the program to run."""
 
-    cmd_args: typing.ClassVar[typing.Sequence[str] | None] = None
+    cmd_args: typing.Sequence[str] | None = None
     """The program arguments. Defaults to the task arguments."""
+
+    def __init__(
+        self,
+        *args,
+        binary: str | None = None,
+        cmd_args: typing.Sequence[str] | None = None,
+        **kwargs,
+    ):
+        """Initialize the task.
+
+        :param args: Task instance arguments.
+        :param kwargs: Task instance keyword arguments.
+        """
+        super().__init__(*args, **kwargs)
+        self.binary = binary if binary is not None else self.binary
+        self.cmd_args = cmd_args if cmd_args is not None else self.cmd_args
 
     def get_binary(self, *args, **kwargs) -> str:
         """Get the name or path of the program to run.
@@ -571,11 +559,25 @@ class Command(_BaseSubprocessTask, private=True):
         return result
 
 
-class Script(_BaseSubprocessTask, private=True):
+class Script(_BaseSubprocessTask):
     """Base class for tasks that run a script."""
 
-    script: typing.ClassVar[str | None] = None
-    executable: typing.ClassVar[str | None] = None
+    script: str | None = None
+    executable: str | None = None
+
+    def __init__(
+        self, *args, script: str | None = None, executable: str | None = None, **kwargs
+    ):
+        """Initialize the task.
+
+        :param args: Task instance arguments.
+        :param script: The script to run.
+        :param executable: The executable to use to run the script.
+        :param kwargs: Task instance keyword arguments.
+        """
+        super().__init__(*args, **kwargs)
+        self.script = script if script is not None else self.script
+        self.executable = executable if executable is not None else self.executable
 
     def get_script(self, *args, **kwargs) -> str:
         """Get the script to run.
@@ -625,7 +627,7 @@ class Script(_BaseSubprocessTask, private=True):
         return result
 
 
-class _TaskGroup(Task, private=True):
+class _TaskGroup(Task):
     """Base class for tasks that run other tasks."""
 
     tasks: typing.ClassVar[typing.Sequence["Task | str"]] = ()
@@ -652,7 +654,7 @@ class _TaskGroup(Task, private=True):
         return task()
 
 
-class Group(_TaskGroup, private=True):
+class Group(_TaskGroup):
     """Base class for tasks that run other tasks in sequence."""
 
     @typing.final
@@ -662,7 +664,7 @@ class Group(_TaskGroup, private=True):
             self._run_task(task)
 
 
-class ThreadGroup(_TaskGroup, private=True):
+class ThreadGroup(_TaskGroup):
     """Base class for tasks that run other tasks in threads."""
 
     max_workers = None

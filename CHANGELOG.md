@@ -96,6 +96,7 @@ Fixes for global runner.
   improving performance in some cases.
 - Using task instances instead of task classes for the task registry.
 - Before, after and cleanup tasks can now be any callable, not just a task.
+- Moved more task class attributes to initialization time, so that they can be overridden by the task instance.
 
 ### Fixed
 - Fix type hinting for task decorators.

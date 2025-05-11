@@ -1,4 +1,4 @@
-from quickie import tasks, app
+from quickie import task, tasks, app
 from quickie._namespace import RootNamespace
 from quickie.completion._internal import TaskCompleter
 from quickie.completion.python import PytestCompleter
@@ -18,14 +18,14 @@ class TestTaskCompleter:
 
             pass
 
-        class Other(tasks.Task):
+        @task
+        def other():
             """Another task"""
-
             pass
 
-        app.tasks.register(MyTask, namespace="task")
-        app.tasks.register(TestTask2, namespace="task2")
-        app.tasks.register(Other, namespace="other")
+        app.tasks.register(MyTask(), namespace="task")
+        app.tasks.register(TestTask2(), namespace="task2")
+        app.tasks.register(other, namespace="other")
 
         completer = TaskCompleter()
 
