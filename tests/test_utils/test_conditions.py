@@ -18,12 +18,11 @@ class TestFilesModified:
         file2 = directory.join("file2")
         file2.write("other content")
         condition = FilesModified([file1, directory], algorithm=algorithm)
-        t = my_task()
-        assert condition(t)
-        assert not condition(t)
+        assert condition(my_task)
+        assert not condition(my_task)
         file1.write("new content")
-        assert condition(t)
-        assert not condition(t)
+        assert condition(my_task)
+        assert not condition(my_task)
 
         # condition with missing files
         missing_file = directory.join("missing")
@@ -31,23 +30,27 @@ class TestFilesModified:
         condition = FilesModified(
             [file1, directory, missing_file], algorithm=algorithm, allow_missing=False
         )
-        assert condition(t)
+        assert condition(my_task)
         # Delete the missing file to test the cache
         missing_file.remove()
-        assert condition(t)  # second call should be true since allow_missing is False
-        assert condition(t)  # While file is missing the condition will pass
+        assert condition(
+            my_task
+        )  # second call should be true since allow_missing is False
+        assert condition(my_task)  # While file is missing the condition will pass
         missing_file.write("missing content")
-        assert condition(t)  # file is back, but files still changed, so condition holds
-        assert not condition(t)  # nothing changed, so condition is false
+        assert condition(
+            my_task
+        )  # file is back, but files still changed, so condition holds
+        assert not condition(my_task)  # nothing changed, so condition is false
 
         # condition with missing files
         condition = FilesModified(
             [file1, directory, missing_file], algorithm=algorithm, allow_missing=True
         )
-        assert condition(t)  # params changed, so cache is invalidated
+        assert condition(my_task)  # params changed, so cache is invalidated
         # Delete the missing file to test the cache
         missing_file.remove()
-        assert not condition(t)  # File is missing but otherwise nothing changed
+        assert not condition(my_task)  # File is missing but otherwise nothing changed
 
         # condition with excluded files
         file1.write("content again")
@@ -56,11 +59,11 @@ class TestFilesModified:
         condition = FilesModified(
             [file1, directory], exclude=[Path(file3)], algorithm=algorithm
         )
-        assert condition(t)
+        assert condition(my_task)
         file3.write("new content")
-        assert not condition(t)
+        assert not condition(my_task)
         condition = FilesModified([file1, directory], algorithm=algorithm)
-        assert condition(t)
+        assert condition(my_task)
 
 
 class TestPathsExist:

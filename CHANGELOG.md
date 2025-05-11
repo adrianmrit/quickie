@@ -80,6 +80,9 @@ Fixes for global runner.
 
 ## UNRELEASED
 
+### Removed
+- Removed `partial_task`. `functools.partial` can be used instead.
+
 ### Changed
 
 - Replace NAMESPACES with Namespace class.
@@ -89,6 +92,8 @@ Fixes for global runner.
 - Changed the way command line arguments are defined in the task.
 - Some task properties are now cached and evaluated when needed instead of at task initialization time, potentially
   improving performance in some cases.
+- Using task instances instead of task classes for the task registry.
+- Before, after and cleanup tasks can now be any callable, not just a task.
 
 ### Fixed
 - Fix type hinting for task decorators.

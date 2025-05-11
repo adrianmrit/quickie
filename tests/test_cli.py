@@ -130,7 +130,7 @@ def test_task_not_found(capsys):
 def test_list(capsys):
     with raises(SystemExit) as exc_info:
         _cli.main(["-l"])
-    assert exc_info.value.code == 0
+    assert exc_info.value.code == 0, str(capsys.readouterr())
     out, err = capsys.readouterr()
     assert "hello" in out
     assert "other_task" in out, f"out: {out}, err: {err}"

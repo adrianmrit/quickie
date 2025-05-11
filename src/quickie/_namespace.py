@@ -7,16 +7,16 @@ import collections.abc
 from quickie.errors import TaskNotFoundError
 
 if typing.TYPE_CHECKING:
-    from quickie.tasks import TaskType
+    from quickie.tasks import Task
 
 
 DEFAULT_SEPARATOR = ":"
 
 
-def is_task_cls(obj) -> typing.TypeGuard["TaskType"]:
+def is_task_instance(obj) -> typing.TypeGuard["Task"]:
     from quickie.tasks import Task
 
-    return isinstance(obj, type) and issubclass(obj, Task)
+    return isinstance(obj, Task)
 
 
 def _merge_aliases(root: str, aliases: typing.Sequence[str]) -> typing.Sequence[str]:
@@ -37,7 +37,7 @@ def _merge_alias(root: str, alias: str) -> str:
     return DEFAULT_SEPARATOR.join([root, alias])
 
 
-class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
+class RootNamespace(collections.abc.Mapping[str, "Task"]):
     """Root namespace for tasks.
 
     This class is used to store tasks with their full mappings. This should
@@ -45,7 +45,7 @@ class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
     """
 
     def __init__(self):
-        self._mappings: dict[str, "TaskType"] = {}
+        self._mappings: dict[str, "Task"] = {}
 
     def __getitem__(self, key):
         try:
@@ -59,7 +59,7 @@ class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
     def __len__(self) -> int:
         return len(self._mappings)
 
-    def register(self, obj: "TaskType", *, namespace: str | typing.Sequence[str] = ""):
+    def register(self, obj: "Task", *, namespace: str | typing.Sequence[str] = ""):
         """Register an object to a namespace.
 
         :param module: The object to register.
@@ -80,7 +80,7 @@ class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
         current: None | typing.Iterator[tuple[str, typing.Any]] = iter(
             ("", obj)
             for obj in obj.__dict__.values()
-            if is_task_cls(obj) or isinstance(obj, Namespace)
+            if is_task_instance(obj) or isinstance(obj, Namespace)
         )
         stack = []
 
@@ -122,7 +122,7 @@ class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
                     if isinstance(value, list):
                         # Treat lists as subtrees and load them next
                         current = iter((current_path, v) for v in value)
-                    elif is_task_cls(value) and not value.private:
+                    elif is_task_instance(value) and not value.private:
                         paths = _merge_aliases(
                             current_path, (value.name, *value.aliases)
                         )
@@ -138,7 +138,7 @@ class RootNamespace(collections.abc.Mapping[str, "TaskType"]):
                         current = iter(
                             (current_path, v)
                             for v in value.__dict__.values()
-                            if is_task_cls(v) or isinstance(v, Namespace)
+                            if is_task_instance(v) or isinstance(v, Namespace)
                         )
                     else:
                         # Should not happen, but just in case

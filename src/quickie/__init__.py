@@ -17,7 +17,6 @@ from quickie.tasks import (
     Task,
     ThreadGroup,
     lazy_task,
-    partial_task,
     suppressed_task,
 )
 from quickie._namespace import Namespace
@@ -49,6 +48,5 @@ __all__ = [
     "group",
     "thread_group",
     "lazy_task",
-    "partial_task",
     "suppressed_task",
 ]

@@ -7,7 +7,8 @@ namespace = Namespace()
 namespace.add(nested, path="nested")
 
 
-class HelloWorld(tasks.Task, name="hello"):
+@task(name="hello")
+class HelloWorld(tasks.Task):
     """Hello world task."""
 
     def run(self, **kwargs):

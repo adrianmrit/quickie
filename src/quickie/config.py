@@ -60,7 +60,7 @@ class App:
 
     def __init__(self):
         """Initialize the application configuration."""
-        self.program_name = (os.path.basename(sys.argv[0]),)
+        self.program_name = os.path.basename(sys.argv[0])
 
         self.logger = logging.getLogger("quickie")
         self.logger.handlers.clear()

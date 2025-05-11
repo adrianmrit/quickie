@@ -1,7 +1,8 @@
-from quickie import tasks, app
+from quickie import tasks, app, task
 
 
-class Other(tasks.Script, name="other"):
+@task(name="other")
+class Other(tasks.Script):
     """Other task."""
 
     extra_args = True

@@ -31,18 +31,16 @@ class TestTask:
         def my_task(*args, **kwargs):
             return args, kwargs
 
-        task_instance = my_task()
-
-        result = task_instance.parse_and_run(["value1", "--arg2", "value2", "value3"])
+        result = my_task.parse_and_run(["value1", "--arg2", "value2", "value3"])
         assert result == (("value3",), {"arg1": "value1", "arg2": "value2"})
 
         my_task.extra_args = False  # type: ignore
 
         with pytest.raises(SystemExit) as exc_info:
-            task_instance.parse_and_run(["value1", "--arg2", "value2", "value3"])
+            my_task.parse_and_run(["value1", "--arg2", "value2", "value3"])
         assert exc_info.value.code == 2
 
-        result = task_instance.parse_and_run(["value1", "--arg2", "value2"])
+        result = my_task.parse_and_run(["value1", "--arg2", "value2"])
         assert result == ((), {"arg1": "value1", "arg2": "value2"})
 
     def test_run_required(self):
@@ -65,16 +63,16 @@ class TestTask:
 
         @task(
             before=[
-                tasks.partial_task(other, "before"),
-                tasks.partial_task("defined_later", "before2"),
+                functools.partial(other, "before"),
+                functools.partial(tasks.lazy_task("defined_later"), "before2"),
             ],
             after=[
-                tasks.partial_task("namespaced.other", "after"),
-                tasks.partial_task(other, "after2"),
+                functools.partial(tasks.lazy_task("namespaced.other"), "after"),
+                functools.partial(other, "after2"),
             ],
             cleanup=[
-                tasks.partial_task(other, "cleanup"),
-                tasks.partial_task(other, "cleanup2"),
+                functools.partial(other, "cleanup"),
+                functools.partial(other, "cleanup2"),
             ],
         )
         def my_task():
@@ -86,8 +84,7 @@ class TestTask:
 
         app.tasks.register(defined_later, namespace="defined_later")
 
-        task_instance = my_task()
-        task_instance()
+        my_task()
 
         assert result == [
             "before",
@@ -115,22 +112,21 @@ class TestTask:
 
         @task(
             before=[
-                tasks.partial_task(task_without_error, "before"),
+                functools.partial(task_without_error, "before"),
                 task_with_error,
             ],
             after=[
-                tasks.partial_task(task_without_error, "after"),
+                functools.partial(task_without_error, "after"),
             ],
             cleanup=[
-                tasks.partial_task(task_without_error, "cleanup"),
+                functools.partial(task_without_error, "cleanup"),
             ],
         )
         def taskA():
             result.append("Task result")
 
-        task_instance = taskA()
         with pytest.raises(MyError):
-            task_instance()
+            taskA()
 
         assert result == [
             "before",
@@ -139,24 +135,23 @@ class TestTask:
 
         @task(
             before=[
-                tasks.partial_task(task_without_error, "before"),
+                functools.partial(task_without_error, "before"),
             ],
             after=[
-                tasks.partial_task(task_without_error, "after"),
+                functools.partial(task_without_error, "after"),
                 task_with_error,
-                tasks.partial_task(task_without_error, "after2"),
+                functools.partial(task_without_error, "after2"),
             ],
             cleanup=[
-                tasks.partial_task(task_without_error, "cleanup"),
+                functools.partial(task_without_error, "cleanup"),
             ],
         )
         def taskB():
             result.append("Task result")
 
-        task_instance = taskB()
         result = []
         with pytest.raises(MyError):
-            task_instance()
+            taskB()
 
         assert result == [
             "before",
@@ -167,23 +162,22 @@ class TestTask:
 
         @task(
             before=[
-                tasks.partial_task(task_without_error, "before"),
+                functools.partial(task_without_error, "before"),
             ],
             after=[
-                tasks.partial_task(task_without_error, "after"),
-                tasks.partial_task(task_without_error, "after2"),
+                functools.partial(task_without_error, "after"),
+                functools.partial(task_without_error, "after2"),
             ],
             cleanup=[
-                tasks.partial_task(task_without_error, "cleanup"),
+                functools.partial(task_without_error, "cleanup"),
             ],
         )
         def taskC():
             raise MyError("An error occurred")
 
-        task_instance = taskC()
         result = []
         with pytest.raises(MyError):
-            task_instance()
+            taskC()
 
         assert result == [
             "before",
@@ -201,10 +195,10 @@ class TestTask:
             return a + b
 
         # initialize multiple times, as this is what might happen in practice
-        assert my_task().__call__(1, 2) == 3  # noqa: PLR2004
-        assert my_task().__call__(1, 2) == 3  # noqa: PLR2004
+        assert my_task(1, 2) == 3  # noqa: PLR2004
+        assert my_task(1, 2) == 3  # noqa: PLR2004
         assert counter == 1
-        assert my_task().__call__(2, 3) == 5  # noqa: PLR2004
+        assert my_task(2, 3) == 5  # noqa: PLR2004
         assert counter == 2  # noqa: PLR2004
 
         # Does not work because self changes every time
@@ -244,10 +238,10 @@ class TestTask:
             result.append("a_xor_b")
 
         def call_tasks():
-            a_and_b()()
-            a_or_b()()
-            not_a()()
-            a_xor_b()()
+            a_and_b()
+            a_or_b()
+            not_a()
+            a_xor_b()
 
         a = False
         b = False
@@ -331,6 +325,7 @@ class TestCommand:
         def task_with_string():
             return 'myprogram arg1 arg2 "arg3 with spaces"'
 
+        @task
         class TaskWithArgs(tasks.Command):
             binary = "myprogram"
             cmd_args = ["arg1", "arg2"]
@@ -339,12 +334,7 @@ class TestCommand:
         def dynamic_args_task(arg1):
             return ["myprogram", arg1]
 
-        task_instance = my_task()
-        cmd_with_string_instance = task_with_string()
-        task_with_args = TaskWithArgs()
-        task_with_dynamic_args = dynamic_args_task()
-
-        task_instance()
+        my_task()
         assert subprocess_run.call_count == 1
         assert subprocess_run.call_args[0][0] == ["myprogram"]
         assert subprocess_run.call_args[1]["check"] is False
@@ -352,7 +342,7 @@ class TestCommand:
         assert subprocess_run.call_args[1]["env"] == {"OTHERENV": "othervalue"}
         subprocess_run.reset_mock()
 
-        cmd_with_string_instance()
+        task_with_string()
         assert subprocess_run.call_count == 1
         assert subprocess_run.call_args[0][0] == [
             "myprogram",
@@ -365,7 +355,7 @@ class TestCommand:
         assert subprocess_run.call_args[1]["env"] == {"OTHERENV": "othervalue"}
         subprocess_run.reset_mock()
 
-        task_with_args([])
+        TaskWithArgs([])
         assert subprocess_run.call_count == 1
         assert subprocess_run.call_args[0][0] == ["myprogram", "arg1", "arg2"]
         assert subprocess_run.call_args[1]["check"] is False
@@ -373,7 +363,7 @@ class TestCommand:
         assert subprocess_run.call_args[1]["env"] == {}
         subprocess_run.reset_mock()
 
-        task_with_dynamic_args.parse_and_run(["--arg1", "value1"])
+        dynamic_args_task.parse_and_run(["--arg1", "value1"])
         assert subprocess_run.call_count == 1
         assert subprocess_run.call_args[0][0] == ["myprogram", "value1"]
         assert subprocess_run.call_args[1]["check"] is False
@@ -410,7 +400,6 @@ class TestScriptTask:
             return "myscript " + arg1
 
         task_instance = MyTask()
-        dynamic_task = dynamic_script()
 
         task_instance([])
         subprocess_run.assert_called_once_with(
@@ -423,7 +412,7 @@ class TestScriptTask:
         )
         subprocess_run.reset_mock()
 
-        dynamic_task.parse_and_run(["value1"])
+        dynamic_script.parse_and_run(["value1"])
         subprocess_run.assert_called_once_with(
             "myscript value1",
             check=False,
@@ -452,16 +441,16 @@ class TestSerialTaskGroup:
         def task_1(self, arg):
             result.append(arg)
 
+        @task
         class Task2(tasks.Task):
             def run(self):
                 result.append("Second")
 
         @group(args=["arg"])
         def my_group(arg):
-            return [tasks.partial_task(task_1, arg), Task2]
+            return [functools.partial(task_1, arg), Task2]
 
-        task_instance = my_group()
-        task_instance.parse_and_run(["First"])
+        my_group.parse_and_run(["First"])
 
         assert result == ["First", "Second"]
 
@@ -485,8 +474,7 @@ class TestThreadTaskGroup:
 
         @thread_group
         def my_task():
-            return [Task1, tasks.partial_task(task2, "Third")]
+            return [Task1(), functools.partial(task2, "Third")]
 
-        task_instance = my_task()
-        task_instance()
+        my_task()
         assert result == ["First", "Second", "Third"]

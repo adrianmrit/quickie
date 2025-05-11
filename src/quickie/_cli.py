@@ -167,7 +167,7 @@ class Main:
         table.add_column("Location", style="bold yellow")
 
         # Invert the task dictionary to group by class
-        names_by_cls: dict[type[quickie.Task], list[str]] = {}
+        names_by_task: dict[quickie.Task, list[str]] = {}
         for invocation_name, task in sorted(
             app.tasks.items(),
             key=lambda x: (
@@ -176,9 +176,9 @@ class Main:
                 x[0].split(":"),
             ),
         ):
-            names_by_cls.setdefault(task, []).append(invocation_name)
+            names_by_task.setdefault(task, []).append(invocation_name)
 
-        for task, task_names in names_by_cls.items():
+        for task, task_names in names_by_task.items():
             aliases = ", ".join(
                 sorted(name for name in task_names if name != task.name)
             )
@@ -198,8 +198,7 @@ class Main:
 
     def get_task(self, task_name: str) -> quickie.Task:
         """Get a task by name."""
-        task_class = app.tasks[task_name]
-        return task_class()
+        return app.tasks[task_name]
 
     def run_task(self, task_name: str, *, args):
         """Run a task."""

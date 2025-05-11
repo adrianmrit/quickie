@@ -30,7 +30,6 @@ import functools
 import typing
 
 from quickie import tasks
-from quickie.tasks import TaskTypeOrProxy
 from quickie.utils.argparser import Arg
 
 
@@ -47,19 +46,19 @@ class CommonTaskKwargs(typing.TypedDict, total=False):
     extra_args: bool | None
     bind: bool
     condition: tasks.BaseCondition | None
-    before: typing.Sequence["TaskTypeOrProxy"] | None
-    after: typing.Sequence["TaskTypeOrProxy"] | None
-    cleanup: typing.Sequence["TaskTypeOrProxy"] | None
+    before: typing.Sequence[typing.Callable] | None
+    after: typing.Sequence[typing.Callable] | None
+    cleanup: typing.Sequence[typing.Callable] | None
 
 
-type PartialReturnType[T: tasks.Task] = typing.Callable[[typing.Callable], type[T]]
+type PartialReturnType[T: tasks.Task] = typing.Callable[[typing.Callable], T]
 """Used for type hinting the return type of a decorator.
 
 PartialReturnType is used for when the decorator function is called, returning a
 new decorator function that will take the actual decorated function as an argument.
 """
 
-type DecoratorReturnType[T: tasks.Task] = type[T] | PartialReturnType[T]
+type DecoratorReturnType[T: tasks.Task] = T | PartialReturnType[T]
 """Used for type hinting the return type of a decorator.
 
 This is a general type hint for the decorator function, which can either return a
@@ -70,16 +69,16 @@ argument.
 
 @typing.overload
 def generic_task_factory[T: tasks.Task](
-    fn: typing.Callable,
+    obj: typing.Callable | type[T],
     *,
     bases: tuple[type[T], ...],
     override_method: str,
-) -> type[T]: ...
+) -> T: ...
 
 
 @typing.overload
 def generic_task_factory[T: tasks.Task](
-    fn: typing.Callable,
+    obj: typing.Callable | type[T],
     *,
     name: str | None,
     aliases: typing.Sequence[str] | None = None,
@@ -88,18 +87,18 @@ def generic_task_factory[T: tasks.Task](
     extra_args: bool | None,
     bind: bool,
     condition: tasks.BaseCondition | None,
-    before: typing.Sequence["TaskTypeOrProxy"] | None,
-    after: typing.Sequence["TaskTypeOrProxy"] | None,
-    cleanup: typing.Sequence["TaskTypeOrProxy"] | None,
+    before: typing.Sequence[typing.Callable] | None,
+    after: typing.Sequence[typing.Callable] | None,
+    cleanup: typing.Sequence[typing.Callable] | None,
     bases: tuple[type[T], ...],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
-) -> type[T]: ...
+) -> T: ...
 
 
 @typing.overload
 def generic_task_factory[T: tasks.Task](
-    fn: None = None,
+    obj: None = None,
     *,
     private: bool | None = None,
     bases: tuple[type[T], ...],
@@ -109,15 +108,15 @@ def generic_task_factory[T: tasks.Task](
     extra_args: bool | None,
     bind: bool,
     condition: tasks.BaseCondition | None,
-    before: typing.Sequence["TaskTypeOrProxy"] | None,
-    after: typing.Sequence["TaskTypeOrProxy"] | None,
-    cleanup: typing.Sequence["TaskTypeOrProxy"] | None,
+    before: typing.Sequence[typing.Callable] | None,
+    after: typing.Sequence[typing.Callable] | None,
+    cleanup: typing.Sequence[typing.Callable] | None,
 ) -> PartialReturnType[T]: ...
 
 
 @typing.overload
 def generic_task_factory[T: tasks.Task](
-    fn: typing.Callable | None = None,
+    obj: typing.Callable | type[T] | None = None,
     *,
     name: str | None = None,
     aliases: typing.Sequence[str] | None = None,
@@ -126,9 +125,9 @@ def generic_task_factory[T: tasks.Task](
     extra_args: bool | None = None,
     bind: bool = False,
     condition: tasks.BaseCondition | None = None,
-    before: typing.Sequence["TaskTypeOrProxy"] | None = None,
-    after: typing.Sequence["TaskTypeOrProxy"] | None = None,
-    cleanup: typing.Sequence["TaskTypeOrProxy"] | None = None,
+    before: typing.Sequence[typing.Callable] | None = None,
+    after: typing.Sequence[typing.Callable] | None = None,
+    cleanup: typing.Sequence[typing.Callable] | None = None,
     bases: tuple[type[T], ...],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
@@ -139,7 +138,7 @@ def generic_task_factory[T: tasks.Task](
 def generic_task_factory[  # noqa: PLR0913
     T: tasks.Task
 ](
-    fn: typing.Callable | None = None,
+    obj: typing.Callable | type[T] | None = None,
     *,
     name: str | None = None,
     aliases: typing.Sequence[str] | None = None,
@@ -148,10 +147,10 @@ def generic_task_factory[  # noqa: PLR0913
     extra_args: bool | None = None,
     bind: bool = False,
     condition: tasks.BaseCondition | None = None,
-    before: typing.Sequence["TaskTypeOrProxy"] | None = None,
-    after: typing.Sequence["TaskTypeOrProxy"] | None = None,
-    cleanup: typing.Sequence["TaskTypeOrProxy"] | None = None,
-    bases: tuple[type[T], ...],
+    before: typing.Sequence[typing.Callable] | None = None,
+    after: typing.Sequence[typing.Callable] | None = None,
+    cleanup: typing.Sequence[typing.Callable] | None = None,
+    bases: tuple[type[typing.Any], ...],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
 ) -> DecoratorReturnType[T]:
@@ -175,9 +174,9 @@ def generic_task_factory[  # noqa: PLR0913
             def get_cmd_args(self):
                 return ["-m", "my_module", self.get_extra_cmd_args()]
 
-        def module_task(fn=None, **kwargs):
+        def module_task(obj=None, **kwargs):
             return generic_task(
-                fn,
+                obj,
                 bases=(MyModuleTask,),
                 override_method=tasks.Command.get_extra_cmd_args.__name__,
                 **kwargs,
@@ -189,7 +188,7 @@ def generic_task_factory[  # noqa: PLR0913
             return ["hello"]
 
 
-    :param fn: The function to create the task from. If None, a partial
+    :param obj: The function to create the task from. If None, a partial
         function will be returned, so you can use this function as a decorator
         with the arguments.
     :param name: The name of the task.
@@ -210,10 +209,10 @@ def generic_task_factory[  # noqa: PLR0913
     :param override_method: The method to override in the task.
     :param attrs: Extra keyword arguments for the task class.
 
-    :returns: The task class, or, if `fn` is None, a partial function to be
+    :returns: The task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
-    if fn is None:
+    if obj is None:
         return functools.partial(
             generic_task_factory,
             name=name,
@@ -253,30 +252,35 @@ def generic_task_factory[  # noqa: PLR0913
     if cleanup:
         kwds["cleanup"] = cleanup
 
-    if bind:
-        new_fn = functools.partialmethod(fn)  # type: ignore
+    if isinstance(obj, type) and issubclass(obj, tasks.Task):
+        # bind or bases have no effect on classes
+        bases = (obj,)
     else:
-        # Still wrap as a method
-        def new_fn(_, *args, **kwargs):
-            return fn(*args, **kwargs)
+        if bind:
+            new_fn = functools.partialmethod(obj)  # type: ignore
+        else:
+            # Still wrap as a method
+            def new_fn(_, *args, **kwargs):
+                return obj(*args, **kwargs)
 
-    kwds[override_method] = new_fn
+        kwds[override_method] = new_fn
 
-    return tasks._TaskMeta(
-        fn.__name__,
+    cls = tasks._TaskMeta(
+        obj.__name__,
         bases,
         kwds,
         name=name,
         aliases=aliases,
-        defined_from=fn,
+        defined_from=obj,
         private=private,
-    )  # type: ignore
+    )
+    return cls()  # type: ignore
 
 
 @typing.overload
 def task(
-    fn: typing.Callable,
-) -> type[tasks.Task]: ...
+    obj: typing.Callable,
+) -> tasks.Task: ...
 
 
 @typing.overload
@@ -286,7 +290,7 @@ def task(
 
 
 def task(  # noqa: PLR0913
-    fn: typing.Callable | None = None,
+    obj: typing.Callable | None = None,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Task]:
     '''Create a task from a function.
@@ -302,15 +306,15 @@ def task(  # noqa: PLR0913
             """Docstring will be used as help text."""
             print("Hello, world!")
 
-    :param fn: The function to create the task from.
+    :param obj: The function to create the task from.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
-    :returns: The task class, or, if `fn` is None, a partial function to be
+    :returns: The task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
     return generic_task_factory(
-        fn,
+        obj,
         **kwargs,
         bases=(tasks.Task,),
         override_method=tasks.Task.run.__name__,
@@ -319,8 +323,8 @@ def task(  # noqa: PLR0913
 
 @typing.overload
 def script(
-    fn: typing.Callable[..., str],
-) -> type[tasks.Script]: ...
+    obj: typing.Callable[..., str],
+) -> tasks.Script: ...
 
 
 @typing.overload
@@ -334,7 +338,7 @@ def script(
 
 
 def script(  # noqa: PLR0913
-    fn: typing.Callable[..., str] | None = None,
+    obj: typing.Callable[..., str] | None = None,
     *,
     executable: str | None = None,
     env: dict[str, str] | None = None,
@@ -354,18 +358,18 @@ def script(  # noqa: PLR0913
             """Docstring will be used as help text."""
             return "echo Hello, world!"
 
-    :param fn: The function to create the script from.
+    :param obj: The function to create the script from.
     :param executable: The executable to use for the script.
     :param env: The environment variables for the script.
     :param cwd: The working directory for the script.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
-    :returns: The task class, or, if `fn` is None, a partial function to be
+    :returns: The task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
     return generic_task_factory(
-        fn,
+        obj,
         bases=(tasks.Script,),
         override_method=tasks.Script.get_script.__name__,
         attrs={"env": env, "cwd": cwd, "executable": executable},
@@ -375,8 +379,8 @@ def script(  # noqa: PLR0913
 
 @typing.overload
 def command(
-    fn: typing.Callable[..., typing.Sequence[str] | str],
-) -> type[tasks.Command]: ...
+    obj: typing.Callable[..., typing.Sequence[str] | str],
+) -> tasks.Command: ...
 
 
 @typing.overload
@@ -389,7 +393,7 @@ def command(
 
 
 def command(  # noqa: PLR0913
-    fn: typing.Callable[..., typing.Sequence[str]] | None = None,
+    obj: typing.Callable[..., typing.Sequence[str]] | None = None,
     *,
     env: dict[str, str] | None = None,
     cwd: str | None = None,
@@ -408,17 +412,17 @@ def command(  # noqa: PLR0913
             """Docstring will be used as help text."""
             return ["program", "arg1", "arg2"]
 
-    :param fn: The function to create the command task from.
+    :param obj: The function to create the command task from.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
     :param env: The environment variables for the command task.
     :param cwd: The working directory for the command task.
 
-    :returns: The command task class, or, if `fn` is None, a partial function to be
+    :returns: The command task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
     return generic_task_factory(
-        fn,
+        obj,
         bases=(tasks.Command,),
         override_method=tasks.Command.get_cmd.__name__,
         attrs={"env": env, "cwd": cwd},
@@ -428,8 +432,8 @@ def command(  # noqa: PLR0913
 
 @typing.overload
 def group(
-    fn: typing.Callable,
-) -> type[tasks.Group]: ...
+    obj: typing.Callable,
+) -> tasks.Group: ...
 
 
 @typing.overload
@@ -439,30 +443,30 @@ def group(  # noqa: PLR0913
 
 
 def group(  # noqa: PLR0913
-    fn: typing.Callable | None = None,
+    obj: typing.Callable | None = None,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Group]:
     """Create a group task from a function.
 
     The returned task will run in the same order without extra arguments.
     To add arguments to individual tasks in the group, you can use
-    :func:`partial_task`.
+    :func:`functools.partial`.
 
     .. code-block:: python
 
         @group(args=["arg1"])
         def my_group(arg1):
-            return [task1, partial_task(task2, arg1)]
+            return [task1, functools.partial(task2, arg1)]
 
-    :param fn: The function to create the group task from.
+    :param obj: The function to create the group task from.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
-    :returns: The group task class, or, if `fn` is None, a partial function to be
+    :returns: The group task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     """
     return generic_task_factory(
-        fn,
+        obj,
         bases=(tasks.Group,),
         override_method=tasks.Group.get_tasks.__name__,
         **kwargs,
@@ -471,8 +475,8 @@ def group(  # noqa: PLR0913
 
 @typing.overload
 def thread_group(
-    fn: typing.Callable,
-) -> type[tasks.ThreadGroup]: ...
+    obj: typing.Callable,
+) -> tasks.ThreadGroup: ...
 
 
 @typing.overload
@@ -482,13 +486,13 @@ def thread_group(
 
 
 def thread_group(  # noqa: PLR0913
-    fn: typing.Callable | None = None,
+    obj: typing.Callable | None = None,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.ThreadGroup]:
     """Create a thread group task from a function.
 
     The returned task will run in parallel. To add arguments to individual tasks
-    in the group, you can return an instance of `partial_task` with the task and the
+    in the group, you can use `functools.partial` with the task and the
     arguments.
 
     Note that the tasks run in separate threads, so they should be thread-safe. This
@@ -498,17 +502,17 @@ def thread_group(  # noqa: PLR0913
 
         @thread_group(args=["arg1"])
         def my_group(arg1):
-            return [task1, partial_task(task2, arg1)]
+            return [task1, functools.partial(task2, arg1)]
 
-    :param fn: The function to create the thread group task from.
+    :param obj: The function to create the thread group task from.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
-    :returns: The thread group task class, or, if `fn` is None, a partial function to
+    :returns: The thread group task class, or, if `obj` is None, a partial function to
         be used as a decorator for a function.
     """
     return generic_task_factory(
-        fn,
+        obj,
         bases=(tasks.ThreadGroup,),
         override_method=tasks.ThreadGroup.get_tasks.__name__,
         **kwargs,

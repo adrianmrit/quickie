@@ -24,8 +24,7 @@ from .context import Context
 
 MAX_SHORT_HELP_LENGTH = 50
 
-type TaskType = type[Task]
-type TaskTypeOrProxy = type[Task] | _TaskProxy
+type TaskTypeOrProxy = Task | _TaskProxy
 
 
 class _TaskMeta(type):
@@ -83,17 +82,6 @@ class _TaskMeta(type):
             cls._qk_defined_from = None
         return cls
 
-    def _get_relative_file_location(cls, basedir) -> str | None:
-        """Returns the file and line number where the class was defined."""
-        import inspect
-
-        if cls._qk_defined_from is None:
-            return None
-        file = inspect.getfile(cls._qk_defined_from)
-        source_lines = inspect.getsourcelines(cls._qk_defined_from)
-        relative_path = os.path.relpath(file, basedir)
-        return f"{relative_path}:{source_lines[1]}"
-
     @property
     def name(cls) -> str:
         """Name of the task."""
@@ -142,25 +130,36 @@ class Task(metaclass=_TaskMeta, private=True):
     See :mod:`quickie.conditions` for more information.
     """
 
-    before: typing.ClassVar[typing.Sequence[TaskType]] = ()
+    before: typing.ClassVar[typing.Sequence["Task"]] = ()
     """Tasks to run before this task.
 
     These tasks are run in the order they are defined. If one of the
     tasks fails, the remaining tasks are not run, except for cleanup tasks.
     """
 
-    after: typing.ClassVar[typing.Sequence[TaskType]] = ()
+    after: typing.ClassVar[typing.Sequence["Task"]] = ()
     """Tasks to run after this task.
 
     These tasks are run in the order they are defined. If one of the
     tasks fails, the remaining tasks are not run, except for cleanup tasks.
     """
 
-    cleanup: typing.ClassVar[typing.Sequence[TaskType]] = ()
+    cleanup: typing.ClassVar[typing.Sequence["Task"]] = ()
     """Tasks to run at the end, even if the task, or before or after tasks fail.
 
     If one of the cleanup tasks fails, the remaining cleanup tasks are still run.
     """
+
+    def _get_relative_file_location(self, basedir) -> str | None:
+        """Returns the file and line number where the class was defined."""
+        import inspect
+
+        if self._qk_defined_from is None:
+            return None
+        file = inspect.getfile(self._qk_defined_from)
+        source_lines = inspect.getsourcelines(self._qk_defined_from)
+        relative_path = os.path.relpath(file, basedir)
+        return f"{relative_path}:{source_lines[1]}"
 
     @functools.cached_property
     def parser(self) -> argparse.ArgumentParser:
@@ -216,11 +215,9 @@ class Task(metaclass=_TaskMeta, private=True):
         :return: The parser.
         """
         if "prog" not in kwargs:
-            if name is None:
-                name = self.name
-            prog = f"{app.program_name} {name}"
-            kwargs["prog"] = prog
-        kwargs.setdefault("description", self.get_help())
+            kwargs["prog"] = name or self.name
+        if "description" not in kwargs:
+            kwargs["description"] = self.get_help()
         parser = argparse.ArgumentParser(**kwargs)
         return parser
 
@@ -274,7 +271,7 @@ class Task(metaclass=_TaskMeta, private=True):
             return app.tasks[task_cls]
         return task_cls
 
-    def get_before(self, *args, **kwargs) -> typing.Iterator[TaskType]:
+    def get_before(self, *args, **kwargs) -> typing.Iterator["Task"]:
         """Get the tasks to run before this task.
 
         You may override this method to customize the behavior.
@@ -288,7 +285,7 @@ class Task(metaclass=_TaskMeta, private=True):
         for before in self.before:
             yield self._resolve_related(before)
 
-    def get_after(self, *args, **kwargs) -> typing.Iterator[TaskType]:
+    def get_after(self, *args, **kwargs) -> typing.Iterator["Task"]:
         """Get the tasks to run after this task.
 
         You may override this method to customize the behavior.
@@ -302,7 +299,7 @@ class Task(metaclass=_TaskMeta, private=True):
         for after in self.after:
             yield self._resolve_related(after)
 
-    def get_cleanup(self, *args, **kwargs) -> typing.Iterator[TaskType]:
+    def get_cleanup(self, *args, **kwargs) -> typing.Iterator["Task"]:
         """Get the tasks to run after this task, even if it fails.
 
         You may override this method to customize the behavior.
@@ -322,8 +319,8 @@ class Task(metaclass=_TaskMeta, private=True):
         :param args: Unknown arguments.
         :param kwargs: Parsed known arguments.
         """
-        for task_cls in self.get_before(*args, **kwargs):
-            task_cls()()
+        for task in self.get_before(*args, **kwargs):
+            task()
 
     def run_after(self, *args, **kwargs):
         """Run the tasks after this task.
@@ -331,8 +328,8 @@ class Task(metaclass=_TaskMeta, private=True):
         :param args: Unknown arguments.
         :param kwargs: Parsed known arguments.
         """
-        for task_cls in self.get_after(*args, **kwargs):
-            task_cls()()
+        for task in self.get_after(*args, **kwargs):
+            task()
 
     def run_cleanup(self, *args, **kwargs):
         """Run the tasks after this task, even if it fails.
@@ -340,11 +337,11 @@ class Task(metaclass=_TaskMeta, private=True):
         :param args: Unknown arguments.
         :param kwargs: Parsed known arguments.
         """
-        for task_cls in self.get_cleanup(*args, **kwargs):
+        for task in self.get_cleanup(*args, **kwargs):
             try:
-                task_cls()()
+                task()
             except Exception as e:
-                app.logger.error(f"Error running cleanup task {task_cls}: {e}")
+                app.logger.error(f"Error running cleanup task {task}: {e}")
                 continue
 
     def condition_passes(self, *args, **kwargs):
@@ -630,23 +627,27 @@ class Script(_BaseSubprocessTask, private=True):
         return result
 
 
+# TODO: Use an actual proxy that resolves the task class when any attribute is accessed
 class _TaskProxy(abc.ABC):
     """A proxy for tasks that resolves the task class when called."""
 
     @abc.abstractmethod
-    def resolve_task_cls(self) -> TaskType:
+    def resolve_task(self) -> "Task":
         """Resolve the task class."""
         pass  # pragma: no cover
 
-    def __call__(self, *args, **kwargs) -> Task:
-        """Resolves and initializes the task class.
+    def run(self, *args, **kwargs):
+        """Runs the task, excluding before, after, and cleanup tasks."""
+        task = self.resolve_task()
+        return task.run(*args, **kwargs)
 
-        This allows to use the same interface as when initializing a task class.
-        """
-        task_cls = self.resolve_task_cls()
-        return task_cls(*args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        """Runs the task."""
+        task = self.resolve_task()
+        return task(*args, **kwargs)
 
 
+# accessed
 class _LazyTaskProxy(_TaskProxy):
     """Used to resolve the task class lazily."""
 
@@ -654,64 +655,35 @@ class _LazyTaskProxy(_TaskProxy):
         self.name = name
 
     @typing.override
-    def resolve_task_cls(self) -> TaskType:
+    def resolve_task(self) -> "Task":
         """Resolve the task class."""
         from quickie import app
 
         return app.tasks[self.name]
 
 
-class _PartialTaskProxy(_TaskProxy):
-    """Wrapper for partial tasks."""
-
-    def __init__(self, task_cls: TaskTypeOrProxy, *args, **kwargs):
-        self.task_cls = task_cls
-        self.args = args
-        self.kwargs = kwargs
-
-    @typing.override
-    def resolve_task_cls(self) -> TaskType:
-        task_cls = self.task_cls
-        while isinstance(task_cls, _TaskProxy):
-            task_cls = task_cls.resolve_task_cls()
-        return task_cls
-
-    def __call__(self, *args, **kwargs) -> Task:
-        """Patch full_run to inject the arguments, and return the instance.
-
-        This way we can inject the arguments without subclassing or modifying the
-        original task class. And this also allows to use the same interface as when
-        initializing a task class.
-        """
-        instance = super().__call__(*args, **kwargs)
-        instance.full_run = functools.partial(  # type: ignore
-            instance.full_run, *self.args, **self.kwargs
-        )
-        return instance
-
-
 class _SuppressErrorsTaskProxy(_TaskProxy):
     """Wrapper to suppress errors for a task."""
 
-    class suppress_decorator(contextlib.ContextDecorator, contextlib.suppress):
-        pass
-
-    def __init__(self, task_cls: TaskTypeOrProxy, *exceptions: type[Exception]):
-        self.task_cls = task_cls
+    def __init__(self, task: TaskTypeOrProxy, *exceptions: type[Exception]):
+        self.task = task
         self.exceptions = exceptions or (Exception,)
 
     @typing.override
-    def resolve_task_cls(self) -> TaskType:
-        task_cls = self.task_cls
-        while isinstance(task_cls, _TaskProxy):
-            task_cls = task_cls.resolve_task_cls()
-        return task_cls  # type: ignore
+    def resolve_task(self) -> "Task":
+        task = self.task
+        while isinstance(task, _TaskProxy):
+            task = task.resolve_task()
+        return task  # type: ignore
 
-    def __call__(self, *args, **kwargs) -> Task:
+    def __call__(self, *args, **kwargs):
         """Patches full_run to ignore errors, and returns the instance."""
-        instance = super().__call__(*args, **kwargs)
-        instance.full_run = self.suppress_decorator(*self.exceptions)(instance.full_run)  # type: ignore
-        return instance
+        task = self.resolve_task()
+
+        with contextlib.suppress(*self.exceptions):
+            # We need to use the original task class, not the proxy
+            # to avoid infinite recursion
+            return task(*args, **kwargs)
 
 
 def lazy_task(name: str) -> TaskTypeOrProxy:
@@ -728,23 +700,6 @@ def lazy_task(name: str) -> TaskTypeOrProxy:
     :returns: A lazy task proxy.
     """
     return _LazyTaskProxy(name)
-
-
-def partial_task(task_cls: TaskTypeOrProxy | str, *args, **kwargs) -> _PartialTaskProxy:
-    """Wraps a task class with partial arguments.
-
-    This is useful when you want to inject arguments to a task without subclassing or
-    modifying the original task class.
-
-    :param task_cls: The task class or lazy task to wrap.
-    :param args: The arguments to inject.
-    :param kwargs: The keyword arguments to inject.
-
-    :returns: A partial task proxy.
-    """
-    if isinstance(task_cls, str):
-        task_cls = lazy_task(task_cls)
-    return _PartialTaskProxy(task_cls, *args, **kwargs)
 
 
 def suppressed_task(
@@ -764,10 +719,10 @@ def suppressed_task(
 class _TaskGroup(Task, private=True):
     """Base class for tasks that run other tasks."""
 
-    task_classes: typing.ClassVar[typing.Sequence[TaskType | str]] = ()
+    tasks: typing.ClassVar[typing.Sequence["Task | str"]] = ()
     """The task classes to run."""
 
-    def get_tasks(self, *args, **kwargs) -> typing.Iterable[TaskType]:
+    def get_tasks(self, *args, **kwargs) -> typing.Iterable["Task"]:
         """Get the tasks to run.
 
         You may override this method to customize the behavior.
@@ -778,14 +733,14 @@ class _TaskGroup(Task, private=True):
 
         :returns: An iterator of tasks to run.
         """
-        for task_cls in self.task_classes:
-            yield self._resolve_related(task_cls)
+        for task in self.tasks:
+            yield self._resolve_related(task)
 
-    def _run_task(self, task_cls: TaskType):
+    def _run_task(self, task: "Task"):
         """Run a task."""
         # This is safer than passing the parent arguments. If need to pass
-        # extra arguments, can override get_tasks and use partial_task
-        return task_cls().__call__()
+        # extra arguments, can override get_tasks and use functools.partial
+        return task()
 
 
 class Group(_TaskGroup, private=True):
@@ -794,8 +749,8 @@ class Group(_TaskGroup, private=True):
     @typing.final
     @typing.override
     def run(self, *args, **kwargs):
-        for task_cls in self.get_tasks(*args, **kwargs):
-            self._run_task(task_cls)
+        for task in self.get_tasks(*args, **kwargs):
+            self._run_task(task)
 
 
 class ThreadGroup(_TaskGroup, private=True):
@@ -834,24 +789,28 @@ class ThreadGroup(_TaskGroup, private=True):
 class _SuppressLogsTaskProxy(_TaskProxy):
     """Wrapper to suppress logs for a task."""
 
-    def __init__(self, task_cls: TaskTypeOrProxy):
-        self.task_cls = task_cls
+    def __init__(self, task: TaskTypeOrProxy):
+        self.task = task
 
     @typing.override
-    def resolve_task_cls(self) -> TaskType:
-        task_cls = self.task_cls
-        while isinstance(task_cls, _TaskProxy):
-            task_cls = task_cls.resolve_task_cls()
-        return task_cls  # type: ignore
+    def resolve_task(self) -> "Task":
+        task = self.task
+        while isinstance(task, _TaskProxy):
+            task = task.resolve_task()
+        return task  # type: ignore
 
-    def __call__(self, *args, **kwargs) -> Task:
+    def __call__(self, *args, **kwargs):
         """Patches the task to suppress logs and returns the instance."""
-        instance = super().__call__(*args, **kwargs)
-        instance.log_task_execution_details = lambda *args, **kwargs: None
-        return instance
+        instance = self.resolve_task()
+        old_log_task_execution = instance.log_task_execution_details
+        try:
+            instance.log_task_execution_details = lambda *_, **__: None
+            return instance(*args, **kwargs)
+        finally:
+            instance.log_task_execution_details = old_log_task_execution
 
 
-def suppress_logs(task_cls: TaskTypeOrProxy) -> _SuppressLogsTaskProxy:
+def suppress_logs(task: TaskTypeOrProxy) -> _SuppressLogsTaskProxy:
     """Wraps a task class to suppress logs.
 
     This is useful for tasks that may log sensitive information, such as
@@ -860,6 +819,6 @@ def suppress_logs(task_cls: TaskTypeOrProxy) -> _SuppressLogsTaskProxy:
     :param task_cls: The task class or lazy task to wrap.
     :returns: An instance of _SuppressLogsTaskProxy wrapping the task class.
     """
-    if isinstance(task_cls, str):
-        task_cls = lazy_task(task_cls)
-    return _SuppressLogsTaskProxy(task_cls)
+    if isinstance(task, str):
+        task = lazy_task(task)
+    return _SuppressLogsTaskProxy(task)
