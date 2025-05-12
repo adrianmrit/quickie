@@ -78,7 +78,7 @@ Fixes for global runner.
 - Changed command from `qck` and `qckg` to `qk` and `qkg`.
 
 
-## UNRELEASED
+## Release 0.5.0
 
 ### Removed
 - Removed `partial_task`. `functools.partial` can be used instead.
