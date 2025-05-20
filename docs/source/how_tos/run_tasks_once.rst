@@ -19,6 +19,10 @@ By default the arguments are not taken into account, but this can be accomplishe
         print(f"This will only run the first time with arg: {arg}")
 
 
+You can also use :func:`functools.cache` or :func:`functools.lru_cache`, however these will only prevent the task from running if the arguments are the same,
+having the same effect as ``FirstRun(check_args=True)``.
+
+
 In a similar way, you can use the :class:`quickie.conditions.FilesModified` condition to only run a task if certain files have been modified since the last run.
 
 .. code-block:: python

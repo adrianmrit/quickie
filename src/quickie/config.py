@@ -12,6 +12,7 @@ from frozendict import frozendict
 from quickie.context import Context
 from quickie.utils import imports
 from quickie.utils.console import QkConsole
+import rich.traceback
 from rich.theme import Theme
 from rich.text import Text
 from rich.logging import RichHandler
@@ -197,6 +198,8 @@ class App:
         :param verbosity: The verbosity level. -1 for quiet, 0 for normal,
             1 for verbose, 2 for very verbose.
         """
+        import quickie
+
         self.verbosity = min(verbosity, 2)
 
         if verbosity == 0:
@@ -221,6 +224,17 @@ class App:
         # set level for the root logger
         logging.getLogger().setLevel(self.log_level)
         self.logger.debug(f"Log level set to: {self.log_level}")
+
+        if self.log_level > logging.DEBUG:
+            sys.excepthook = self._simple_error_hook
+        else:
+            rich.traceback.install(suppress=[quickie])
+
+    def _simple_error_hook(
+        self, type_: type[BaseException], value: BaseException, traceback
+    ):
+        """Simple error hook that prints the error message to the console."""
+        self.error_console.print(f"[bold red]{type_.__name__}:[/bold red] {value}")
 
     def set_log_file(self, log_file: str | Path | None):
         """Set the log file for the application.
