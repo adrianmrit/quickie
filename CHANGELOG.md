@@ -110,3 +110,9 @@ Fixes for global runner.
 - Add logging and logging levels.
 - Documentation for custom task factories.
 - Can define the working directory for a command or script to be the parent of the tasks directory.
+
+
+## Release 0.5.1
+
+### Changed
+- Only show error tracebacks when verbosity is set to 2 or higher.
