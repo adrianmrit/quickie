@@ -116,3 +116,13 @@ Fixes for global runner.
 
 ### Changed
 - Only show error tracebacks when verbosity is set to 2 or higher.
+
+
+## Unreleased
+
+### Changed
+
+- Default task names are transformed to lowercase, contiguous or single underscores are replaces with a single dash, and leading and trailing underscores/dashes are removed.
+
+### Fixed
+- Can retrieve the file and line of tasks defined from functions wrapped with `functools.wraps`.
