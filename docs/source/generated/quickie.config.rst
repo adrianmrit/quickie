@@ -12,6 +12,7 @@ quickie.config
       console
       error_console
       logger
+      context
    
    .. rubric:: Classes
 

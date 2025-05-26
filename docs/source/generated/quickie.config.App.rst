@@ -16,6 +16,7 @@
       ~App.__init__
       ~App.configure
       ~App.load_tasks
+      ~App.set_context
       ~App.set_home_path
       ~App.set_log_file
       ~App.set_project_path

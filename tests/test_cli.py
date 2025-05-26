@@ -132,10 +132,10 @@ def test_list(capsys):
     assert exc_info.value.code == 0, str(capsys.readouterr())
     out, err = capsys.readouterr()
     assert "hello" in out
-    assert "other_task" in out, f"out: {out}, err: {err}"
+    assert "other-task" in out, f"out: {out}, err: {err}"
     assert "cls_holder:hello" in out, f"out: {out}, err: {err}"
     assert "dict:task:hello" in out, f"out: {out}, err: {err}"
-    assert "dict:task:other_ta" in out, f"out: {out}, err: {err}"
+    assert "dict:task:other-ta" in out, f"out: {out}, err: {err}"
     assert "Hello world task." in out
 
     assert "nested:other" in out, f"out: {out}, err: {err}"

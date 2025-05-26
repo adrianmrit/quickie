@@ -7,6 +7,7 @@ that need them. Python does not usually allow importing from a folder outside th
 :func:`quickie.utils.imports.import_from_path`, which allows you to retrieve a module from a path.
 
 For example, it could work like this:
+
 .. code-block:: python
 
     from quickie import task, Namespace
@@ -32,6 +33,7 @@ For example, it could work like this:
 
 This idea can also be used to keep a backup of private tasks in a separate repository, i.e. a private GitHub repository.
 For example, the project could have a setup like this:
+
 .. code-block:: python
 
     # main_project/_qk/__init__.py

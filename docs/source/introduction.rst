@@ -1,27 +1,31 @@
 Introduction
 ============
 
-Quickie is a simple task runner, inspired on tools like `cargo-make <https://github.com/sagiegurari/cargo-make>`_,
-`Task <https://taskfile.dev>`_, and `invoke <https://www.pyinvoke.org>`_.
+Quickie is a simple task runner, inspired on tools like `celery <https://docs.celeryproject.org/en/stable/index.html>`,
+`cargo-make <https://github.com/sagiegurari/cargo-make>`_, `Task <https://taskfile.dev>`_, and `invoke <https://www.pyinvoke.org>`_.
 It aims to be simple to use, easy to extend, and to provide a good experience for developers and teams.
 
 Unlike other task runners that define tasks in YAML, TOML or specialized formats, Quickie uses the Python programming language
 directly, leveraging the power of the language and the ecosystem around it. This means for example, that syntax highlighting,
-errors, and auto completion in most code editors will work out of the box. Still, Quickie is not limited to Python projects.
+errors, and auto completion in most code editors will work out of the box.
+
+Quickie is not limited to Python projects, you can for example define a virtual environment with Quickie and other dependencies
+alongside a project that is not using Python at all, similar to how make can be used in non C/C++ projects.
 
 Some features include:
 
 * Run python, shell scripts, and subprocesses as tasks.
 * Powerful arguments parsing, by wrapping `argparse <https://docs.python.org/3/library/argparse.html>`_.
-* Autocompletion both for the CLI and the individual tasks, thanks to `argcomplete <https://pypi.org/project/argcomplete/>`_.
+* Autocompletion both for the CLI and tasks, thanks to `argcomplete <https://pypi.org/project/argcomplete/>`_.
 * Custom autocompletion for task arguments.
-* Conditions to control when or if a task should run.
+* Conditions to run tasks only if certain conditions are met.
 * Dependencies between tasks.
 * Namespaces to organize tasks.
 
 Requirements
 --------------
-Quickie works with macOS, Linux and Windows. Python 3.12 or higher is required.
+
+Quickie has been tested on macOs, but should work on Linux and Windows as well. If you find any issues, please open an issue on GitHub.
 
 
 Per Project Installation
@@ -153,10 +157,10 @@ Now you can run the tasks from anywhere in the project, even from a subdirectory
     $ qk hello
     Hello, World!
 
-    $ qk hello_script --name Alice
+    $ qk hello-script --name Alice
     Hello, Alice!
 
-    $ qk some_command arg1 arg2
+    $ qk some-command arg1 arg2
     my_command arg1 arg2
 
 

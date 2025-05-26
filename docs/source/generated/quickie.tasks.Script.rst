@@ -20,12 +20,12 @@
       ~Script.get_after
       ~Script.get_before
       ~Script.get_cleanup
-      ~Script.get_wd
       ~Script.get_env
       ~Script.get_help
       ~Script.get_parser
       ~Script.get_script
       ~Script.get_short_help
+      ~Script.get_wd
       ~Script.log_task_execution
       ~Script.log_task_execution_details
       ~Script.parse_and_run
@@ -48,11 +48,11 @@
       ~Script.before
       ~Script.cleanup
       ~Script.condition
-      ~Script.wd
       ~Script.env
       ~Script.executable
       ~Script.extra_args
       ~Script.parser
       ~Script.script
+      ~Script.wd
    
    

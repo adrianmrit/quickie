@@ -21,6 +21,29 @@ from quickie.utils.argparser import Arg
 
 
 MAX_SHORT_HELP_LENGTH = 50
+_UNDERSCORE_SUB_REGEX = re.compile(r"_+")
+
+
+def identifier_to_task_name(identifier: str) -> str:
+    """Transforms a python identifier to a task name.
+
+    This is useful to convert a class name or function name to a task name.
+    The transformation is done by replacing all continuous underscores with a dash
+    and converting the string to lowercase. The result is stripped of leading and
+    trailing dashes.
+
+    Example:
+        >>> identifier_to_task_name("MyTask")
+        "mytask"
+        "my-task"
+        >>> identifier_to_task_name("My__Task_")
+        "my-task"
+
+    :param identifier: The python identifier to transform.
+
+    :returns: The transformed task name.
+    """
+    return _UNDERSCORE_SUB_REGEX.sub("-", identifier).strip("-").lower()
 
 
 class Task:
@@ -113,7 +136,7 @@ class Task:
             after tasks fail. If not provided, it defaults to the class attribute
             :attr:`cleanup`.
         """
-        self.name = name or self.__class__.__name__
+        self.name = name or identifier_to_task_name(self.__class__.__name__)
         self.aliases = aliases or ()
         self.private = private
 
@@ -131,10 +154,22 @@ class Task:
 
         if self.defined_from is None:
             return None
-        file = inspect.getfile(self.defined_from)
-        source_lines = inspect.getsourcelines(self.defined_from)
-        relative_path = os.path.relpath(file, basedir)
-        return f"{relative_path}:{source_lines[1]}"
+
+        defined_from = self.defined_from
+
+        # functools.wraps and functools.lru_cache will return a wrapped function
+        # We want the original one to get the file and line number.
+        if hasattr(defined_from, "__wrapped__"):
+            defined_from = defined_from.__wrapped__  # type: ignore
+
+        try:
+            file = inspect.getfile(defined_from)
+            source_lines = inspect.getsourcelines(defined_from)
+        except TypeError:
+            return None
+        else:
+            relative_path = os.path.relpath(file, basedir)
+            return f"{relative_path}:{source_lines[1]}"
 
     @functools.cached_property
     def parser(self) -> argparse.ArgumentParser:

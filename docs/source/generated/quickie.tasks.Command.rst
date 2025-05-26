@@ -23,11 +23,11 @@
       ~Command.get_cleanup
       ~Command.get_cmd
       ~Command.get_cmd_args
-      ~Command.get_wd
       ~Command.get_env
       ~Command.get_help
       ~Command.get_parser
       ~Command.get_short_help
+      ~Command.get_wd
       ~Command.log_task_execution
       ~Command.log_task_execution_details
       ~Command.parse_and_run
@@ -53,9 +53,9 @@
       ~Command.cleanup
       ~Command.cmd_args
       ~Command.condition
-      ~Command.wd
       ~Command.env
       ~Command.extra_args
       ~Command.parser
+      ~Command.wd
    
    
