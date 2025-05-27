@@ -11,8 +11,11 @@ from quickie.conditions.base import BaseCondition
 
 __all__ = [
     "BaseCondition",
-    "FilesModified",
+    "condition",
+    "FirstRun",
     "PathsExist",
+    "FilesModified",
+    "All",
 ]
 
 
@@ -39,17 +42,6 @@ class All(BaseCondition):
 class FilesModified(BaseCondition):
     """Check if files have been not being modified."""
 
-    _params_identifier: str
-    """Unique identifier for the parameters."""
-
-    class _KwargsJsonEncoder(json.JSONEncoder):
-        """Custom JSON encoder for the kwargs."""
-
-        def default(self, obj):
-            if isinstance(obj, (pathlib.PurePath)):
-                return str(obj)
-            return super().default(obj)
-
     class Algorithm(enum.StrEnum):
         """Algorithm to use for checking."""
 
@@ -58,39 +50,33 @@ class FilesModified(BaseCondition):
         SHA256 = "sha256"
         TIMESTAMP = "timestamp"
 
-    def __new__(cls, *args, **kwargs):
-        """Create a new instance of the class.
-
-        This is needed to make the class hashable.
-        """
-        # Hash args and kwargs to create a unique key
-        key = (args, json.dumps(kwargs, sort_keys=True, cls=cls._KwargsJsonEncoder))
-        instance = super().__new__(cls)
-        instance.__init__(*args, **kwargs)
-        instance._params_identifier = hashlib.md5(str(key).encode()).hexdigest()
-        return instance
-
     def __init__(
         self,
-        paths: typing.Sequence[str | pathlib.Path],
+        cache_id: typing.LiteralString,
         *,
+        paths: typing.Sequence[str | pathlib.Path],
         exclude: typing.Sequence[str | pathlib.Path] = (),
         algorithm: str | Algorithm = Algorithm.TIMESTAMP,
         allow_missing: bool = False,
     ):
         """Initialize the check.
 
-        The algorithm can be one of :class:`FilesModified.Algorithm`.
-
+        :param cache_id: The identifier of the condition, used as part of the cache file
+            name. It should be unique for each condition instance to avoid conflicts. It
+            is recommended to be something that groups the files being checked, or a
+            random string like an UUID.
         :param paths: The files to check.
         :param exclude: The files to exclude from the check.
         :param algorithm: The algorithm to use for checking.
+            Can be one of :class:`FilesModified.Algorithm` or a string representing the
+            algorithm name, such as "md5", "sha1", "sha256", or "timestamp".
         :param allow_missing: If True, missing files will be treated as if they have not
-            been modified.
+            been modified. Defaults to False.
 
         :raises ValueError: If the algorithm is not supported.
         :return: True if the files have been modified, False otherwise.
         """
+        self.cache_id = cache_id
         self.paths = paths
         self.exclude = exclude
         self.algorithm = self.Algorithm(algorithm)
@@ -98,7 +84,7 @@ class FilesModified(BaseCondition):
 
     def get_cache_file_name(self, task):
         """Return the name of the cache file."""
-        return f"{task.name}.filesmodified.{self.algorithm.value}.{self._params_identifier}.json"
+        return f"{task.name}.filesmodified.{self.cache_id}.json"
 
     def get_cache_file_path(self, task):
         """Return the path of the cache file."""

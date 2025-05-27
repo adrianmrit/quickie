@@ -17,7 +17,9 @@ class TestFilesModified:
         directory = tmpdir.mkdir("directory")
         file2 = directory.join("file2")
         file2.write("other content")
-        condition = FilesModified([file1, directory], algorithm=algorithm)
+        condition = FilesModified(
+            "identifier1", paths=[file1, directory], algorithm=algorithm
+        )
         assert condition(my_task)
         assert not condition(my_task)
         file1.write("new content")
@@ -28,7 +30,10 @@ class TestFilesModified:
         missing_file = directory.join("missing")
         missing_file.write("missing content")
         condition = FilesModified(
-            [file1, directory, missing_file], algorithm=algorithm, allow_missing=False
+            "identifier2",
+            paths=[file1, directory, missing_file],
+            algorithm=algorithm,
+            allow_missing=False,
         )
         assert condition(my_task)
         # Delete the missing file to test the cache
@@ -45,7 +50,10 @@ class TestFilesModified:
 
         # condition with missing files
         condition = FilesModified(
-            [file1, directory, missing_file], algorithm=algorithm, allow_missing=True
+            "identifier3",
+            paths=[file1, directory, missing_file],
+            algorithm=algorithm,
+            allow_missing=True,
         )
         assert condition(my_task)  # params changed, so cache is invalidated
         # Delete the missing file to test the cache
@@ -57,12 +65,17 @@ class TestFilesModified:
         file3 = directory.join("file3")
         file3.write("other content")
         condition = FilesModified(
-            [file1, directory], exclude=[Path(file3)], algorithm=algorithm
+            "identifier4",
+            paths=[file1, directory],
+            exclude=[Path(file3)],
+            algorithm=algorithm,
         )
         assert condition(my_task)
         file3.write("new content")
         assert not condition(my_task)
-        condition = FilesModified([file1, directory], algorithm=algorithm)
+        condition = FilesModified(
+            "identifier5", paths=[file1, directory], algorithm=algorithm
+        )
         assert condition(my_task)
 
 
