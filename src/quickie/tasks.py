@@ -104,7 +104,7 @@ class Task:
         *,
         aliases: typing.Sequence[str] | None = None,
         private: bool = False,
-        defined_from: type | typing.Callable | None = None,
+        wraps: type | typing.Callable | None = None,
         args: typing.Sequence[Arg | str | typing.Sequence[str]] | None = None,
         extra_args: bool | None = None,
         condition: BaseCondition | None = None,
@@ -117,7 +117,7 @@ class Task:
         :param name: The name it can be invoked with. If not provided, it defaults to
             the class name.
         :param aliases: Alternative names it can be invoked with..
-        :param defined_from: The obj (class or function) where the task was defined.
+        :param wraps: The obj (class or function) where the task was defined.
             If not provided, and the task is not private, it defaults to the class
             itself.
         :param private: Whether the task is private. If not provided, it is private if
@@ -140,7 +140,10 @@ class Task:
         self.aliases = aliases or ()
         self.private = private
 
-        self.defined_from = defined_from if defined_from is not None else self.__class__
+        while hasattr(wraps, "__wrapped__"):
+            wraps = wraps.__wrapped__  # type: ignore
+
+        self.__wrapped__ = wraps if wraps is not None else self.__class__
         self.args = args if args is not None else self.args
         self.extra_args = extra_args if extra_args is not None else self.extra_args
         self.condition = condition if condition is not None else self.condition
@@ -152,19 +155,19 @@ class Task:
         """Returns the file and line number where the class was defined."""
         import inspect
 
-        if self.defined_from is None:
+        if self.__wrapped__ is None:
             return None
 
-        defined_from = self.defined_from
+        wraps = self.__wrapped__
 
         # functools.wraps and functools.lru_cache will return a wrapped function
         # We want the original one to get the file and line number.
-        if hasattr(defined_from, "__wrapped__"):
-            defined_from = defined_from.__wrapped__  # type: ignore
+        while hasattr(wraps, "__wrapped__"):
+            wraps = wraps.__wrapped__  # type: ignore
 
         try:
-            file = inspect.getfile(defined_from)
-            source_lines = inspect.getsourcelines(defined_from)
+            file = inspect.getfile(wraps)
+            source_lines = inspect.getsourcelines(wraps)
         except TypeError:
             return None
         else:
@@ -182,8 +185,8 @@ class Task:
         """Get the help message of the task."""
         if self.__doc__:
             return self.__doc__
-        if self.defined_from is not None:
-            return self.defined_from.__doc__ or ""
+        if self.__wrapped__ is not None:
+            return self.__wrapped__.__doc__ or ""
         return ""
 
     def get_short_help(self) -> str:

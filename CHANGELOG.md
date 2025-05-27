@@ -126,3 +126,4 @@ Fixes for global runner.
 
 ### Fixed
 - Can retrieve the file and line of tasks defined from functions wrapped with `functools.wraps`.
+- FilesModified condition now takes a cache id explicitly.

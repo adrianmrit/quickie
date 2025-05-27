@@ -257,7 +257,7 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
     return cls(
         name=name,
         aliases=aliases,
-        defined_from=obj,
+        wraps=obj,
         private=private,
         args=args,
         extra_args=extra_args,
