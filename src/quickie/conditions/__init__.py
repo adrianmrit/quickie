@@ -68,7 +68,7 @@ class FilesModified(BaseCondition):
         :param paths: The files to check.
         :param exclude: The files to exclude from the check.
         :param algorithm: The algorithm to use for checking.
-            Can be one of :class:`FilesModified.Algorithm` or a string representing the
+            Can be one of :class:`quickie.conditions.FilesModified.Algorithm` or a string representing the
             algorithm name, such as "md5", "sha1", "sha256", or "timestamp".
         :param allow_missing: If True, missing files will be treated as if they have not
             been modified. Defaults to False.
@@ -113,9 +113,14 @@ class FilesModified(BaseCondition):
                 # Remove file from cache if it no longer exists
                 # In future runs if it comes to existence, it
                 # should be treated as if it changed.
-                cache.pop(key, None)
-                if not self.allow_missing:
-                    all_matches = False
+                if key in cache:
+                    # File was previously found and no longer exists
+                    if not self.allow_missing:
+                        all_matches = False
+                    cache.pop(key, None)
+                else:
+                    # File was not found before so nothing has changed
+                    continue
             else:
                 val = val_getter(file)
                 matches = cache.get(key, None) == val

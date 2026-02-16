@@ -1,7 +1,7 @@
 Accepting arguments
 ===================
 
-You can define command line arguments for your tasks by using the `args` parameter in the task decorator.
+You can define command line arguments for your tasks by using the ``args`` parameter in the task decorator.
 
 The ``args`` parameter accepts a list containing either:
 

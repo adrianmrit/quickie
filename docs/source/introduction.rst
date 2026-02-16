@@ -1,7 +1,7 @@
 Introduction
 ============
 
-Quickie is a simple task runner, inspired on tools like `celery <https://docs.celeryproject.org/en/stable/index.html>`,
+Quickie is a simple task runner, inspired on tools like `celery <https://docs.celeryproject.org/en/stable/index.html>`_,
 `cargo-make <https://github.com/sagiegurari/cargo-make>`_, `Task <https://taskfile.dev>`_, and `invoke <https://www.pyinvoke.org>`_.
 It aims to be simple to use, easy to extend, and to provide a good experience for developers and teams.
 
@@ -49,8 +49,8 @@ Global installation
 While Quickie allows to run tasks defined between a project, sometimes it is useful to have tasks defined globally and run them
 from anywhere. `quickie-runner-global <https://pypi.org/project/quickie-runner-global/>`_ is a package that allows to do just that.
 
-This is a wrapper around `quickie-runner` that will add a separate `qkg` command, thus not conflicting with `qk`. Tasks in this case
-need to be defined at `~/_qkg`.
+This is a wrapper around ``quickie-runner`` that will add a separate ``qkg`` command, thus not conflicting with ``qk``. Tasks in this case
+need to be defined at ``~/_qkg``.
 
 You can do this install for your default Python installation, or use `pipx <https://pipx.pypa.io/stable/>`_ to create an isolated
 environment.
@@ -83,14 +83,14 @@ With pipx
 Upgrading
 ---------
 
-You can also upgrade via `pip`:
+You can also upgrade via ``pip``:
 
 .. code-block:: bash
 
     pip install --upgrade quickie-runner
 
 
-Or `pipx`:
+Or ``pipx``:
 
 .. code-block:: bash
 
@@ -123,8 +123,8 @@ Quick(ie)start
 Defining tasks
 ^^^^^^^^^^^^^^
 
-Tasks can be defined in a `_qk` Python module, be it a single file or a package, usually at the
-root of the project. For global tasks they can be defined in the same way at `~/_qkg`. They can also
+Tasks can be defined in a ``_qk`` Python module, be it a single file or a package, usually at the
+root of the project. For global tasks they can be defined in the same way at ``~/_qkg``. They can also
 be defined at an arbitrary Python module, and passed to the runner using the ``--module`` or ``-m`` argument.
 
 For example:

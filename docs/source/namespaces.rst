@@ -6,14 +6,14 @@ The best way to do so is to create separate modules for each group of tasks and 
 While we could simple import all tasks from the modules, there is a chance of name conflicts and can create
 confusion. To avoid this, we can use namespaces.
 
-Namespaces are defined by creating an instance of the `Namespace` class and adding modules, other namespaces, or tasks to it.
+Namespaces are defined by creating an instance of the :class:`quickie.Namespace` class and adding modules, other namespaces, or tasks to it.
 
 .. WARNING::
     Tasks and namespaces are loaded in the order they are defined. When a namespace is found, it will be fully
     loaded (i.e. recursively) before moving on to the next task or namespace.
 
 .. WARNING::
-    Simply creating a `Namespace` instance will not load the tasks. The namespace is discovered at the time of
+    Simply creating a :class:`quickie.Namespace` instance will not load the tasks. The namespace is discovered at the time of
     loading tasks, by going through the attributes of the module. Therefore it is important to define the namespace
     as a global variable in the module, or nested within other namespaces.
 

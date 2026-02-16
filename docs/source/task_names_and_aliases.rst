@@ -4,7 +4,7 @@ Task names and aliases
 By default the task name is the function/class name, with underscores and contiguous underscores
 replaced by a single dash, and leading and trailing dashes removed, as to make it a friendlier name.
 
-You can change the task name, or add aliases, by passing the `name` and `alias` arguments to the task decorator,
+You can change the task name, or add aliases, by passing the ``name`` and ``alias`` arguments to the task decorator,
 and these will not be transformed in any way.
 
 .. WARNING::

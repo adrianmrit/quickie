@@ -41,7 +41,7 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
     """Root namespace for tasks.
 
     This class is used to store tasks with their full mappings. This should
-    not be used directly, instead use the :class:`Namespace` class.
+    not be used directly, instead use the :class:`quickie.Namespace` class.
     """
 
     def __init__(self):

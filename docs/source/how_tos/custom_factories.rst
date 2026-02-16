@@ -4,7 +4,7 @@ Custom Factories
 Quickie provides a way to create custom factories for your tasks. This allows you to create tasks that are tailored to your specific needs,
 and to reuse code across multiple tasks.
 
-To make the creation of custom factories easier, Quickie provides the `task_factory_helper` function. This function takes care of the
+To make the creation of custom factories easier, Quickie provides the :func:`quickie.factories.task_factory_helper` function. This function takes care of the
 boilerplate code for you, and allows you to create a custom factory with just a few lines of code.
 
 In the following example we have taken care of adding type hints, but you can skip this step if you don't need them.

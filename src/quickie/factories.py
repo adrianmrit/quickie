@@ -163,7 +163,7 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
     You might find this useful when you have a base class for tasks and you want to
     create your own decorator that creates tasks from functions.
 
-    Other decorators like :func:`task`, :func:`script`, and :func:`command` use this
+    Other decorators like :func:`quickie.task`, :func:`quickie.script`, and :func:`quickie.command` use this
     function internally.
 
     .. code-block:: python

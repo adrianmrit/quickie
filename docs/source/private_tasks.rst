@@ -3,7 +3,7 @@ Private tasks
 
 Sometimes you want to define tasks that are not meant to be run directly, but rather from other tasks. You can use
 simple functions most of the time, but sometimes it is useful to define them as tasks. This can be achieved by
-passing the `private=True` argument to the task decorator.
+passing the ``private=True`` argument to the task decorator.
 
 .. code-block:: python
 

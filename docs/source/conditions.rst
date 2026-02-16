@@ -7,7 +7,7 @@ Conditions are used to determine if a task should run or not. There are some bui
 FirstRun
 --------
 
-The :class:`quickie.conditions.FirstRun` condition is used to run a task only the first time it is called, or the first time with specific arguments if `check_args` is set to `True`.
+The :class:`quickie.conditions.FirstRun` condition is used to run a task only the first time it is called, or the first time with specific arguments if ``check_args`` is set to ``True``.
 It is useful for tasks that should not be repeated, such as initialization tasks or one-time setup.
 
 It can be used as follows:
@@ -44,14 +44,14 @@ It can be used as follows:
 
 :class:`quickie.conditions.FilesModified` takes the following parameters:
 
-- `cache_id`: The identifier of the condition, used as part of the cache file
-    name. It should be unique for each condition instance to avoid conflicts. It
-    is recommended to be something that groups the files being checked, or a
-    random string like an UUID.
-- `paths`: The files to check.
-- `exclude`: The files to exclude from the check.
-- `algorithm``: The algorithm to use for checking. Can be one of :class:`FilesModified.Algorithm` or a string representing the algorithm name, such as "md5", "sha1", "sha256", or "timestamp".
-- `allow_missing`: If True, missing files will be treated as if they have not been modified. Defaults to False.
+- ``cache_id``: The identifier of the condition, used as part of the cache file
+  name. It should be unique for each condition instance to avoid conflicts. It
+  is recommended to be something that groups the files being checked, or a
+  random string like an UUID.
+- ``paths``: The files to check.
+- ``exclude``: The files to exclude from the check.
+- ``algorithm``: The algorithm to use for checking. Can be one of :class:`quickie.FilesModified.Algorithm` or a string representing the algorithm name, such as ``md5``, ``sha1``, ``sha256``, or ``timestamp``.
+- ``allow_missing``: If True, missing files will be treated as if they have not been modified. Defaults to False.
 
 
 PathsExist

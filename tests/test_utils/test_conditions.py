@@ -38,14 +38,14 @@ class TestFilesModified:
         assert condition(my_task)
         # Delete the missing file to test the cache
         missing_file.remove()
-        assert condition(
-            my_task
-        )  # second call should be true since allow_missing is False
-        assert condition(my_task)  # While file is missing the condition will pass
+        assert condition(my_task)
+        # second call should return false since even though the file is missing,
+        # that didn't change from the previous call
+        assert not condition(my_task)
+
+        # File is back, so something changed
         missing_file.write("missing content")
-        assert condition(
-            my_task
-        )  # file is back, but files still changed, so condition holds
+        assert condition(my_task)
         assert not condition(my_task)  # nothing changed, so condition is false
 
         # condition with missing files
