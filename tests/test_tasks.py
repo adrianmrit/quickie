@@ -1,4 +1,5 @@
 import functools
+import types
 
 import pytest
 
@@ -6,7 +7,16 @@ import quickie._namespace
 from quickie import tasks, app
 from quickie.conditions import condition
 from quickie.context import Context
-from quickie.factories import command, group, script, task, thread_group
+from quickie.errors import TaskNotFoundError
+from quickie.factories import (
+    command,
+    group,
+    script,
+    task,
+    task_factory_helper,
+    thread_group,
+)
+from quickie.tasks import MAX_SHORT_HELP_LENGTH, identifier_to_task_name
 
 
 class TestGlobalNamespace:
@@ -473,3 +483,277 @@ class TestThreadTaskGroup:
 
         my_task()
         assert result == ["First", "Second", "Third"]
+
+    def test_exception_propagation(self):
+        class FailingTask(tasks.Task):
+            def run(self):
+                raise ValueError("thread error")
+
+        @thread_group
+        def my_group():
+            return [FailingTask()]
+
+        with pytest.raises(ValueError, match="thread error"):
+            my_group()
+
+
+def test_identifier_to_task_name():
+    assert identifier_to_task_name("MyTask") == "mytask"
+    assert identifier_to_task_name("my_task") == "my-task"
+    assert identifier_to_task_name("My__Task_") == "my-task"
+    assert identifier_to_task_name("_private_") == "private"
+    assert identifier_to_task_name("simple") == "simple"
+    assert identifier_to_task_name("ALLCAPS") == "allcaps"
+
+
+class TestTaskExtended:
+    def test_skip_inside_run(self):
+        from quickie.errors import Skip
+
+        @task
+        def my_task():
+            raise Skip("skipping this")
+
+        # Skip raised inside run() is caught by full_run, not propagated
+        result = my_task()
+        assert result is None
+
+    def test_cleanup_exception_suppressed(self):
+        result = []
+
+        @task
+        def failing_cleanup():
+            raise ValueError("cleanup failed")
+
+        @task
+        def passing_cleanup():
+            result.append("ran")
+
+        @task(cleanup=[failing_cleanup, passing_cleanup])
+        def main_task():
+            pass
+
+        # Should not raise despite failing_cleanup; passing_cleanup still runs
+        main_task()
+        assert result == ["ran"]
+
+    def test_double_dash_extra_args(self):
+        @task(extra_args=True)
+        def my_task(*args):
+            return args
+
+        result = my_task.parse_and_run(["--", "extra1", "extra2"])
+        assert result == ("extra1", "extra2")
+
+    def test_string_in_before(self, mocker):
+        result = []
+
+        @task
+        def before_task():
+            result.append("before")
+
+        tasks_ns = quickie._namespace.RootNamespace()
+        tasks_ns.register(before_task, namespace="before-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        @task(before=["before-task"])
+        def main_task():
+            result.append("main")
+
+        main_task()
+        assert result == ["before", "main"]
+
+    def test_get_short_help_truncation(self):
+        long_doc = "A" * 60  # longer than MAX_SHORT_HELP_LENGTH = 50
+
+        class MyTask(tasks.Task):
+            def run(self):
+                pass
+
+        MyTask.__doc__ = long_doc
+        t = MyTask()
+        short = t.get_short_help()
+        assert len(short) == MAX_SHORT_HELP_LENGTH
+        assert short.endswith("...")
+
+    def test_get_short_help_multiline(self):
+        class MyTask(tasks.Task):
+            """First paragraph summary.
+
+            Second paragraph detail that should be ignored.
+            """
+
+            def run(self):
+                pass
+
+        t = MyTask()
+        short = t.get_short_help()
+        assert short == "First paragraph summary."
+        assert "Second" not in short
+
+    def test_aliases_registered(self):
+        module = types.SimpleNamespace()
+
+        @task(aliases=["h", "hello-alias"])
+        def hello():
+            pass
+
+        module.__dict__["hello"] = hello
+
+        ns = quickie._namespace.RootNamespace()
+        ns.load(module)
+
+        assert ns["hello"] is hello
+        assert ns["h"] is hello
+        assert ns["hello-alias"] is hello
+
+    def test_private_excluded_from_load(self):
+        module = types.SimpleNamespace()
+
+        @task(private=True)
+        def private_task():
+            pass
+
+        module.__dict__["private_task"] = private_task
+
+        ns = quickie._namespace.RootNamespace()
+        ns.load(module)
+
+        assert len(ns) == 0
+        with pytest.raises(TaskNotFoundError):
+            ns["private-task"]
+
+
+class TestBaseSubprocessTaskExtended:
+    def test_wd_dot_uses_tasks_path_parent(self, mocker):
+        from pathlib import Path
+
+        mocker.patch(
+            "quickie.app._project_path", Path("/abs/tasks_module"), create=True
+        )
+
+        class MyTask(tasks._BaseSubprocessTask):
+            wd = "."
+
+        assert MyTask().get_wd() == "/abs"
+
+
+class TestCommandExtended:
+    def test_empty_cmd_raises(self, mocker):
+        mocker.patch.object(
+            app, "context", Context(wd="/tmp", env={}, inherit_env=False)
+        )
+
+        class EmptyCmd(tasks.Command):
+            def get_cmd(self, *args, **kwargs):
+                return []
+
+        with pytest.raises(ValueError, match="No program to run"):
+            EmptyCmd()([])
+
+
+class TestRootNamespace:
+    def test_register_multiple_namespaces(self):
+        @task
+        def my_task():
+            pass
+
+        ns = quickie._namespace.RootNamespace()
+        ns.register(my_task, namespace=["alias1", "alias2"])
+
+        assert ns["alias1"] is my_task
+        assert ns["alias2"] is my_task
+
+    def test_getitem_missing_raises(self):
+        ns = quickie._namespace.RootNamespace()
+        with pytest.raises(TaskNotFoundError):
+            ns["nonexistent"]
+
+
+class TestFactories:
+    def test_wrong_base_class_raises(self):
+        class NotATask:
+            pass
+
+        with pytest.raises(TypeError):
+            task_factory_helper(NotATask, base=tasks.Task, override_method="run")
+
+    def test_script_executable_passed_to_subprocess(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=0)
+        mocker.patch.object(
+            app, "context", Context(wd="/somedir", env={}, inherit_env=False)
+        )
+
+        @script(executable="/bin/bash")
+        def my_script():
+            return "echo hello"
+
+        my_script()
+        subprocess_run.assert_called_once()
+        assert subprocess_run.call_args[1]["executable"] == "/bin/bash"
+
+
+class TestTaskFileLocation:
+    def test_get_relative_file_location_returns_none_for_builtin(self):
+        class MyTask(tasks.Task):
+            def run(self):
+                pass
+
+        t = MyTask()
+        t.__wrapped__ = len  # builtin has no Python source file
+        assert t._get_relative_file_location("/tmp") is None
+
+
+class TestAddArgs:
+    def test_add_args_with_arg_instance(self):
+        from quickie.utils.argparser import Arg
+
+        @task(args=[Arg("--my-arg")])
+        def my_task(my_arg=None):
+            return my_arg
+
+        result = my_task.parse_and_run(["--my-arg", "value"])
+        assert result == "value"
+
+    def test_add_args_invalid_type_raises(self):
+        import argparse
+
+        @task
+        def my_task():
+            pass
+
+        my_task.args = [42]  # type: ignore[assignment]
+        parser = argparse.ArgumentParser()
+        with pytest.raises(TypeError, match="Invalid argument type"):
+            my_task.add_args(parser)
+
+
+class TestGroupWithTasksAttr:
+    def test_group_class_level_tasks(self):
+        result = []
+
+        @task
+        def task_a():
+            result.append("a")
+
+        @task
+        def task_b():
+            result.append("b")
+
+        class MyGroup(tasks.Group):
+            pass
+
+        MyGroup.tasks = (task_a, task_b)  # type: ignore[assignment]
+        MyGroup()()
+
+        assert result == ["a", "b"]
+
+
+def test_log_task_execution_details_noop():
+    class MyTask(tasks.Task):
+        def run(self):
+            pass
+
+    t = MyTask()
+    t.log_task_execution_details("some_arg")

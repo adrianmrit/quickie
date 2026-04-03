@@ -35,7 +35,6 @@ def identifier_to_task_name(identifier: str) -> str:
     Example:
         >>> identifier_to_task_name("MyTask")
         "mytask"
-        "my-task"
         >>> identifier_to_task_name("My__Task_")
         "my-task"
 
@@ -155,9 +154,6 @@ class Task:
         """Returns the file and line number where the class was defined."""
         import inspect
 
-        if self.__wrapped__ is None:
-            return None
-
         wraps = self.__wrapped__
 
         # functools.wraps and functools.lru_cache will return a wrapped function
@@ -232,7 +228,7 @@ class Task:
             elif isinstance(a, Arg):
                 arg = a
             else:
-                raise TypeError(f"Invalid argument type: {type(arg)}")
+                raise TypeError(f"Invalid argument type: {type(a)}")
             arg.add(parser)
 
     def parse_args(
@@ -583,12 +579,12 @@ class Command(_BaseSubprocessTask):
             raise ValueError("No program to run")
         elif len(cmd) == 1:
             program = cmd[0]
-            args = []
+            cmd_args = []
         else:
-            program, *args = cmd
+            program, *cmd_args = cmd
         wd = self.get_wd(*args, **kwargs)
         env = self.get_env(*args, **kwargs)
-        return self._run_program(program, cmd_args=args, wd=wd, env=env)
+        return self._run_program(program, cmd_args=cmd_args, wd=wd, env=env)
 
     def _run_program(
         self,
@@ -657,7 +653,7 @@ class Script(_BaseSubprocessTask):
         script = self.get_script(*args, **kwargs)
         wd = self.get_wd(*args, **kwargs)
         env = self.get_env(*args, **kwargs)
-        self._run_script(script, wd=wd, env=env)
+        return self._run_script(script, wd=wd, env=env)
 
     @typing.override
     def log_task_execution_details(self, script):

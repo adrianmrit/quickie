@@ -2,6 +2,10 @@ from quickie import task, tasks, app
 from quickie._namespace import RootNamespace
 from quickie.completion._internal import TaskCompleter
 from quickie.completion.python import PytestCompleter
+from quickie.completion.base import BaseCompleter
+from quickie.errors import TasksModuleNotFoundError
+from quickie.completion import PathCompleter
+import pytest
 
 
 class TestTaskCompleter:
@@ -129,3 +133,46 @@ class NestedClass:
             prefix="test.py::", action=None, parser=None, parsed_args=None
         )
         assert completions == []
+
+
+class TestBaseCompleter:
+    def test_complete_raises_not_implemented(self):
+        completer = BaseCompleter()
+        with pytest.raises(NotImplementedError):
+            completer.complete(prefix="", action=None, parser=None, parsed_args=None)  # type: ignore[arg-type]
+
+    def test_call_handles_exception(self, mocker):
+        warn_mock = mocker.patch("argcomplete.io.warn")
+
+        completer = BaseCompleter()
+        result = completer(prefix="", action=None, parser=None, parsed_args=None)  # type: ignore[arg-type]
+        assert result == []
+        warn_mock.assert_called_once()
+
+
+class TestTaskCompleterError:
+    def test_complete_suppresses_quickie_error(self, mocker):
+        mock_ns = mocker.MagicMock()
+        mock_ns.items.side_effect = TasksModuleNotFoundError("_qk")
+        mocker.patch("quickie.app._tasks", mock_ns)
+
+        completer = TaskCompleter()
+        result = completer(prefix="", action=None, parser=None, parsed_args=None)  # type: ignore[arg-type]
+        assert result is None
+
+
+class TestPathCompleter:
+    def test_get_pre_filtered_paths_handles_error(self):
+        completer = PathCompleter()
+        result = list(completer.get_pre_filtered_paths("/nonexistent/path/xyz_abc123"))
+        assert result == []
+
+
+class TestPytestCompleterReadFile:
+    def test_read_python_file(self, tmp_path):
+        py_file = tmp_path / "test_sample.py"
+        py_file.write_text("def test_foo(): pass")
+
+        completer = PytestCompleter()
+        content = completer._read_python_file(str(py_file))
+        assert "test_foo" in content

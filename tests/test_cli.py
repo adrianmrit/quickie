@@ -9,8 +9,10 @@ from pytest import mark, raises
 from quickie import _cli
 from quickie._argparser import AppArgumentParser
 from quickie._namespace import RootNamespace
-from quickie.errors import Stop
+from quickie.errors import Skip, Stop
 from quickie.factories import task
+from quickie import app as quickie_app
+from quickie._cli import global_main
 
 PYTHON_PATH = sys.executable
 BIN_FOLDER = os.path.join(sys.prefix, "bin")
@@ -249,3 +251,148 @@ class TestAutocompletion:
         # check the args passed to the autocomplete function
         args, _ = autocomplete_mock.call_args
         assert args[0].description == "Hello world task."
+
+
+class TestPartitionArgs:
+    def setup_method(self):
+        self.parser = AppArgumentParser(main=None)
+
+    def test_log_file_consumes_value(self):
+        ns = self.parser.parse_args(["--log-file", "/tmp/log.txt", "my-task", "arg1"])
+        assert ns.log_file == "/tmp/log.txt"
+        assert ns.task == "my-task"
+        assert ns.args == ["arg1"]
+
+    def test_module_flag_consumes_value(self):
+        ns = self.parser.parse_args(["-m", "/path/to/module", "my-task"])
+        assert ns.module == "/path/to/module"
+        assert ns.task == "my-task"
+
+    def test_long_module_flag_consumes_value(self):
+        ns = self.parser.parse_args(["--module", "/path/to/module", "my-task"])
+        assert ns.module == "/path/to/module"
+        assert ns.task == "my-task"
+
+    def test_verbosity_flag_before_task(self):
+        ns = self.parser.parse_args(["-v", "my-task", "arg1"])
+        assert ns.verbosity == 1
+        assert ns.task == "my-task"
+        assert ns.args == ["arg1"]
+
+    def test_task_only(self):
+        ns = self.parser.parse_args(["my-task"])
+        assert ns.task == "my-task"
+        assert ns.args == []
+
+    def test_no_task_only_flags(self):
+        ns = self.parser.parse_args(["-v"])
+        assert ns.task is None
+        assert ns.args == []
+
+    def test_task_with_multiple_args(self):
+        ns = self.parser.parse_args(["my-task", "arg1", "arg2", "--extra"])
+        assert ns.task == "my-task"
+        assert ns.args == ["arg1", "arg2", "--extra"]
+
+    def test_empty_args(self):
+        ns = self.parser.parse_args([])
+        assert ns.task is None
+        assert ns.args == []
+
+
+def test_unrecognized_args(capsys):
+    with raises(SystemExit) as exc_info:
+        _cli.main(["--unknown-quickie-flag"])
+    assert exc_info.value.code == 2
+    _, err = capsys.readouterr()
+    assert "unrecognized arguments" in err
+
+
+def test_skip_at_top_level(capsys, mocker):
+    def before_raises_skip():
+        raise Skip("test skip message")
+
+    @task(before=[before_raises_skip])
+    def skipped_task():
+        pass
+
+    tasks_ns = RootNamespace()
+    tasks_ns.register(skipped_task, namespace="skipped-task")
+    mocker.patch("quickie.app._tasks", tasks_ns)
+    mocker.patch("quickie.app.load_tasks")
+
+    _cli.main(["-v", "skipped-task"])
+    _, err = capsys.readouterr()
+    assert "Skipping" in err
+
+
+def test_skip_at_top_level_no_message(capsys, mocker):
+    def before_raises_skip():
+        raise Skip()
+
+    @task(before=[before_raises_skip])
+    def skipped_task2():
+        pass
+
+    tasks_ns = RootNamespace()
+    tasks_ns.register(skipped_task2, namespace="skipped-task2")
+    mocker.patch("quickie.app._tasks", tasks_ns)
+    mocker.patch("quickie.app.load_tasks")
+
+    _cli.main(["-v", "skipped-task2"])
+    _, err = capsys.readouterr()
+    assert "Skipping because" in err
+
+
+@mark.integration
+def test_global_main(capsys):
+    with raises(SystemExit) as exc_info:
+        global_main(["-h"])
+    assert exc_info.value.code == 0
+
+
+def test_keyboard_interrupt(mocker, capsys):
+    mocker.patch("quickie._cli.Main.__call__", side_effect=KeyboardInterrupt)
+
+    with raises(SystemExit) as exc_info:
+        _cli.main([])
+    assert exc_info.value.code == 1
+    out, _ = capsys.readouterr()
+    assert "KeyboardInterrupt" in out
+
+
+@mark.integration
+def test_init_flag(capsys, tmp_path):
+    with raises(SystemExit) as exc_info:
+        _cli.main(["--init", str(tmp_path)])
+    assert exc_info.value.code == 0
+    assert (tmp_path / "_qk").exists()
+    assert (tmp_path / "_qk" / "__init__.py").exists()
+
+
+@mark.integration
+def test_init_flag_already_initialized(capsys, tmp_path):
+    existing_dir = tmp_path / "_qk"
+    existing_dir.mkdir()
+    with raises(SystemExit) as exc_info:
+        _cli.main(["--init", str(tmp_path)])
+    assert exc_info.value.code == 0
+    out, _ = capsys.readouterr()
+    assert "already initialized" in out
+
+
+def test_module_flag(mocker, capsys):
+    @task
+    def module_hello():
+        pass
+
+    tasks_ns = RootNamespace()
+    tasks_ns.register(module_hello, namespace="module-hello")
+    mocker.patch("quickie.app._tasks", tasks_ns)
+    mocker.patch("quickie.app.load_tasks")
+    set_project_path_mock = mocker.patch.object(quickie_app, "set_project_path")
+
+    with raises(SystemExit):
+        _cli.main(["--module", "tests/_qk_test", "module-hello"])
+
+    set_project_path_mock.assert_called_once_with("tests/_qk_test")

@@ -167,11 +167,12 @@ class Main:
         table.add_column("Location", style="bold yellow")
 
         # Invert the task dictionary to group by class
+        cwd = os.getcwd()
         names_by_task: dict[quickie.Task, list[str]] = {}
         for invocation_name, task in sorted(
             app.tasks.items(),
             key=lambda x: (
-                x[1]._get_relative_file_location(os.getcwd()) or "",
+                x[1]._get_relative_file_location(cwd) or "",
                 x[0].count(":"),
                 x[0].split(":"),
             ),
@@ -185,7 +186,7 @@ class Main:
             rich_task_name = rich.text.Text(task.name, style="bold")
             rich_aliases = rich.text.Text(aliases, style="dim")
             task_location = rich.text.Text(
-                task._get_relative_file_location(os.getcwd()) or "", style="dim"
+                task._get_relative_file_location(cwd) or "", style="dim"
             )
             short_help = rich.text.Text(task.get_short_help(), style="green")
             table.add_row(rich_task_name, rich_aliases, short_help, task_location)

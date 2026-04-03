@@ -85,7 +85,7 @@ class AppArgumentParser(ArgumentParser):
         task_args = []
         args = iter(args)
         while arg := next(args, None):
-            if arg in {"-m", "--module", "--autocomplete"}:
+            if arg in {"-m", "--module", "--autocomplete", "--log-file"}:
                 qk_args.append(arg)
                 qk_args.append(next(args))
             elif arg.startswith("-"):

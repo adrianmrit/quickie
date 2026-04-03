@@ -306,8 +306,7 @@ class App:
 
     def load_tasks(self):
         """Load tasks from the tasks module."""
-        root = Path.cwd()
-        module = imports.import_from_path(root / self.tasks_path)
+        module = imports.import_from_path(self.tasks_path)
         self._tasks = RootNamespace()
         self._tasks.load(module)
 
