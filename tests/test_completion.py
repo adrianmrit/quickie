@@ -158,7 +158,7 @@ class TestTaskCompleterError:
 
         completer = TaskCompleter()
         result = completer(prefix="", action=None, parser=None, parsed_args=None)  # type: ignore[arg-type]
-        assert result is None
+        assert result == {}
 
 
 class TestPathCompleter:

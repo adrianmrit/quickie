@@ -13,7 +13,7 @@ class AppArgumentParser(ArgumentParser):
     """Custom argument parser for quickie."""
 
     @typing.override
-    def __init__(self, main):
+    def __init__(self):
         super().__init__(description="A CLI tool for quick tasks.")
         # argument for logging level
         self.add_argument(
@@ -58,6 +58,12 @@ class AppArgumentParser(ArgumentParser):
         ).completer = argcomplete.completers.ChoicesCompleter(  # type: ignore
             ["bash", "zsh"]
         )
+        self.add_argument(
+            "--global",
+            action="store_true",
+            dest="use_global",
+            help="Use global tasks from ~/_qkg instead of project tasks",
+        )
         self.add_argument("task", nargs="?", help="The task to run").completer = (  # type: ignore
             TaskCompleter()
         )
@@ -66,9 +72,16 @@ class AppArgumentParser(ArgumentParser):
             "args", nargs="*", help="The arguments to pass to the task"
         ).completer = argcomplete.completers.SuppressCompleter()  # type: ignore
 
+        self._value_flags: frozenset[str] = frozenset(
+            opt
+            for action in self._actions
+            for opt in action.option_strings
+            if action.nargs is None
+        )
+
     @typing.override
     def parse_known_args(self, args=None, namespace=None):
-        qk_args, task_args = self._partition_args(args)
+        qk_args, task_args = self.partition_args(args)
         namespace, argv = super().parse_known_args(qk_args, namespace)
 
         if argv:
@@ -76,24 +89,26 @@ class AppArgumentParser(ArgumentParser):
             msg = "unrecognized arguments: %s"
             self.error(msg % " ".join(argv))
 
-        # namespace.task = task
         namespace.args = task_args
         return namespace, []
 
-    def _partition_args(self, args):
+    def partition_args(self, args) -> tuple[list[str], list[str]]:
+        """Split raw argv into (qk_args, task_args).
+
+        qk_args contains all flags and values that belong to quickie itself,
+        up to and including the task name. task_args contains everything after.
+        """
         qk_args = []
         task_args = []
         args = iter(args)
-        while arg := next(args, None):
-            if arg in {"-m", "--module", "--autocomplete", "--log-file"}:
+        while (arg := next(args, None)) is not None:
+            if arg in self._value_flags:
                 qk_args.append(arg)
                 qk_args.append(next(args))
             elif arg.startswith("-"):
                 qk_args.append(arg)
             else:
-                # Task found
                 qk_args.append(arg)
-                # The rest of the arguments are task arguments
                 task_args = list(args)
 
         return qk_args, task_args

@@ -1,5 +1,39 @@
 # Quickie Change Log
 
+## Unreleased
+
+### Added
+
+- **Smart launcher for unified qk command**: The global `qk` command now automatically discovers project-local quickie installations and delegates to them, eliminating the need for manual venv activation. Each project can pin its own version while using the same `qk` command.
+- `--global` flag to `qk` command to explicitly use global tasks from `~/_qkg` without project discovery.
+- Project discovery algorithm that searches for `_qk` directory or `_qk.py` file starting from the current directory and traversing parent directories.
+- Environment detection supporting uv-managed virtual environments, generic venv paths, and explicit path override via `QK_EXECUTABLE` environment variable.
+- Recursion guard to prevent infinite delegation loops when project environment is misconfigured.
+- Comprehensive error messages with attempted paths and setup guidance when project or executable cannot be found.
+
+### Changed
+
+- `qk` is now the primary entry point with smart launcher behavior. It first attempts to discover and delegate to a project-local quickie installation before falling back to the local CLI logic.
+- `--global` flag is now the recommended way to access global tasks instead of requiring separate `qkg` command.
+- Installation documentation updated to emphasize the automatic launcher flow as the recommended usage pattern.
+- Default task names are transformed to lowercase, contiguous or single underscores are replaced with a single dash, and leading and trailing underscores/dashes are removed.
+
+### Deprecated
+
+- `qkg` command is now a backward-compatibility alias for `qk --global`. Existing users may continue using `qkg`, but `qk --global` is recommended.
+
+### Fixed
+
+- Can retrieve the file and line of tasks defined from functions wrapped with `functools.wraps`.
+- `FilesModified` condition now takes a cache id explicitly.
+- `Command` now falls back to `sys.executable` or `python3` when the `python` binary is not found in PATH.
+
+### Migration Notes
+
+- **For project users**: No changes required. Running `qk` from anywhere in your project will automatically use the project-specific version without manual venv activation.
+- **For global task users**: Existing `qkg` aliases continue to work. Optionally migrate to `qk --global` for consistency.
+- **For users with multiple project versions**: Your setup is now natively supported. Each project can pin its own quickie version, and `qk` will automatically delegate to the correct version.
+
 ## Release 0.1.0
 
 - Initial release.
@@ -116,14 +150,3 @@ Fixes for global runner.
 
 ### Changed
 - Only show error tracebacks when verbosity is set to 2 or higher.
-
-
-## Unreleased
-
-### Changed
-
-- Default task names are transformed to lowercase, contiguous or single underscores are replaces with a single dash, and leading and trailing underscores/dashes are removed.
-
-### Fixed
-- Can retrieve the file and line of tasks defined from functions wrapped with `functools.wraps`.
-- FilesModified condition now takes a cache id explicitly.

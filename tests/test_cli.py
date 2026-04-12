@@ -236,7 +236,7 @@ class TestAutocompletion:
         # check the args passed to the autocomplete function
         args, _ = autocomplete_mock.call_args
         assert args[0].description
-        assert args[0].description == AppArgumentParser(None).description
+        assert args[0].description == AppArgumentParser().description
 
     @mark.integration
     def test_task_autocompletion(self, add_env, mocker):
@@ -255,7 +255,7 @@ class TestAutocompletion:
 
 class TestPartitionArgs:
     def setup_method(self):
-        self.parser = AppArgumentParser(main=None)
+        self.parser = AppArgumentParser()
 
     def test_log_file_consumes_value(self):
         ns = self.parser.parse_args(["--log-file", "/tmp/log.txt", "my-task", "arg1"])
@@ -297,6 +297,13 @@ class TestPartitionArgs:
     def test_empty_args(self):
         ns = self.parser.parse_args([])
         assert ns.task is None
+        assert ns.args == []
+
+    def test_empty_string_arg_preserved_for_completion(self):
+        # argcomplete passes [""] when the user typed "qk " (trailing space).
+        # partition_args must not drop it (empty string is falsy but not None).
+        ns = self.parser.parse_args([""])
+        assert ns.task == ""
         assert ns.args == []
 
 

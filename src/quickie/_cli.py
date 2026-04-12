@@ -2,19 +2,25 @@
 
 import os
 import sys
+from functools import wraps
 
 import argcomplete
+import rich.box
+import rich.table
+import rich.text
 from rich import traceback
 
 import quickie
 from quickie import app
 from quickie._argparser import AppArgumentParser
+from quickie._init import init
+from quickie._launcher import Launcher
 from quickie.errors import QuickieError, Skip, Stop
+
+_parser = AppArgumentParser()
 
 
 def _clean_exit(func):
-    from functools import wraps
-
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -30,9 +36,34 @@ def _clean_exit(func):
 def main(argv=None, *, raise_error=False, global_=False):
     """Run the CLI."""
     traceback.install(suppress=[quickie])
-    main = Main(argv=argv, global_=global_)
+
+    if argv is None:
+        argv = sys.argv[1:]
+
+    main_obj = Main(argv=argv, global_=global_)
+    app.set_verbosity(main_obj.namespace.verbosity)
+
+    launcher = Launcher()
+    if (
+        not global_
+        and not main_obj.namespace.use_global
+        and not launcher.is_in_recursion()
+    ):
+        try:
+            app.logger.debug("Attempting launcher discovery...")
+            exit_code = launcher.launch(argv)
+            sys.exit(exit_code)
+        except QuickieError as e:
+            app.logger.debug(f"Launcher discovery failed: {e}")
+        except Exception as e:
+            app.logger.debug(f"Unexpected error in launcher: {e}")
+
+    if os.environ.get("_ARGCOMPLETE"):
+        main_obj.handle_autocomplete()
+        return  # handle_autocomplete calls sys.exit
+
     try:
-        main()
+        main_obj()
     except Stop as e:
         if e.message:
             app.logger.info(f"Stopping: [info]{e.message}[/info]")
@@ -69,54 +100,64 @@ class Main:
         if argv is None:
             argv = sys.argv[1:]
         self.argv = argv
-        self.parser = AppArgumentParser(main=self)
         self.global_ = global_
+        self.namespace = _parser.parse_args(argv)
 
-    def __call__(self):
-        """Run the CLI."""
-        arg_complete_val = os.environ.get("_ARGCOMPLETE")
-        if arg_complete_val:
-            comp_line = os.environ["COMP_LINE"]
-            comp_point = int(os.environ["COMP_POINT"])
+    def handle_autocomplete(self):
+        """Handle argcomplete tab completion. Calls sys.exit."""
+        arg_complete_val = os.environ["_ARGCOMPLETE"]
+        comp_line = os.environ["COMP_LINE"]
+        comp_point = int(os.environ["COMP_POINT"])
 
-            # Hack to parse the arguments
-            (_, _, _, comp_words, _) = argcomplete.lexers.split_line(
-                comp_line, comp_point
-            )
+        (_, _, _, comp_words, _) = argcomplete.lexers.split_line(comp_line, comp_point)
 
-            # _ARGCOMPLETE is set by the shell script to tell us where comp_words
-            # should start, based on what we're completing.
-            # we ignore teh program name, hence no -1
-            start = int(arg_complete_val)
-            args = comp_words[start:]
-        else:
-            args = self.argv
+        # _ARGCOMPLETE is set by the shell script to tell us where comp_words
+        # should start, based on what we're completing.
+        # we ignore the program name, hence no -1
+        start = int(arg_complete_val)
+        args = comp_words[start:]
+        namespace = _parser.parse_args(args)
 
-        namespace = self.parser.parse_args(args)
         app.set_verbosity(namespace.verbosity)
         app.set_log_file(namespace.log_file)
-        if not self.global_ and namespace.module:
+        use_global = self.global_ or namespace.use_global
+        if not use_global and namespace.module:
             app.set_project_path(namespace.module)
-        app.set_use_global(self.global_)
-        # Loads tasks before completion
+        app.set_use_global(use_global)
 
-        if arg_complete_val:
+        try:
             app.load_tasks()
-            if namespace.task:
+        except QuickieError:
+            pass  # Outside a project; TaskCompleter returns empty gracefully
+
+        if namespace.task:
+            try:
                 task = self.get_task(namespace.task)
+            except (QuickieError, KeyError):
+                parser = _parser
+            else:
                 # Update _ARGCOMPLETE to the index of the task, so that completion
                 # only considers the task arguments
                 os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
                 parser = task.parser
-            else:
-                parser = self.parser
-            argcomplete.autocomplete(parser)
-            sys.exit(0)
+
+        else:
+            parser = _parser
+        argcomplete.autocomplete(parser)
+        sys.exit(0)
+
+    def __call__(self):
+        """Run the CLI."""
+        namespace = self.namespace
+
+        app.set_log_file(namespace.log_file)
+        use_global = self.global_ or namespace.use_global
+        if not use_global and namespace.module:
+            app.set_project_path(namespace.module)
+        app.set_use_global(use_global)
 
         app.logger.info(f"Running quickie {quickie.__version__}")
         if namespace.init:
-            from quickie._init import init
-
             init(namespace.init)
         elif namespace.suggest_auto_completion:
             if namespace.suggest_auto_completion == "bash":
@@ -134,7 +175,7 @@ class Main:
             )
         else:
             app.console.print(self.get_usage())
-        self.parser.exit()
+        _parser.exit()
 
     def suggest_autocompletion_bash(self):
         """Suggest autocompletion for bash."""
@@ -156,10 +197,6 @@ class Main:
 
     def list_tasks(self):
         """List the available tasks."""
-        import rich.box
-        import rich.table
-        import rich.text
-
         table = rich.table.Table(title="Available tasks", box=rich.box.SIMPLE)
         table.add_column("Task", style="bold yellow")
         table.add_column("Aliases", style="bold yellow")
@@ -195,7 +232,7 @@ class Main:
 
     def get_usage(self) -> str:
         """Get the usage message."""
-        return self.parser.format_usage()
+        return _parser.format_usage()
 
     def get_task(self, task_name: str) -> quickie.Task:
         """Get a task by name."""

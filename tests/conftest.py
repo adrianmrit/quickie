@@ -8,6 +8,9 @@ from quickie._namespace import RootNamespace
 @pytest.fixture(autouse=True)
 def patch_config(tmpdir_factory, mocker):
     """Patch the config module to use a temporary directory for the home path."""
+    # Prevent the launcher from firing (and calling os.execv) in unit tests.
+    mocker.patch.dict("os.environ", {"QK_LAUNCHER_RUNNING": "true"})
+
     # Patch the configure method
     mocker.patch("quickie.app._home_path", Path("tests/_qk_home"), create=True)
     mocker.patch("quickie.app._project_path", Path("tests/_qk_test"), create=True)

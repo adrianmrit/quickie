@@ -20,5 +20,5 @@ class TaskCompleter(BaseCompleter):
                 for key, task in app.tasks.items()
                 if key.startswith(prefix)
             }
-        except QuickieError:
-            pass
+        except (QuickieError, ValueError):
+            return {}

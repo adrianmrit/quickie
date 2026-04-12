@@ -11,6 +11,8 @@ import functools
 import os
 from pathlib import Path
 import re
+import shutil
+import sys
 import shlex
 import typing
 
@@ -606,13 +608,47 @@ class Command(_BaseSubprocessTask):
         import subprocess
 
         self.log_task_execution_details(program, cmd_args)
-        result = subprocess.run(
-            [program, *cmd_args],
-            check=False,
-            cwd=wd,
-            env=env,
-        )
+        cmd = [program, *cmd_args]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                cwd=wd,
+                env=env,
+            )
+        except FileNotFoundError:
+            fallback = self._resolve_program_fallback(program, env)
+            if fallback is None:
+                raise
+            result = subprocess.run(
+                [fallback, *cmd_args],
+                check=False,
+                cwd=wd,
+                env=env,
+            )
         return result
+
+    def _resolve_program_fallback(
+        self,
+        program: str,
+        env: typing.Mapping[str, str],
+    ) -> str | None:
+        """Resolve fallback executable for missing commands.
+
+        Currently only supports ``python`` to improve compatibility on systems
+        where only ``python3`` is available in PATH.
+        """
+        if program != "python":
+            return None
+
+        if os.path.exists(sys.executable):
+            return sys.executable
+
+        env_path = env.get("PATH")
+        if python3 := shutil.which("python3", path=env_path):
+            return python3
+        return shutil.which("python3") if env_path is not None else None
 
 
 class Script(_BaseSubprocessTask):

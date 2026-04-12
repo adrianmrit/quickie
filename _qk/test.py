@@ -11,6 +11,7 @@ def test(*args):
 def coverage():
     """Run tests with coverage."""
     return """
+    source .venv/bin/activate
     coverage run -m pytest
     coverage html
     """

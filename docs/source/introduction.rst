@@ -31,12 +31,28 @@ Quickie has been tested on macOs, but should work on Linux and Windows as well. 
 Per Project Installation
 ------------------------
 
-You can install Quickie with pip or your favorite package manager. For projects, it is usually better to install
-Quickie in a virtual environment. By using a virtual environment you can isolate your dependencies for that specific
-project, and use different versions of Quickie for different projects without conflicts.
+The recommended way to use Quickie is to install it per-project in a virtual environment. This allows each project to pin its own version of Quickie and avoids version conflicts across projects.
+
+**With automatic launcher (recommended):**
+
+Once you have Quickie installed in a project virtual environment, you can run tasks from anywhere without manual virtual environment activation. The global ``qk`` command will automatically discover your project and delegate to the project-specific version:
 
 .. code-block:: bash
 
+    cd my-project
+    python -m venv .venv
+    .venv/bin/pip install quickie-runner
+    qk task-name  # Automatically uses project-specific quickie!
+
+The launcher will search for a ``_qk`` directory or ``_qk.py`` file starting from your current directory and traveling up the directory tree. Once found, it delegates to the quickie installation in that project's virtual environment.
+
+**Traditional manual activation (still supported):**
+
+If preferred, you can still manually activate the virtual environment:
+
+.. code-block:: bash
+
+    cd my-project
     python -m venv .venv
     source .venv/bin/activate
     pip install quickie-runner
@@ -46,34 +62,39 @@ project, and use different versions of Quickie for different projects without co
 Global installation
 -------------------
 
-While Quickie allows to run tasks defined between a project, sometimes it is useful to have tasks defined globally and run them
-from anywhere. `quickie-runner-global <https://pypi.org/project/quickie-runner-global/>`_ is a package that allows to do just that.
+While Quickie allows you to run tasks defined within a project, sometimes it is useful to have global tasks accessible from anywhere. The `quickie-runner-global <https://pypi.org/project/quickie-runner-global/>`_ package provides a global task runner via the ``qkg`` command.
 
-This is a wrapper around ``quickie-runner`` that will add a separate ``qkg`` command, thus not conflicting with ``qk``. Tasks in this case
-need to be defined at ``~/_qkg``.
+To access global tasks explicitly, use the ``--global`` flag:
 
-You can do this install for your default Python installation, or use `pipx <https://pipx.pypa.io/stable/>`_ to create an isolated
-environment.
+.. code-block:: bash
 
+    qk --global task-name
 
-With pip
-^^^^^^^^
+Or use the ``qkg`` command (backward-compatible alias):
+
+.. code-block:: bash
+
+    qkg task-name
+
+Global tasks are stored in ``~/_qkg`` and are only used when explicitly requested with ``--global`` or ``qkg``.
+
+**Installation with pip:**
 
 .. code-block:: bash
 
     pip install quickie-runner-global
-    qkg --help
+    qkg task-name
 
 
-With pipx
+**Installation with pipx (recommended for global tools):**
 
 .. code-block:: bash
 
     pipx install quickie-runner-global
-    qkg --help
+    qkg task-name
 
 .. TIP::
-    If installing via PIPX and you need to add extra dependencies, you can inject them:
+    If installing via pipx and you need to add extra dependencies, you can inject them:
 
     .. code-block:: bash
 
@@ -107,8 +128,9 @@ To enable it, you need to install `argcomplete <https://pypi.org/project/argcomp
 
     eval "$(register-python-argcomplete qk)"
 
+This is sufficient for both project tasks and global tasks. When tab completing inside a project directory, the smart launcher delegates to the project-local quickie installation, so completions reflect that project's tasks and version.
 
-This will enable auto completion for the ``qk`` command. If you have a global installation, you can enable auto completion for the ``qkg`` command as well:
+If you have a global installation, you can also enable auto completion for the ``qkg`` command:
 
 .. code-block:: bash
 

@@ -385,6 +385,52 @@ class TestCommand:
         ):
             task_instance([])
 
+    def test_run_falls_back_when_python_is_missing(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            FileNotFoundError("python"),
+            mocker.Mock(returncode=0),
+        ]
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+        mocker.patch("quickie.tasks.os.path.exists", return_value=True)
+        mocker.patch("quickie.tasks.sys.executable", "/venv/bin/python")
+
+        @command
+        def my_task():
+            return ["python", "-m", "pytest"]
+
+        my_task()
+
+        assert subprocess_run.call_count == 2
+        assert subprocess_run.call_args_list[0].args[0] == ["python", "-m", "pytest"]
+        assert subprocess_run.call_args_list[1].args[0] == [
+            "/venv/bin/python",
+            "-m",
+            "pytest",
+        ]
+
+    def test_run_raises_when_non_python_binary_is_missing(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = FileNotFoundError("myprogram")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command
+        def my_task():
+            return ["myprogram", "--version"]
+
+        with pytest.raises(FileNotFoundError):
+            my_task()
+
 
 class TestScriptTask:
     def test_run(self, mocker):
