@@ -62,43 +62,27 @@ If preferred, you can still manually activate the virtual environment:
 Global installation
 -------------------
 
-While Quickie allows you to run tasks defined within a project, sometimes it is useful to have global tasks accessible from anywhere. The `quickie-runner-global <https://pypi.org/project/quickie-runner-global/>`_ package provides a global task runner via the ``qkg`` command.
-
-To access global tasks explicitly, use the ``--global`` flag:
+While Quickie allows you to run tasks defined within a project, sometimes it is useful to have global tasks accessible from anywhere. Install ``quickie-runner`` globally (e.g. with pipx) and use the ``--global`` (or ``-g``) flag:
 
 .. code-block:: bash
 
     qk --global task-name
 
-Or use the ``qkg`` command (backward-compatible alias):
-
-.. code-block:: bash
-
-    qkg task-name
-
-Global tasks are stored in ``~/_qkg`` and are only used when explicitly requested with ``--global`` or ``qkg``.
-
-**Installation with pip:**
-
-.. code-block:: bash
-
-    pip install quickie-runner-global
-    qkg task-name
-
+Global tasks are stored in ``~/_qkg`` and are only used when explicitly requested with ``--global`` (or ``-g``).
 
 **Installation with pipx (recommended for global tools):**
 
 .. code-block:: bash
 
-    pipx install quickie-runner-global
-    qkg task-name
+    pipx install quickie-runner
+    qk --global task-name
 
 .. TIP::
     If installing via pipx and you need to add extra dependencies, you can inject them:
 
     .. code-block:: bash
 
-        pipx inject quickie-runner-global my-extra-dependency
+        pipx inject quickie-runner my-extra-dependency
 
 
 Upgrading
@@ -129,12 +113,6 @@ To enable it, you need to install `argcomplete <https://pypi.org/project/argcomp
     eval "$(register-python-argcomplete qk)"
 
 This is sufficient for both project tasks and global tasks. When tab completing inside a project directory, the smart launcher delegates to the project-local quickie installation, so completions reflect that project's tasks and version.
-
-If you have a global installation, you can also enable auto completion for the ``qkg`` command:
-
-.. code-block:: bash
-
-    eval "$(register-python-argcomplete qkg)"
 
 You can also call ``qk --autocomplete bash`` or ``qk --autocomplete zsh`` for instructions on how to enable auto completion for your shell.
 

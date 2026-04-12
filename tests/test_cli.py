@@ -12,7 +12,6 @@ from quickie._namespace import RootNamespace
 from quickie.errors import Skip, Stop
 from quickie.factories import task
 from quickie import app as quickie_app
-from quickie._cli import global_main
 
 PYTHON_PATH = sys.executable
 BIN_FOLDER = os.path.join(sys.prefix, "bin")
@@ -349,13 +348,6 @@ def test_skip_at_top_level_no_message(capsys, mocker):
     _cli.main(["-v", "skipped-task2"])
     _, err = capsys.readouterr()
     assert "Skipping because" in err
-
-
-@mark.integration
-def test_global_main(capsys):
-    with raises(SystemExit) as exc_info:
-        global_main(["-h"])
-    assert exc_info.value.code == 0
 
 
 def test_keyboard_interrupt(mocker, capsys):

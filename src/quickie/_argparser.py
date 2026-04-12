@@ -59,6 +59,7 @@ class AppArgumentParser(ArgumentParser):
             ["bash", "zsh"]
         )
         self.add_argument(
+            "-g",
             "--global",
             action="store_true",
             dest="use_global",

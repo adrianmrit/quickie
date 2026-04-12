@@ -82,16 +82,6 @@ def main(argv=None, *, raise_error=False, global_=False):
         sys.exit(e.exit_code)
 
 
-@_clean_exit
-def global_main(argv=None, *, raise_error=False):
-    """Run the CLI with the global option."""
-    main(
-        argv=argv,
-        raise_error=raise_error,
-        global_=True,
-    )
-
-
 class Main:
     """Represents the CLI entry of quickie."""
 

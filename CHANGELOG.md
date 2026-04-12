@@ -1,6 +1,6 @@
 # Quickie Change Log
 
-## Unreleased
+## Release 0.6.0
 
 ### Added
 
@@ -18,9 +18,9 @@
 - Installation documentation updated to emphasize the automatic launcher flow as the recommended usage pattern.
 - Default task names are transformed to lowercase, contiguous or single underscores are replaced with a single dash, and leading and trailing underscores/dashes are removed.
 
-### Deprecated
+### Removed
 
-- `qkg` command is now a backward-compatibility alias for `qk --global`. Existing users may continue using `qkg`, but `qk --global` is recommended.
+- `quickie-runner-global` package and the `qkg` command have been removed. Use `qk --global` or `qk -g` instead.
 
 ### Fixed
 
@@ -31,7 +31,7 @@
 ### Migration Notes
 
 - **For project users**: No changes required. Running `qk` from anywhere in your project will automatically use the project-specific version without manual venv activation.
-- **For global task users**: Existing `qkg` aliases continue to work. Optionally migrate to `qk --global` for consistency.
+- **For global task users**: Migrate from `qkg` to `qk --global` or `qk -g`. The `quickie-runner-global` package and `qkg` command are no longer available.
 - **For users with multiple project versions**: Your setup is now natively supported. Each project can pin its own quickie version, and `qk` will automatically delegate to the correct version.
 
 ## Release 0.1.0

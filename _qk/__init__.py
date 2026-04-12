@@ -43,7 +43,6 @@ def script_example(task):
 def build():
     return """
     python -m build
-    python -m build src/quickie_global -o dist
     """
 
 
