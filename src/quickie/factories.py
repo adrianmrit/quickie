@@ -327,6 +327,9 @@ def script(
     env: dict[str, str] | None = None,
     wd: str | None = None,
     expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
+    timeout: float | None | UseDefault = USE_DEFAULT,
+    retries: int | UseDefault = USE_DEFAULT,
+    retry_delay: float | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Script]: ...
 
@@ -338,6 +341,9 @@ def script(  # noqa: PLR0913
     env: dict[str, str] | None = None,
     wd: str | None = None,
     expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
+    timeout: float | None | UseDefault = USE_DEFAULT,
+    retries: int | UseDefault = USE_DEFAULT,
+    retry_delay: float | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Script]:
     '''Create a script from a function.
@@ -358,6 +364,9 @@ def script(  # noqa: PLR0913
     :param env: The environment variables for the script.
     :param wd: The working directory for the script.
     :param expected_exit_codes: Accepted subprocess exit codes for the script.
+    :param timeout: Timeout in seconds for each attempt. ``None`` means no limit.
+    :param retries: Number of additional attempts after an initial failure.
+    :param retry_delay: Seconds to wait between retry attempts.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
@@ -371,6 +380,12 @@ def script(  # noqa: PLR0913
     }
     if expected_exit_codes is not USE_DEFAULT:
         attrs["expected_exit_codes"] = expected_exit_codes
+    if timeout is not USE_DEFAULT:
+        attrs["timeout"] = timeout
+    if retries is not USE_DEFAULT:
+        attrs["retries"] = retries
+    if retry_delay is not USE_DEFAULT:
+        attrs["retry_delay"] = retry_delay
     return task_factory_helper(
         obj,
         base=tasks.Script,
@@ -393,6 +408,9 @@ def command(
     env: dict[str, str] | None = None,
     wd: str | None = None,
     expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
+    timeout: float | None | UseDefault = USE_DEFAULT,
+    retries: int | UseDefault = USE_DEFAULT,
+    retry_delay: float | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Command]: ...
 
@@ -403,6 +421,9 @@ def command(  # noqa: PLR0913
     env: dict[str, str] | None = None,
     wd: str | None = None,
     expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
+    timeout: float | None | UseDefault = USE_DEFAULT,
+    retries: int | UseDefault = USE_DEFAULT,
+    retry_delay: float | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Command]:
     '''Create a command task from a function.
@@ -424,6 +445,9 @@ def command(  # noqa: PLR0913
     :param env: The environment variables for the command task.
     :param wd: The working directory for the command task.
     :param expected_exit_codes: Accepted subprocess exit codes for the command.
+    :param timeout: Timeout in seconds for each attempt. ``None`` means no limit.
+    :param retries: Number of additional attempts after an initial failure.
+    :param retry_delay: Seconds to wait between retry attempts.
 
     :returns: The command task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
@@ -431,6 +455,12 @@ def command(  # noqa: PLR0913
     attrs = {"env": env, "wd": wd}
     if expected_exit_codes is not USE_DEFAULT:
         attrs["expected_exit_codes"] = expected_exit_codes
+    if timeout is not USE_DEFAULT:
+        attrs["timeout"] = timeout
+    if retries is not USE_DEFAULT:
+        attrs["retries"] = retries
+    if retry_delay is not USE_DEFAULT:
+        attrs["retry_delay"] = retry_delay
     return task_factory_helper(
         obj,
         base=tasks.Command,

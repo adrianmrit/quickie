@@ -7,7 +7,11 @@ import quickie._namespace
 from quickie import tasks, app
 from quickie.conditions import condition
 from quickie.context import Context
-from quickie.errors import SubprocessExitCodeError, TaskNotFoundError
+from quickie.errors import (
+    SubprocessExitCodeError,
+    SubprocessTimeoutError,
+    TaskNotFoundError,
+)
 from quickie.factories import (
     command,
     group,
@@ -385,12 +389,10 @@ class TestCommand:
         ):
             task_instance([])
 
-    def test_run_falls_back_when_python_is_missing(self, mocker):
+    def test_run_resolves_python_to_venv_executable_early(self, mocker):
+        """python binary is resolved to sys.executable before subprocess is called."""
         subprocess_run = mocker.patch("subprocess.run")
-        subprocess_run.side_effect = [
-            FileNotFoundError("python"),
-            mocker.Mock(returncode=0),
-        ]
+        subprocess_run.return_value = mocker.Mock(returncode=0)
 
         mocker.patch.object(
             app,
@@ -406,13 +408,34 @@ class TestCommand:
 
         my_task()
 
-        assert subprocess_run.call_count == 2
-        assert subprocess_run.call_args_list[0].args[0] == ["python", "-m", "pytest"]
-        assert subprocess_run.call_args_list[1].args[0] == [
+        # Only one subprocess call — resolution happened before it, not as a retry
+        assert subprocess_run.call_count == 1
+        assert subprocess_run.call_args_list[0].args[0] == [
             "/venv/bin/python",
             "-m",
             "pytest",
         ]
+
+    def test_run_uses_original_python_when_no_fallback_found(self, mocker):
+        """When no fallback is resolvable, python is used as-is."""
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=0)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+        mocker.patch("quickie.tasks.os.path.exists", return_value=False)
+        mocker.patch("quickie.tasks.shutil.which", return_value=None)
+
+        @command
+        def my_task():
+            return ["python", "-m", "pytest"]
+
+        my_task()
+
+        assert subprocess_run.call_args_list[0].args[0] == ["python", "-m", "pytest"]
 
     def test_run_raises_when_non_python_binary_is_missing(self, mocker):
         subprocess_run = mocker.patch("subprocess.run")
@@ -460,6 +483,7 @@ class TestScriptTask:
             cwd="/somedir",
             env={},
             executable=None,
+            timeout=None,
         )
         subprocess_run.reset_mock()
 
@@ -471,6 +495,7 @@ class TestScriptTask:
             cwd="/somedir",
             env={"VAR": "VAL"},
             executable=None,
+            timeout=None,
         )
 
     def test_script_required(self):
@@ -756,6 +781,179 @@ class TestCommandExtended:
         assert result.returncode == 7
         assert subprocess_run.call_args[1]["check"] is False
 
+    def test_timeout_raises_subprocess_timeout_error(self, mocker):
+        import subprocess as sp
+
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = sp.TimeoutExpired(cmd="myprogram", timeout=5)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(timeout=5)
+        def my_task():
+            return ["myprogram", "--long"]
+
+        with pytest.raises(SubprocessTimeoutError) as exc_info:
+            my_task()
+
+        assert exc_info.value.timeout == 5
+        assert "myprogram" in str(exc_info.value)
+        assert subprocess_run.call_args[1]["timeout"] == 5
+
+    def test_timeout_passed_to_subprocess(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=0)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(timeout=10.0)
+        def my_task():
+            return ["myprogram"]
+
+        my_task()
+
+        assert subprocess_run.call_args[1]["timeout"] == 10.0
+
+    def test_retries_on_exit_code_error(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            mocker.Mock(returncode=1),
+            mocker.Mock(returncode=0),
+        ]
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(retries=1)
+        def my_task():
+            return ["myprogram"]
+
+        result = my_task()
+
+        assert result.returncode == 0
+        assert subprocess_run.call_count == 2  # noqa: PLR2004
+
+    def test_retries_exhausted_raises_last_error(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=1)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(retries=2)
+        def my_task():
+            return ["myprogram"]
+
+        with pytest.raises(SubprocessExitCodeError):
+            my_task()
+
+        assert subprocess_run.call_count == 3  # noqa: PLR2004
+
+    def test_retries_on_timeout(self, mocker):
+        import subprocess as sp
+
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            sp.TimeoutExpired(cmd="myprogram", timeout=2),
+            mocker.Mock(returncode=0),
+        ]
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(timeout=2, retries=1)
+        def my_task():
+            return ["myprogram"]
+
+        result = my_task()
+
+        assert result.returncode == 0
+        assert subprocess_run.call_count == 2  # noqa: PLR2004
+
+    def test_retry_delay_sleeps_between_attempts(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            mocker.Mock(returncode=1),
+            mocker.Mock(returncode=0),
+        ]
+        time_sleep = mocker.patch("time.sleep")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(retries=1, retry_delay=2.0)
+        def my_task():
+            return ["myprogram"]
+
+        my_task()
+
+        time_sleep.assert_called_once_with(2.0)
+
+    def test_no_sleep_when_retry_delay_is_zero(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            mocker.Mock(returncode=1),
+            mocker.Mock(returncode=0),
+        ]
+        time_sleep = mocker.patch("time.sleep")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(retries=1)
+        def my_task():
+            return ["myprogram"]
+
+        my_task()
+
+        time_sleep.assert_not_called()
+
+    def test_retry_logs_warning_on_failure(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            mocker.Mock(returncode=1),
+            mocker.Mock(returncode=0),
+        ]
+        logger_warning = mocker.patch.object(app.logger, "warning")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(retries=1)
+        def my_task():
+            return ["myprogram"]
+
+        my_task()
+
+        # Should log: attempt N failed + retrying
+        assert logger_warning.call_count == 2  # noqa: PLR2004
+
 
 class TestScriptTaskExtended:
     def test_non_zero_exit_code_raises(self, mocker):
@@ -816,6 +1014,91 @@ class TestScriptTaskExtended:
 
         assert result.returncode == 5
         assert subprocess_run.call_args[1]["check"] is False
+
+    def test_timeout_raises_subprocess_timeout_error(self, mocker):
+        import subprocess as sp
+
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = sp.TimeoutExpired(cmd="exit 5", timeout=3)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(timeout=3)
+        def slow_script():
+            return "exit 5"
+
+        with pytest.raises(SubprocessTimeoutError) as exc_info:
+            slow_script()
+
+        assert exc_info.value.timeout == 3  # noqa: PLR2004
+        assert subprocess_run.call_args[1]["timeout"] == 3  # noqa: PLR2004
+
+    def test_retries_on_exit_code_error(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            mocker.Mock(returncode=1),
+            mocker.Mock(returncode=0),
+        ]
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(retries=1)
+        def flaky_script():
+            return "flaky_command"
+
+        result = flaky_script()
+
+        assert result.returncode == 0
+        assert subprocess_run.call_count == 2  # noqa: PLR2004
+
+    def test_retries_exhausted_raises_last_error(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=1)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(retries=2)
+        def always_fails():
+            return "bad_command"
+
+        with pytest.raises(SubprocessExitCodeError):
+            always_fails()
+
+        assert subprocess_run.call_count == 3  # noqa: PLR2004
+
+    def test_retry_delay_sleeps_between_attempts(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.side_effect = [
+            mocker.Mock(returncode=1),
+            mocker.Mock(returncode=0),
+        ]
+        time_sleep = mocker.patch("time.sleep")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(retries=1, retry_delay=1.5)
+        def flaky_script():
+            return "flaky_command"
+
+        flaky_script()
+
+        time_sleep.assert_called_once_with(1.5)
 
 
 class TestRootNamespace:

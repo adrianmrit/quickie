@@ -4,6 +4,7 @@
 
 - Command and script tasks now fail fast on unexpected non-zero subprocess exit codes.
 - Command and script tasks now support `expected_exit_codes` to allow non-zero results explicitly or disable exit code validation.
+- Command and script tasks now support `timeout` (seconds per attempt), `retries` (additional attempts on failure), and `retry_delay` (seconds between attempts). Timeouts raise `SubprocessTimeoutError` (exit code 124). Both exit-code and timeout errors trigger the retry loop; warnings are logged for each failed attempt and retry.
 
 ## Release 0.6.0
 

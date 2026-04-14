@@ -83,3 +83,47 @@ If a script intentionally uses a non-zero exit code, allow it explicitly with ``
 The same option is available on subclasses by setting the ``expected_exit_codes`` attribute.
 
 To disable exit-code validation completely, set ``expected_exit_codes`` to ``None`` or ``()``.
+
+Timeout
+-------
+
+To limit how long a single script attempt may run, set ``timeout`` (in seconds):
+
+.. code-block:: python
+
+    from quickie import script
+
+    @script(timeout=30)
+    def long_script():
+        return "my_tool --process"
+
+If the script does not finish within the allotted time, a
+:exc:`~quickie.errors.SubprocessTimeoutError` is raised (exit code 124).
+The same attribute is available on subclasses.
+
+Retry
+-----
+
+To automatically retry a script after a transient failure, set ``retries`` to the
+number of *additional* attempts:
+
+.. code-block:: python
+
+    from quickie import script
+
+    @script(retries=3)
+    def flaky_script():
+        return "curl https://example.com/api"
+
+An optional ``retry_delay`` (in seconds) can be added to wait between attempts:
+
+.. code-block:: python
+
+    @script(retries=3, retry_delay=2.0)
+    def flaky_script():
+        return "curl https://example.com/api"
+
+Retries are triggered by both :exc:`~quickie.errors.SubprocessExitCodeError` and
+:exc:`~quickie.errors.SubprocessTimeoutError`. If all attempts fail, the last
+exception is re-raised. A warning is logged for each failed attempt and each retry.
+Both attributes are available on subclasses.

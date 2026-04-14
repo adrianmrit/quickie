@@ -14,10 +14,11 @@ import re
 import shutil
 import sys
 import shlex
+import time
 import typing
 
 from quickie.conditions.base import BaseCondition
-from quickie.errors import Skip, SubprocessExitCodeError
+from quickie.errors import Skip, SubprocessExitCodeError, SubprocessTimeoutError
 from quickie._sentinels import USE_DEFAULT, UseDefault
 from quickie.config import app
 from quickie.utils.argparser import Arg
@@ -439,12 +440,29 @@ class _BaseSubprocessTask(Task):
     expected_exit_codes: typing.Sequence[int] | None = (0,)
     """Accepted subprocess exit codes."""
 
-    def __init__(
+    timeout: float | None = None
+    """Timeout in seconds for each subprocess attempt. ``None`` means no limit."""
+
+    retries: int = 0
+    """Number of additional attempts after an initial failure.
+
+    Set to a positive integer to automatically re-run the subprocess on
+    transient errors (:exc:`~quickie.errors.SubprocessExitCodeError` or
+    :exc:`~quickie.errors.SubprocessTimeoutError`).
+    """
+
+    retry_delay: float = 0.0
+    """Seconds to wait between retry attempts."""
+
+    def __init__(  # noqa: PLR0913
         self,
         *args,
         env: typing.Mapping[str, str] | None = None,
         wd: str | Path | None = None,
         expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
+        timeout: float | None | UseDefault = USE_DEFAULT,
+        retries: int | UseDefault = USE_DEFAULT,
+        retry_delay: float | UseDefault = USE_DEFAULT,
         **kwargs,
     ):
         """Initialize the task.
@@ -454,6 +472,9 @@ class _BaseSubprocessTask(Task):
         :param wd: The working directory.
         :param expected_exit_codes: Accepted subprocess exit codes.
             Pass ``None`` or ``()`` to disable validation.
+        :param timeout: Timeout in seconds for each attempt. ``None`` means no limit.
+        :param retries: Number of additional attempts after an initial failure.
+        :param retry_delay: Seconds to wait between retry attempts.
         :param kwargs: Task instance keyword arguments.
         """
         super().__init__(*args, **kwargs)
@@ -464,6 +485,15 @@ class _BaseSubprocessTask(Task):
         self.expected_exit_codes = self._normalize_expected_exit_codes(
             expected_exit_codes
         )
+        if timeout is USE_DEFAULT:
+            timeout = self.timeout
+        self.timeout = timeout
+        if retries is USE_DEFAULT:
+            retries = self.retries
+        self.retries = retries
+        if retry_delay is USE_DEFAULT:
+            retry_delay = self.retry_delay
+        self.retry_delay = retry_delay
 
     def get_wd(self, *args, **kwargs) -> str:
         """Get the working directory.
@@ -516,6 +546,21 @@ class _BaseSubprocessTask(Task):
         """Get accepted subprocess exit codes."""
         return self.expected_exit_codes
 
+    def get_timeout(self) -> float | None:
+        """Get the subprocess timeout in seconds.
+
+        :returns: The timeout value, or ``None`` for no limit.
+        """
+        return self.timeout
+
+    def get_retries(self) -> int:
+        """Get the number of additional retry attempts."""
+        return self.retries
+
+    def get_retry_delay(self) -> float:
+        """Get the seconds to wait between retry attempts."""
+        return self.retry_delay
+
     def validate_exit_code(
         self,
         *,
@@ -533,6 +578,49 @@ class _BaseSubprocessTask(Task):
                 command=command,
                 expected_exit_codes=expected_exit_codes,
             )
+
+    def _execute_with_retry(
+        self, attempt_fn: typing.Callable[[], typing.Any]
+    ) -> typing.Any:
+        """Execute attempt_fn, retrying on transient subprocess failures.
+
+        Retries on :exc:`~quickie.errors.SubprocessExitCodeError` and
+        :exc:`~quickie.errors.SubprocessTimeoutError` up to :attr:`retries`
+        additional times. All other exceptions propagate immediately.
+
+        :param attempt_fn: A callable that makes a single subprocess attempt.
+        :returns: The result of the first successful attempt.
+        :raises SubprocessExitCodeError: If all attempts fail with an unexpected
+            exit code.
+        :raises SubprocessTimeoutError: If all attempts fail due to timeout.
+        """
+        total_attempts = self.get_retries() + 1
+        last_exc: SubprocessExitCodeError | SubprocessTimeoutError | None = None
+
+        for attempt in range(total_attempts):
+            if attempt > 0:
+                delay = self.get_retry_delay()
+                if delay > 0:
+                    app.logger.debug(
+                        f"Waiting {delay}s before retrying task '{self.name}'."
+                    )
+                    time.sleep(delay)
+                app.logger.warning(
+                    f"Retrying task '{self.name}'"
+                    f" (attempt {attempt + 1}/{total_attempts})."
+                )
+            try:
+                return attempt_fn()
+            except (SubprocessExitCodeError, SubprocessTimeoutError) as e:
+                last_exc = e
+                if attempt < total_attempts - 1:
+                    app.logger.warning(
+                        f"Task '{self.name}' attempt {attempt + 1}/{total_attempts}"
+                        f" failed: {e}"
+                    )
+
+        assert last_exc is not None
+        raise last_exc
 
 
 class Command(_BaseSubprocessTask):
@@ -655,33 +743,35 @@ class Command(_BaseSubprocessTask):
         import subprocess
 
         self.log_task_execution_details(program, cmd_args)
+        program = self._resolve_program_fallback(program, env) or program
         cmd = [program, *cmd_args]
         expected_exit_codes = self.get_expected_exit_codes()
+        timeout = self.get_timeout()
 
-        try:
-            result = subprocess.run(
-                cmd,
-                check=False,
-                cwd=wd,
-                env=env,
+        def attempt():
+            try:
+                result = subprocess.run(
+                    cmd,
+                    check=False,
+                    cwd=wd,
+                    env=env,
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired:
+                assert timeout is not None
+                raise SubprocessTimeoutError(
+                    task_name=self.name,
+                    command=shlex.join(cmd),
+                    timeout=timeout,
+                )
+            self.validate_exit_code(
+                return_code=result.returncode,
+                command=shlex.join(cmd),
+                expected_exit_codes=expected_exit_codes,
             )
-        except FileNotFoundError:
-            fallback = self._resolve_program_fallback(program, env)
-            if fallback is None:
-                raise
-            result = subprocess.run(
-                [fallback, *cmd_args],
-                check=False,
-                cwd=wd,
-                env=env,
-            )
-            cmd = [fallback, *cmd_args]
-        self.validate_exit_code(
-            return_code=result.returncode,
-            command=shlex.join(cmd),
-            expected_exit_codes=expected_exit_codes,
-        )
-        return result
+            return result
+
+        return self._execute_with_retry(attempt)
 
     def _resolve_program_fallback(
         self,
@@ -762,20 +852,34 @@ class Script(_BaseSubprocessTask):
 
         self.log_task_execution_details(script)
         expected_exit_codes = self.get_expected_exit_codes()
-        result = subprocess.run(
-            script,
-            shell=True,
-            check=False,
-            cwd=wd,
-            env=env,
-            executable=self.executable,
-        )
-        self.validate_exit_code(
-            return_code=result.returncode,
-            command=script,
-            expected_exit_codes=expected_exit_codes,
-        )
-        return result
+        timeout = self.get_timeout()
+
+        def attempt():
+            try:
+                result = subprocess.run(
+                    script,
+                    shell=True,
+                    check=False,
+                    cwd=wd,
+                    env=env,
+                    executable=self.executable,
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired:
+                assert timeout is not None
+                raise SubprocessTimeoutError(
+                    task_name=self.name,
+                    command=script,
+                    timeout=timeout,
+                )
+            self.validate_exit_code(
+                return_code=result.returncode,
+                command=script,
+                expected_exit_codes=expected_exit_codes,
+            )
+            return result
+
+        return self._execute_with_retry(attempt)
 
 
 class _TaskGroup(Task):

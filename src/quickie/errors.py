@@ -70,6 +70,25 @@ class SubprocessExitCodeError(QuickieError):
         self.expected_exit_codes = expected_exit_codes
 
 
+class SubprocessTimeoutError(QuickieError):
+    """Raised when a subprocess task exceeds its configured timeout."""
+
+    def __init__(self, *, task_name: str, command: str, timeout: float):
+        """Initialize the error.
+
+        :param task_name: The task that executed the subprocess.
+        :param command: The command or script that timed out.
+        :param timeout: The timeout value in seconds.
+        """
+        super().__init__(
+            (f"Task '{task_name}' timed out after {timeout}s." f" Command: {command}"),
+            exit_code=124,
+        )
+        self.task_name = task_name
+        self.command = command
+        self.timeout = timeout
+
+
 class Stop(Exception):
     """Raised when execution should stop.
 

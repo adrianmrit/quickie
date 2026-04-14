@@ -57,3 +57,47 @@ If a command is expected to return a non-zero code, allow it explicitly with ``e
 The same option is available on subclasses by setting the ``expected_exit_codes`` attribute.
 
 To disable exit-code validation completely, set ``expected_exit_codes`` to ``None`` or ``()``.
+
+Timeout
+-------
+
+To limit how long a single subprocess attempt may run, set ``timeout`` (in seconds):
+
+.. code-block:: python
+
+    from quickie import command
+
+    @command(timeout=30)
+    def long_running():
+        return ["my_tool", "--process"]
+
+If the subprocess does not finish within the allotted time, a
+:exc:`~quickie.errors.SubprocessTimeoutError` is raised (exit code 124).
+The same attribute is available on subclasses.
+
+Retry
+-----
+
+To automatically retry a command after a transient failure, set ``retries`` to the
+number of *additional* attempts:
+
+.. code-block:: python
+
+    from quickie import command
+
+    @command(retries=3)
+    def flaky_network_call():
+        return ["curl", "https://example.com/api"]
+
+An optional ``retry_delay`` (in seconds) can be added to wait between attempts:
+
+.. code-block:: python
+
+    @command(retries=3, retry_delay=2.0)
+    def flaky_network_call():
+        return ["curl", "https://example.com/api"]
+
+Retries are triggered by both :exc:`~quickie.errors.SubprocessExitCodeError` and
+:exc:`~quickie.errors.SubprocessTimeoutError`. If all attempts fail, the last
+exception is re-raised. A warning is logged for each failed attempt and each retry.
+Both attributes are available on subclasses.
