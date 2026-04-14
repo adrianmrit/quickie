@@ -13,6 +13,7 @@ from quickie.factories import (
 from quickie.tasks import (
     Command,
     Group,
+    OutputMode,
     Script,
     Task,
     ThreadGroup,
@@ -37,6 +38,7 @@ __all__ = [
     "Command",
     "Group",
     "ThreadGroup",
+    "OutputMode",
     "Namespace",
     "task",
     "script",

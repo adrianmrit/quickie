@@ -4,6 +4,12 @@ quickie.tasks
 .. automodule:: quickie.tasks
 
    
+   .. rubric:: Module Attributes
+
+   .. autosummary::
+   
+      OutputModeT
+   
    .. rubric:: Functions
 
    .. autosummary::
@@ -16,6 +22,7 @@ quickie.tasks
    
       Command
       Group
+      OutputMode
       Script
       Task
       ThreadGroup

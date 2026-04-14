@@ -9,6 +9,11 @@
 - `TaskNotFoundError` exit code changed from `1` to `127` (POSIX shell "command not found" convention).
 - `TasksModuleNotFoundError` exit code changed from `2` to `78` (`EX_CONFIG` from sysexits.h — configuration/environment problem).
 - `SubprocessTimeoutError` exit code `124` is now a class-level attribute (previously passed at instance construction).
+- `Task.__call__`, `Task.full_run`, and `Task.run` now carry explicit return-type annotations (`Any`). `Command.run` and `Script.run` are annotated `subprocess.CompletedProcess[bytes]`.
+- `Group.run` now returns `list[Any]` of sub-task results in definition order (previously returned `None`).
+- `ThreadGroup.run` now returns `list[Any]` of sub-task results in **definition order**, not completion order (previously returned `None`).
+- Documented direct task-to-task composition pattern: call a task instance from within another task's `run()` to receive its result. Updated `task.rst` and `dependencies_and_cleanup.rst`.
+- Command and script tasks now expose an `output_mode` parameter (and class attribute) accepting `OutputMode.STREAM` (default), `OutputMode.CAPTURE`, or `OutputMode.TEE`. `CAPTURE` silences the terminal and populates `CompletedProcess.stdout`/`.stderr` as bytes. `TEE` streams to the terminal *and* captures. String literals `"stream"`, `"capture"`, `"tee"` are accepted and coerced automatically. `OutputMode` is exported from the top-level `quickie` package.
 
 ## Release 0.6.0
 

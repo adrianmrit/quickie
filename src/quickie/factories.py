@@ -31,6 +31,7 @@ import typing
 
 from quickie import tasks
 from quickie._sentinels import USE_DEFAULT, UseDefault
+from quickie.tasks import OutputModeT
 from quickie.utils.argparser import Arg
 
 
@@ -330,6 +331,7 @@ def script(
     timeout: float | None | UseDefault = USE_DEFAULT,
     retries: int | UseDefault = USE_DEFAULT,
     retry_delay: float | UseDefault = USE_DEFAULT,
+    output_mode: OutputModeT | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Script]: ...
 
@@ -344,6 +346,7 @@ def script(  # noqa: PLR0913
     timeout: float | None | UseDefault = USE_DEFAULT,
     retries: int | UseDefault = USE_DEFAULT,
     retry_delay: float | UseDefault = USE_DEFAULT,
+    output_mode: OutputModeT | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Script]:
     '''Create a script from a function.
@@ -367,6 +370,9 @@ def script(  # noqa: PLR0913
     :param timeout: Timeout in seconds for each attempt. ``None`` means no limit.
     :param retries: Number of additional attempts after an initial failure.
     :param retry_delay: Seconds to wait between retry attempts.
+    :param output_mode: How to handle subprocess output — ``"stream"`` (default),
+        ``"capture"``, or ``"tee"``. Accepts :class:`~quickie.tasks.OutputMode` values
+        or the equivalent string literals.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
@@ -386,6 +392,8 @@ def script(  # noqa: PLR0913
         attrs["retries"] = retries
     if retry_delay is not USE_DEFAULT:
         attrs["retry_delay"] = retry_delay
+    if output_mode is not USE_DEFAULT:
+        attrs["output_mode"] = output_mode
     return task_factory_helper(
         obj,
         base=tasks.Script,
@@ -411,6 +419,7 @@ def command(
     timeout: float | None | UseDefault = USE_DEFAULT,
     retries: int | UseDefault = USE_DEFAULT,
     retry_delay: float | UseDefault = USE_DEFAULT,
+    output_mode: OutputModeT | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Command]: ...
 
@@ -424,6 +433,7 @@ def command(  # noqa: PLR0913
     timeout: float | None | UseDefault = USE_DEFAULT,
     retries: int | UseDefault = USE_DEFAULT,
     retry_delay: float | UseDefault = USE_DEFAULT,
+    output_mode: OutputModeT | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Command]:
     '''Create a command task from a function.
@@ -448,6 +458,9 @@ def command(  # noqa: PLR0913
     :param timeout: Timeout in seconds for each attempt. ``None`` means no limit.
     :param retries: Number of additional attempts after an initial failure.
     :param retry_delay: Seconds to wait between retry attempts.
+    :param output_mode: How to handle subprocess output — ``"stream"`` (default),
+        ``"capture"``, or ``"tee"``. Accepts :class:`~quickie.tasks.OutputMode` values
+        or the equivalent string literals.
 
     :returns: The command task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
@@ -461,6 +474,8 @@ def command(  # noqa: PLR0913
         attrs["retries"] = retries
     if retry_delay is not USE_DEFAULT:
         attrs["retry_delay"] = retry_delay
+    if output_mode is not USE_DEFAULT:
+        attrs["output_mode"] = output_mode
     return task_factory_helper(
         obj,
         base=tasks.Command,

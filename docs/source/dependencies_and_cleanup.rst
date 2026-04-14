@@ -56,3 +56,10 @@ dynamically get the dependencies and any arguments.
 
         def run(self, *arg, **kwargs):
             print("My task")
+
+.. note::
+
+    When you need the *result* of a dependency rather than just its side
+    effects, call it directly from ``run()`` instead of listing it in
+    ``before``/``after``/``cleanup``.  See :ref:`calling-tasks-from-run`
+    for the recommended pattern.

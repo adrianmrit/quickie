@@ -1,4 +1,4 @@
-from quickie import script, task, Namespace
+from quickie import script, task, command, Namespace, OutputMode
 from quickie import app, console
 from quickie.errors import Skip, Stop
 
@@ -42,14 +42,14 @@ def script_example(task):
 @script
 def build():
     return """
-    python -m build
+    uv run python -m build
     """
 
 
 @script
 def upload():
     return """
-    python -m twine upload dist/*
+    uv run python -m twine upload dist/*
     """
 
 
@@ -67,7 +67,7 @@ def build_docs(*args):
     return f"""
     rm -rf docs/build
     rm -rf docs/source/generated
-    sphinx-build -M html docs/source docs/build {args}
+    uv run sphinx-build -M html docs/source docs/build {args}
     """
 
 
@@ -83,3 +83,55 @@ def stop_example():
     """Example task that stops all tasks."""
     console.print("This task will stop all tasks.")
     raise Stop("Stopping all tasks.")
+
+
+# ── output_mode examples ──────────────────────────────────────────────────────
+
+
+@script(output_mode=OutputMode.CAPTURE)
+def capture_example():
+    """Capture stdout/stderr without printing to the terminal.
+
+    Demonstrates OutputMode.CAPTURE: result.stdout is available, nothing
+    is written to the terminal during execution.
+    """
+    return "echo 'captured output'; echo 'captured stderr' >&2"
+
+
+@task
+def show_captured():
+    """Run capture_example and print the captured bytes afterwards."""
+    result = capture_example()
+    console.print(f"[bold]stdout:[/bold] {result.stdout!r}")
+    console.print(f"[bold]stderr:[/bold] {result.stderr!r}")
+
+
+@script(output_mode=OutputMode.TEE)
+def tee_example():
+    """Stream output to the terminal AND capture it.
+
+    Demonstrates OutputMode.TEE: you should see output live, and the
+    captured bytes are also available on the returned CompletedProcess.
+    """
+    return "echo 'tee stdout'; echo 'tee stderr' >&2"
+
+
+@task
+def show_tee():
+    """Run tee_example, then echo the captured bytes to confirm TEE worked."""
+    result = tee_example()
+    console.print(f"[bold]captured stdout:[/bold] {result.stdout!r}")
+    console.print(f"[bold]captured stderr:[/bold] {result.stderr!r}")
+
+
+@command(output_mode="capture")
+def capture_command_example():
+    """Same as capture_example but using a command task and a string literal mode."""
+    return ["echo", "command captured"]
+
+
+@task
+def show_captured_command():
+    """Run capture_command_example and show the captured bytes."""
+    result = capture_command_example()
+    console.print(f"[bold]stdout:[/bold] {result.stdout!r}")

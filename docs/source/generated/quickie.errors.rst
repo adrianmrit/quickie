@@ -11,6 +11,8 @@ quickie.errors
       QuickieError
       Skip
       Stop
+      SubprocessExitCodeError
+      SubprocessTimeoutError
       TaskNotFoundError
       TasksModuleNotFoundError
    

@@ -127,3 +127,47 @@ Retries are triggered by both :exc:`~quickie.errors.SubprocessExitCodeError` and
 :exc:`~quickie.errors.SubprocessTimeoutError`. If all attempts fail, the last
 exception is re-raised. A warning is logged for each failed attempt and each retry.
 Both attributes are available on subclasses.
+
+Capturing output
+----------------
+
+By default, script output streams directly to the terminal. Use
+``output_mode`` to control this behaviour:
+
+- ``"stream"`` *(default)* — output goes to the terminal; nothing is captured.
+- ``"capture"`` — output is captured as bytes; nothing is printed.
+- ``"tee"`` — output streams to the terminal *and* is captured.
+
+Both :class:`~quickie.tasks.OutputMode` enum values and plain string literals
+are accepted interchangeably:
+
+.. code-block:: python
+
+    from quickie import script, task, OutputMode
+
+    # Using the enum
+    @script(output_mode=OutputMode.CAPTURE)
+    def get_version_enum():
+        return "my_tool --version"
+
+    # Using a string literal — equivalent to the above
+    @script(output_mode="capture")
+    def get_version_str():
+        return "my_tool --version"
+
+    # Tee — terminal sees output and it is also available afterwards
+    @script(output_mode="tee")
+    def verbose_build():
+        return "make all"
+
+    @task
+    def print_version():
+        result = get_version_str()      # CompletedProcess.stdout is bytes
+        print(result.stdout.decode())
+
+When subclassing, set ``output_mode`` as a class attribute using either form::
+
+    class MyScript(Script):
+        output_mode = OutputMode.CAPTURE  # or output_mode = "capture"
+
+See also :ref:`calling-tasks-from-run` for the task composition pattern.

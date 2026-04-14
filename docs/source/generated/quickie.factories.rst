@@ -4,6 +4,13 @@ quickie.factories
 .. automodule:: quickie.factories
 
    
+   .. rubric:: Module Attributes
+
+   .. autosummary::
+   
+      PartialReturnType
+      DecoratorReturnType
+   
    .. rubric:: Functions
 
    .. autosummary::

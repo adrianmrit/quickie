@@ -7,13 +7,16 @@ together.
 """
 
 import argparse
+import enum
 import functools
 import os
 from pathlib import Path
 import re
-import shutil
-import sys
 import shlex
+import shutil
+import subprocess
+import sys
+import threading
 import time
 import typing
 
@@ -371,15 +374,20 @@ class Task:
             extra = extra[1:]
         return self.__call__(*extra, **parsed_args)
 
-    def run(self, *args, **kwargs):
-        """Runs work related to the task, excluding before, after, and cleanup tasks.
+    def run(self, *args, **kwargs) -> typing.Any:
+        """Run the main work of this task.
 
-        This method should be overridden by subclasses to implement the task.
+        Override this in subclasses to implement task logic. Return any value;
+        it will be propagated to the caller of :meth:`__call__`.
 
-        :param args: Unknown arguments.
-        :param kwargs: Parsed known arguments.
+        ``before``, ``after``, and ``cleanup`` phases are *not* invoked by
+        this method — use :meth:`__call__` when calling a task from inside
+        another task's ``run()`` to include the full lifecycle.
 
-        :returns: The result of the task.
+        :param args: Positional arguments forwarded from :meth:`__call__`.
+        :param kwargs: Keyword arguments forwarded from :meth:`__call__`.
+
+        :returns: Any value; propagated as-is to the caller.
         """
         raise NotImplementedError
 
@@ -396,19 +404,44 @@ class Task:
 
     # not implemented in __call__ so that we can override it at the instance level
     @typing.final
-    def full_run(self, *args, **kwargs):
-        """Call the task, including before, after, and cleanup tasks.
+    def full_run(self, *args, **kwargs) -> typing.Any:
+        """Execute the full task lifecycle and return the result of :meth:`run`.
 
-        :param args: Unknown arguments.
-        :param kwargs: Parsed known arguments.
+        Execution order:
 
-        :returns: The result of the task.
+        1. **condition** — if it fails, logs and returns ``None`` immediately.
+        2. **before** — each task in :attr:`before` is called; return values
+           are discarded.
+        3. **run** — the main work; its return value is captured.
+           If :exc:`~quickie.errors.Skip` is raised, the result is set to
+           ``None`` and ``after`` still runs.
+        4. **after** — each task in :attr:`after` is called; return values
+           are discarded.
+        5. **cleanup** — each task in :attr:`cleanup` is called even if an
+           earlier phase raised; exceptions are logged and swallowed.
+
+        ``before``, ``after``, and ``cleanup`` phase return values are always
+        discarded.  To pass results between tasks, call them directly from
+        :meth:`run` instead:
+
+        .. code-block:: python
+
+            class MyTask(Task):
+                def run(self):
+                    b_result = TaskB()()
+                    return TaskC()(b_result)
+
+        :param args: Positional arguments forwarded to each phase.
+        :param kwargs: Keyword arguments forwarded to each phase.
+
+        :returns: The return value of :meth:`run`, or ``None`` if the
+            condition failed or :exc:`~quickie.errors.Skip` was raised.
         """
         from quickie import app
 
         if not self.condition_passes(*args, **kwargs):
             app.logger.info(f"Skipping task {self.name}: conditions not met.")
-            return
+            return None
         try:
             self.run_before(*args, **kwargs)
             try:
@@ -423,9 +456,51 @@ class Task:
             self.run_cleanup(*args, **kwargs)
 
     @typing.final
-    def __call__(self, *args, **kwargs):
-        """Convenient shortcut for :meth:`full_run`."""
+    def __call__(self, *args, **kwargs) -> typing.Any:
+        """Invoke this task, running the full lifecycle via :meth:`full_run`.
+
+        This is the canonical way to call a task from within another task's
+        :meth:`run` method::
+
+            class PipelineTask(Task):
+                def run(self):
+                    data = FetchTask()()
+                    return ProcessTask()(data)
+
+        :returns: The return value of :meth:`run`, or ``None`` if the
+            condition failed or :exc:`~quickie.errors.Skip` was raised.
+        """
         return self.full_run(*args, **kwargs)
+
+
+class OutputMode(enum.StrEnum):
+    """Controls how subprocess stdout and stderr are handled."""
+
+    STREAM = "stream"
+    """Stream output directly to the terminal (default). Output is not captured."""
+
+    CAPTURE = "capture"
+    """Capture stdout and stderr as bytes; nothing is printed to the terminal.
+
+    The returned :class:`subprocess.CompletedProcess` will have populated
+    ``.stdout`` and ``.stderr`` byte attributes.
+    """
+
+    TEE = "tee"
+    """Stream output to the terminal *and* capture it as bytes.
+
+    The returned :class:`subprocess.CompletedProcess` will have populated
+    ``.stdout`` and ``.stderr`` byte attributes while output is still written
+    to the terminal in real time.
+    """
+
+
+type OutputModeT = OutputMode | typing.Literal["stream", "capture", "tee"]
+"""Accepted values for the ``output_mode`` parameter.
+
+Either an :class:`OutputMode` member or one of the string literals
+``"stream"``, ``"capture"``, or ``"tee"``.
+"""
 
 
 class _BaseSubprocessTask(Task):
@@ -454,6 +529,18 @@ class _BaseSubprocessTask(Task):
     retry_delay: float = 0.0
     """Seconds to wait between retry attempts."""
 
+    output_mode: OutputMode = OutputMode.STREAM
+    """Controls how subprocess output is handled.
+
+    - :attr:`OutputMode.STREAM` — output goes to the terminal (default).
+    - :attr:`OutputMode.CAPTURE` — output is captured; terminal sees nothing.
+    - :attr:`OutputMode.TEE` — output streams to the terminal *and* is captured.
+
+    The latter two modes populate :attr:`subprocess.CompletedProcess.stdout`
+    and :attr:`subprocess.CompletedProcess.stderr` as :class:`bytes` objects on
+    the returned result, enabling use of subprocess output in composing tasks.
+    """
+
     def __init__(  # noqa: PLR0913
         self,
         *args,
@@ -463,6 +550,7 @@ class _BaseSubprocessTask(Task):
         timeout: float | None | UseDefault = USE_DEFAULT,
         retries: int | UseDefault = USE_DEFAULT,
         retry_delay: float | UseDefault = USE_DEFAULT,
+        output_mode: OutputModeT | UseDefault = USE_DEFAULT,
         **kwargs,
     ):
         """Initialize the task.
@@ -475,6 +563,9 @@ class _BaseSubprocessTask(Task):
         :param timeout: Timeout in seconds for each attempt. ``None`` means no limit.
         :param retries: Number of additional attempts after an initial failure.
         :param retry_delay: Seconds to wait between retry attempts.
+        :param output_mode: How to handle subprocess output — ``"stream"`` (default),
+            ``"capture"``, or ``"tee"``. Accepts :class:`OutputMode` values or the
+            equivalent string literals.
         :param kwargs: Task instance keyword arguments.
         """
         super().__init__(*args, **kwargs)
@@ -494,6 +585,9 @@ class _BaseSubprocessTask(Task):
         if retry_delay is USE_DEFAULT:
             retry_delay = self.retry_delay
         self.retry_delay = retry_delay
+        if output_mode is USE_DEFAULT:
+            output_mode = self.output_mode
+        self.output_mode = OutputMode(output_mode)
 
     def get_wd(self, *args, **kwargs) -> str:
         """Get the working directory.
@@ -622,6 +716,74 @@ class _BaseSubprocessTask(Task):
         assert last_exc is not None
         raise last_exc
 
+    def _tee_popen(
+        self,
+        cmd: list[str] | str,
+        *,
+        shell: bool = False,
+        executable: str | None = None,
+        wd: str,
+        env: typing.Mapping[str, str],
+        timeout: float | None,
+    ) -> subprocess.CompletedProcess[bytes]:
+        """Run cmd via Popen, streaming to the terminal while capturing output.
+
+        :returns: A :class:`subprocess.CompletedProcess` with populated ``.stdout``
+            and ``.stderr`` bytes.
+        :raises SubprocessTimeoutError: If the process exceeds *timeout* seconds.
+        """
+        stdout_chunks: list[bytes] = []
+        stderr_chunks: list[bytes] = []
+
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=shell,
+            executable=executable,
+            cwd=wd,
+            env=env,
+        )
+
+        def _drain(pipe: typing.IO[bytes], chunks: list[bytes], dest) -> None:
+            for chunk in iter(lambda: pipe.read1(), b""):  # type: ignore[attr-defined]
+                chunks.append(chunk)
+                dest.write(chunk)
+                dest.flush()
+
+        stdout_thread = threading.Thread(
+            target=_drain, args=(process.stdout, stdout_chunks, sys.stdout.buffer)
+        )
+        stderr_thread = threading.Thread(
+            target=_drain, args=(process.stderr, stderr_chunks, sys.stderr.buffer)
+        )
+        stdout_thread.start()
+        stderr_thread.start()
+
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout_thread.join()
+            stderr_thread.join()
+            assert timeout is not None
+            cmd_str = shlex.join(cmd) if isinstance(cmd, list) else cmd
+            raise SubprocessTimeoutError(
+                task_name=self.name,
+                command=cmd_str,
+                timeout=timeout,
+            )
+
+        stdout_thread.join()
+        stderr_thread.join()
+
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=process.returncode,
+            stdout=b"".join(stdout_chunks),
+            stderr=b"".join(stderr_chunks),
+        )
+
 
 class Command(_BaseSubprocessTask):
     """Base class for tasks that run a binary."""
@@ -708,7 +870,7 @@ class Command(_BaseSubprocessTask):
 
     @typing.final
     @typing.override
-    def run(self, *args, **kwargs):
+    def run(self, *args, **kwargs) -> subprocess.CompletedProcess[bytes]:
         cmd = self.get_cmd(*args, **kwargs)
         cmd = self.split_cmd_args(cmd)
 
@@ -740,30 +902,33 @@ class Command(_BaseSubprocessTask):
 
         :returns: The result of the program.
         """
-        import subprocess
-
         self.log_task_execution_details(program, cmd_args)
         program = self._resolve_program_fallback(program, env) or program
         cmd = [program, *cmd_args]
         expected_exit_codes = self.get_expected_exit_codes()
         timeout = self.get_timeout()
+        output_mode = self.output_mode
 
         def attempt():
-            try:
-                result = subprocess.run(
-                    cmd,
-                    check=False,
-                    cwd=wd,
-                    env=env,
-                    timeout=timeout,
-                )
-            except subprocess.TimeoutExpired:
-                assert timeout is not None
-                raise SubprocessTimeoutError(
-                    task_name=self.name,
-                    command=shlex.join(cmd),
-                    timeout=timeout,
-                )
+            if output_mode is OutputMode.TEE:
+                result = self._tee_popen(cmd, wd=wd, env=env, timeout=timeout)
+            else:
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        check=False,
+                        cwd=wd,
+                        env=env,
+                        timeout=timeout,
+                        capture_output=(output_mode is OutputMode.CAPTURE),
+                    )
+                except subprocess.TimeoutExpired:
+                    assert timeout is not None
+                    raise SubprocessTimeoutError(
+                        task_name=self.name,
+                        command=shlex.join(cmd),
+                        timeout=timeout,
+                    )
             self.validate_exit_code(
                 return_code=result.returncode,
                 command=shlex.join(cmd),
@@ -829,7 +994,7 @@ class Script(_BaseSubprocessTask):
 
     @typing.final
     @typing.override
-    def run(self, *args, **kwargs):
+    def run(self, *args, **kwargs) -> subprocess.CompletedProcess[bytes]:
         script = self.get_script(*args, **kwargs)
         wd = self.get_wd(*args, **kwargs)
         env = self.get_env(*args, **kwargs)
@@ -848,30 +1013,41 @@ class Script(_BaseSubprocessTask):
 
     def _run_script(self, script: str, *, wd, env):
         """Run the script."""
-        import subprocess
-
         self.log_task_execution_details(script)
         expected_exit_codes = self.get_expected_exit_codes()
         timeout = self.get_timeout()
+        output_mode = self.output_mode
+        executable = self.executable
 
         def attempt():
-            try:
-                result = subprocess.run(
+            if output_mode is OutputMode.TEE:
+                result = self._tee_popen(
                     script,
                     shell=True,
-                    check=False,
-                    cwd=wd,
+                    executable=executable,
+                    wd=wd,
                     env=env,
-                    executable=self.executable,
                     timeout=timeout,
                 )
-            except subprocess.TimeoutExpired:
-                assert timeout is not None
-                raise SubprocessTimeoutError(
-                    task_name=self.name,
-                    command=script,
-                    timeout=timeout,
-                )
+            else:
+                try:
+                    result = subprocess.run(
+                        script,
+                        shell=True,
+                        check=False,
+                        cwd=wd,
+                        env=env,
+                        executable=executable,
+                        timeout=timeout,
+                        capture_output=(output_mode is OutputMode.CAPTURE),
+                    )
+                except subprocess.TimeoutExpired:
+                    assert timeout is not None
+                    raise SubprocessTimeoutError(
+                        task_name=self.name,
+                        command=script,
+                        timeout=timeout,
+                    )
             self.validate_exit_code(
                 return_code=result.returncode,
                 command=script,
@@ -914,9 +1090,12 @@ class Group(_TaskGroup):
 
     @typing.final
     @typing.override
-    def run(self, *args, **kwargs):
-        for task in self.get_tasks(*args, **kwargs):
-            self._run_task(task)
+    def run(self, *args, **kwargs) -> list[typing.Any]:
+        """Run each sub-task in definition order and return their results.
+
+        :returns: A list of each sub-task's return value, in definition order.
+        """
+        return [self._run_task(task) for task in self.get_tasks(*args, **kwargs)]
 
 
 class ThreadGroup(_TaskGroup):
@@ -939,14 +1118,27 @@ class ThreadGroup(_TaskGroup):
 
     @typing.final
     @typing.override
-    def run(self, *args, **kwargs):
+    def run(self, *args, **kwargs) -> list[typing.Any]:
+        """Run each sub-task concurrently and return their results in definition order.
+
+        All sub-tasks are submitted to a thread pool simultaneously.  If any
+        task raises, the exception propagates immediately after all futures
+        settle; remaining results are still collected in submission order.
+
+        :returns: A list of each sub-task's return value, in definition order
+            (not completion order).
+        :raises: The first exception raised by any sub-task.
+        """
         import concurrent.futures
 
-        tasks = self.get_tasks(*args, **kwargs)
+        tasks = list(self.get_tasks(*args, **kwargs))
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.get_max_workers(),
             thread_name_prefix=f"quickie-parallel-task.{self.name}",
         ) as executor:
             futures = [executor.submit(self._run_task, task) for task in tasks]
+            # surface the first exception while still letting others complete
             for future in concurrent.futures.as_completed(futures):
                 future.result()
+        # collect in definition (submission) order
+        return [future.result() for future in futures]

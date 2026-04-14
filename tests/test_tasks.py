@@ -1,4 +1,6 @@
 import functools
+import io
+import sys
 import types
 
 import pytest
@@ -20,7 +22,7 @@ from quickie.factories import (
     task_factory_helper,
     thread_group,
 )
-from quickie.tasks import MAX_SHORT_HELP_LENGTH, identifier_to_task_name
+from quickie.tasks import MAX_SHORT_HELP_LENGTH, OutputMode, identifier_to_task_name
 
 
 class TestGlobalNamespace:
@@ -478,24 +480,26 @@ class TestScriptTask:
         task_instance([])
         subprocess_run.assert_called_once_with(
             "myscript",
-            check=False,
             shell=True,
+            check=False,
             cwd="/somedir",
-            env={},
+            env=mocker.ANY,
             executable=None,
             timeout=None,
+            capture_output=False,
         )
         subprocess_run.reset_mock()
 
         dynamic_script.parse_and_run(["value1"])
         subprocess_run.assert_called_once_with(
             "myscript value1",
-            check=False,
             shell=True,
+            check=False,
             cwd="/somedir",
-            env={"VAR": "VAL"},
+            env=mocker.ANY,
             executable=None,
             timeout=None,
+            capture_output=False,
         )
 
     def test_script_required(self):
@@ -954,6 +958,132 @@ class TestCommandExtended:
         # Should log: attempt N failed + retrying
         assert logger_warning.call_count == 2  # noqa: PLR2004
 
+    def test_capture_output_mode(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(
+            returncode=0, stdout=b"output", stderr=b""
+        )
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(output_mode=OutputMode.CAPTURE)
+        def my_task():
+            return ["myprogram"]
+
+        result = my_task()
+
+        assert subprocess_run.call_args[1]["capture_output"] is True
+        assert result.stdout == b"output"
+
+    def test_capture_output_mode_string_literal(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(
+            returncode=0, stdout=b"output", stderr=b""
+        )
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(output_mode="capture")
+        def my_task():
+            return ["myprogram"]
+
+        result = my_task()
+
+        assert subprocess_run.call_args[1]["capture_output"] is True
+        assert result.stdout == b"output"
+
+    def test_tee_output_mode(self, mocker):
+        mock_process = mocker.Mock()
+        mock_process.stdout.read1.side_effect = [b"hello\n", b""]
+        mock_process.stderr.read1.side_effect = [b"err\n", b""]
+        mock_process.returncode = 0
+        mock_process.wait.return_value = None
+
+        mock_popen = mocker.patch("subprocess.Popen", return_value=mock_process)
+        subprocess_run = mocker.patch("subprocess.run")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+        mocker.patch.object(sys, "stdout", mocker.Mock(buffer=io.BytesIO()))
+        mocker.patch.object(sys, "stderr", mocker.Mock(buffer=io.BytesIO()))
+
+        @command(output_mode=OutputMode.TEE)
+        def my_task():
+            return ["myprogram"]
+
+        result = my_task()
+
+        mock_popen.assert_called_once()
+        subprocess_run.assert_not_called()
+        assert result.stdout == b"hello\n"
+        assert result.stderr == b"err\n"
+        assert result.returncode == 0
+
+    def test_tee_output_mode_streams_to_terminal(self, mocker):
+        mock_process = mocker.Mock()
+        mock_process.stdout.read1.side_effect = [b"hello\n", b""]
+        mock_process.stderr.read1.side_effect = [b""]
+        mock_process.returncode = 0
+        mock_process.wait.return_value = None
+
+        mocker.patch("subprocess.Popen", return_value=mock_process)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+        stdout_buf = io.BytesIO()
+        mocker.patch.object(sys, "stdout", mocker.Mock(buffer=stdout_buf))
+        mocker.patch.object(sys, "stderr", mocker.Mock(buffer=io.BytesIO()))
+
+        @command(output_mode=OutputMode.TEE)
+        def my_task():
+            return ["myprogram"]
+
+        my_task()
+
+        assert stdout_buf.getvalue() == b"hello\n"
+
+    def test_tee_output_mode_timeout(self, mocker):
+        import subprocess as sp
+
+        mock_process = mocker.Mock()
+        mock_process.stdout.read1.return_value = b""
+        mock_process.stderr.read1.return_value = b""
+        mock_process.wait.side_effect = sp.TimeoutExpired(cmd="myprogram", timeout=5)
+
+        mocker.patch("subprocess.Popen", return_value=mock_process)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+        mocker.patch.object(sys, "stdout", mocker.Mock(buffer=io.BytesIO()))
+        mocker.patch.object(sys, "stderr", mocker.Mock(buffer=io.BytesIO()))
+
+        @command(output_mode=OutputMode.TEE, timeout=5)
+        def my_task():
+            return ["myprogram"]
+
+        with pytest.raises(SubprocessTimeoutError) as exc_info:
+            my_task()
+
+        assert exc_info.value.timeout == 5
+        mock_process.kill.assert_called_once()
+
 
 class TestScriptTaskExtended:
     def test_non_zero_exit_code_raises(self, mocker):
@@ -1099,6 +1229,106 @@ class TestScriptTaskExtended:
         flaky_script()
 
         time_sleep.assert_called_once_with(1.5)
+
+    def test_capture_output_mode(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(
+            returncode=0, stdout=b"output", stderr=b""
+        )
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(output_mode=OutputMode.CAPTURE)
+        def my_script():
+            return "myprogram"
+
+        result = my_script()
+
+        assert subprocess_run.call_args[1]["capture_output"] is True
+        assert result.stdout == b"output"
+
+    def test_capture_output_mode_string_literal(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(
+            returncode=0, stdout=b"output", stderr=b""
+        )
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(output_mode="capture")
+        def my_script():
+            return "myprogram"
+
+        result = my_script()
+
+        assert subprocess_run.call_args[1]["capture_output"] is True
+        assert result.stdout == b"output"
+
+    def test_tee_output_mode(self, mocker):
+        mock_process = mocker.Mock()
+        mock_process.stdout.read1.side_effect = [b"hello\n", b""]
+        mock_process.stderr.read1.side_effect = [b"err\n", b""]
+        mock_process.returncode = 0
+        mock_process.wait.return_value = None
+
+        mock_popen = mocker.patch("subprocess.Popen", return_value=mock_process)
+        subprocess_run = mocker.patch("subprocess.run")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+        mocker.patch.object(sys, "stdout", mocker.Mock(buffer=io.BytesIO()))
+        mocker.patch.object(sys, "stderr", mocker.Mock(buffer=io.BytesIO()))
+
+        @script(output_mode=OutputMode.TEE)
+        def my_script():
+            return "myprogram"
+
+        result = my_script()
+
+        mock_popen.assert_called_once()
+        subprocess_run.assert_not_called()
+        assert result.stdout == b"hello\n"
+        assert result.stderr == b"err\n"
+        assert result.returncode == 0
+
+    def test_tee_output_mode_timeout(self, mocker):
+        import subprocess as sp
+
+        mock_process = mocker.Mock()
+        mock_process.stdout.read1.return_value = b""
+        mock_process.stderr.read1.return_value = b""
+        mock_process.wait.side_effect = sp.TimeoutExpired(cmd="myprogram", timeout=5)
+
+        mocker.patch("subprocess.Popen", return_value=mock_process)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+        mocker.patch.object(sys, "stdout", mocker.Mock(buffer=io.BytesIO()))
+        mocker.patch.object(sys, "stderr", mocker.Mock(buffer=io.BytesIO()))
+
+        @script(output_mode=OutputMode.TEE, timeout=5)
+        def my_script():
+            return "myprogram"
+
+        with pytest.raises(SubprocessTimeoutError) as exc_info:
+            my_script()
+
+        assert exc_info.value.timeout == 5
+        mock_process.kill.assert_called_once()
 
 
 class TestRootNamespace:

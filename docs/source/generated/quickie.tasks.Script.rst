@@ -21,10 +21,14 @@
       ~Script.get_before
       ~Script.get_cleanup
       ~Script.get_env
+      ~Script.get_expected_exit_codes
       ~Script.get_help
       ~Script.get_parser
+      ~Script.get_retries
+      ~Script.get_retry_delay
       ~Script.get_script
       ~Script.get_short_help
+      ~Script.get_timeout
       ~Script.get_wd
       ~Script.log_task_execution
       ~Script.log_task_execution_details
@@ -34,6 +38,7 @@
       ~Script.run_after
       ~Script.run_before
       ~Script.run_cleanup
+      ~Script.validate_exit_code
    
    
 
@@ -50,9 +55,14 @@
       ~Script.condition
       ~Script.env
       ~Script.executable
+      ~Script.expected_exit_codes
       ~Script.extra_args
+      ~Script.output_mode
       ~Script.parser
+      ~Script.retries
+      ~Script.retry_delay
       ~Script.script
+      ~Script.timeout
       ~Script.wd
    
    
