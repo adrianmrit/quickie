@@ -7,7 +7,7 @@ import quickie._namespace
 from quickie import tasks, app
 from quickie.conditions import condition
 from quickie.context import Context
-from quickie.errors import TaskNotFoundError
+from quickie.errors import SubprocessExitCodeError, TaskNotFoundError
 from quickie.factories import (
     command,
     group,
@@ -697,6 +697,126 @@ class TestCommandExtended:
         with pytest.raises(ValueError, match="No program to run"):
             EmptyCmd()([])
 
+    def test_non_zero_exit_code_raises(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=7)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command
+        def my_task():
+            return ["myprogram", "--fail"]
+
+        with pytest.raises(SubprocessExitCodeError, match="exit code 7") as exc_info:
+            my_task()
+
+        assert exc_info.value.exit_code == 7
+        assert subprocess_run.call_args[1]["check"] is False
+
+    def test_expected_exit_codes_allow_non_zero_result(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=7)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(expected_exit_codes=(0, 7))
+        def my_task():
+            return ["myprogram", "--fail"]
+
+        result = my_task()
+
+        assert result.returncode == 7
+        assert subprocess_run.call_args[1]["check"] is False
+
+    @pytest.mark.parametrize("expected_exit_codes", [None, ()])
+    def test_disable_exit_code_validation(self, mocker, expected_exit_codes):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=7)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/example/cwd", env={}, inherit_env=False),
+        )
+
+        @command(expected_exit_codes=expected_exit_codes)
+        def my_task():
+            return ["myprogram", "--fail"]
+
+        result = my_task()
+
+        assert result.returncode == 7
+        assert subprocess_run.call_args[1]["check"] is False
+
+
+class TestScriptTaskExtended:
+    def test_non_zero_exit_code_raises(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=5)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script
+        def fail_script():
+            return "exit 5"
+
+        with pytest.raises(SubprocessExitCodeError, match="exit code 5") as exc_info:
+            fail_script()
+
+        assert exc_info.value.exit_code == 5
+        assert subprocess_run.call_args[1]["check"] is False
+
+    def test_expected_exit_codes_allow_non_zero_result(self, mocker):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=5)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(expected_exit_codes=(0, 5))
+        def fail_script():
+            return "exit 5"
+
+        result = fail_script()
+
+        assert result.returncode == 5
+        assert subprocess_run.call_args[1]["check"] is False
+
+    @pytest.mark.parametrize("expected_exit_codes", [None, ()])
+    def test_disable_exit_code_validation(self, mocker, expected_exit_codes):
+        subprocess_run = mocker.patch("subprocess.run")
+        subprocess_run.return_value = mocker.Mock(returncode=5)
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="/somedir", env={}, inherit_env=False),
+        )
+
+        @script(expected_exit_codes=expected_exit_codes)
+        def fail_script():
+            return "exit 5"
+
+        result = fail_script()
+
+        assert result.returncode == 5
+        assert subprocess_run.call_args[1]["check"] is False
+
 
 class TestRootNamespace:
     def test_register_multiple_namespaces(self):
@@ -714,6 +834,65 @@ class TestRootNamespace:
         ns = quickie._namespace.RootNamespace()
         with pytest.raises(TaskNotFoundError):
             ns["nonexistent"]
+
+    def test_alias_collision_uses_last_loaded_task(self):
+        module = types.SimpleNamespace()
+
+        @task(name="first", aliases=["shared"])
+        def first_task():
+            pass
+
+        @task(name="shared")
+        def second_task():
+            pass
+
+        module.__dict__["first_task"] = first_task
+        module.__dict__["second_task"] = second_task
+
+        ns = quickie._namespace.RootNamespace()
+        ns.load(module)
+
+        assert ns["first"] is first_task
+        assert ns["shared"] is second_task
+
+    def test_deep_nested_namespaces_load_all_tasks(self):
+        module = types.SimpleNamespace()
+
+        @task(name="alpha")
+        def alpha_task():
+            pass
+
+        @task(name="beta")
+        def beta_task():
+            pass
+
+        module.__dict__["namespace"] = quickie._namespace.Namespace(
+            {
+                "lvl1": {
+                    "lvl2": {
+                        "lvl3": {
+                            "lvl4": [alpha_task, beta_task],
+                        }
+                    }
+                }
+            }
+        )
+
+        ns = quickie._namespace.RootNamespace()
+        ns.load(module)
+
+        assert ns["lvl1:lvl2:lvl3:lvl4:alpha"] is alpha_task
+        assert ns["lvl1:lvl2:lvl3:lvl4:beta"] is beta_task
+
+    def test_private_task_can_still_be_registered_explicitly(self):
+        @task(private=True, name="private-task")
+        def private_task():
+            pass
+
+        ns = quickie._namespace.RootNamespace()
+        ns.register(private_task, namespace="manual:private")
+
+        assert ns["manual:private"] is private_task
 
 
 class TestFactories:

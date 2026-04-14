@@ -1,5 +1,10 @@
 # Quickie Change Log
 
+## Unreleased
+
+- Command and script tasks now fail fast on unexpected non-zero subprocess exit codes.
+- Command and script tasks now support `expected_exit_codes` to allow non-zero results explicitly or disable exit code validation.
+
 ## Release 0.6.0
 
 ### Added

@@ -17,7 +17,8 @@ import shlex
 import typing
 
 from quickie.conditions.base import BaseCondition
-from quickie.errors import Skip
+from quickie.errors import Skip, SubprocessExitCodeError
+from quickie._sentinels import USE_DEFAULT, UseDefault
 from quickie.config import app
 from quickie.utils.argparser import Arg
 
@@ -435,11 +436,15 @@ class _BaseSubprocessTask(Task):
     env: typing.Mapping[str, str] | None = None
     """The environment."""
 
+    expected_exit_codes: typing.Sequence[int] | None = (0,)
+    """Accepted subprocess exit codes."""
+
     def __init__(
         self,
         *args,
         env: typing.Mapping[str, str] | None = None,
         wd: str | Path | None = None,
+        expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
         **kwargs,
     ):
         """Initialize the task.
@@ -447,11 +452,18 @@ class _BaseSubprocessTask(Task):
         :param args: Task instance arguments.
         :param env: The environment to use.
         :param wd: The working directory.
+        :param expected_exit_codes: Accepted subprocess exit codes.
+            Pass ``None`` or ``()`` to disable validation.
         :param kwargs: Task instance keyword arguments.
         """
         super().__init__(*args, **kwargs)
         self.wd = wd if wd is not None else self.wd
         self.env = env if env is not None else self.env
+        if expected_exit_codes is USE_DEFAULT:
+            expected_exit_codes = self.expected_exit_codes
+        self.expected_exit_codes = self._normalize_expected_exit_codes(
+            expected_exit_codes
+        )
 
     def get_wd(self, *args, **kwargs) -> str:
         """Get the working directory.
@@ -486,6 +498,41 @@ class _BaseSubprocessTask(Task):
         # to this dictionary. So we can allow it to be any sort of mapping.
         env = typing.cast(dict, self.env)
         return app.context.env.new_child(env).new_child()
+
+    def _normalize_expected_exit_codes(
+        self,
+        expected_exit_codes: typing.Sequence[int] | None,
+    ) -> tuple[int, ...] | None:
+        if not expected_exit_codes:
+            return None
+
+        normalized = tuple(expected_exit_codes)
+
+        if not all(isinstance(code, int) for code in normalized):
+            raise TypeError("expected_exit_codes values must be integers")
+        return normalized
+
+    def get_expected_exit_codes(self, *args, **kwargs) -> typing.Iterable[int] | None:
+        """Get accepted subprocess exit codes."""
+        return self.expected_exit_codes
+
+    def validate_exit_code(
+        self,
+        *,
+        return_code: int,
+        command: str,
+        expected_exit_codes: typing.Iterable[int] | None,
+    ):
+        """Validate the subprocess return code."""
+        if not expected_exit_codes:
+            return
+        if return_code not in expected_exit_codes:
+            raise SubprocessExitCodeError(
+                task_name=self.name,
+                return_code=return_code,
+                command=command,
+                expected_exit_codes=expected_exit_codes,
+            )
 
 
 class Command(_BaseSubprocessTask):
@@ -609,6 +656,7 @@ class Command(_BaseSubprocessTask):
 
         self.log_task_execution_details(program, cmd_args)
         cmd = [program, *cmd_args]
+        expected_exit_codes = self.get_expected_exit_codes()
 
         try:
             result = subprocess.run(
@@ -627,6 +675,12 @@ class Command(_BaseSubprocessTask):
                 cwd=wd,
                 env=env,
             )
+            cmd = [fallback, *cmd_args]
+        self.validate_exit_code(
+            return_code=result.returncode,
+            command=shlex.join(cmd),
+            expected_exit_codes=expected_exit_codes,
+        )
         return result
 
     def _resolve_program_fallback(
@@ -706,8 +760,8 @@ class Script(_BaseSubprocessTask):
         """Run the script."""
         import subprocess
 
-        # TODO: Raise error if code is not 0, or expected value
         self.log_task_execution_details(script)
+        expected_exit_codes = self.get_expected_exit_codes()
         result = subprocess.run(
             script,
             shell=True,
@@ -715,6 +769,11 @@ class Script(_BaseSubprocessTask):
             cwd=wd,
             env=env,
             executable=self.executable,
+        )
+        self.validate_exit_code(
+            return_code=result.returncode,
+            command=script,
+            expected_exit_codes=expected_exit_codes,
         )
         return result
 

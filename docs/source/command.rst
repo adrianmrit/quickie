@@ -37,3 +37,23 @@ For example the followings are all equivalent:
 
         def get_cmd_args(self):
             return "arg1 arg2"  # or ["arg1", "arg2"]
+
+
+Exit codes
+----------
+
+Command tasks validate subprocess exit codes strictly by default. Exit code ``0`` is accepted, and any other exit code raises an error that exits the CLI with the same code.
+
+If a command is expected to return a non-zero code, allow it explicitly with ``expected_exit_codes``:
+
+.. code-block:: python
+
+    from quickie import command
+
+    @command(expected_exit_codes=(0, 2))
+    def grep_with_no_match_allowed():
+        return ["grep", "-q", "pattern", "file.txt"]
+
+The same option is available on subclasses by setting the ``expected_exit_codes`` attribute.
+
+To disable exit-code validation completely, set ``expected_exit_codes`` to ``None`` or ``()``.

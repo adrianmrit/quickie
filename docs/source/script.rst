@@ -63,3 +63,23 @@ Setting the ``executable`` attribute of the task will change the shell used to r
     @script(executable="python")
     def hello_script():
         return "print('Hello, World!')"
+
+
+Exit codes
+----------
+
+Script tasks validate shell exit codes strictly by default. Exit code ``0`` is accepted, and any other exit code raises an error that exits the CLI with the same code.
+
+If a script intentionally uses a non-zero exit code, allow it explicitly with ``expected_exit_codes``:
+
+.. code-block:: python
+
+    from quickie import script
+
+    @script(expected_exit_codes=(0, 5))
+    def script_with_expected_failure():
+        return "exit 5"
+
+The same option is available on subclasses by setting the ``expected_exit_codes`` attribute.
+
+To disable exit-code validation completely, set ``expected_exit_codes`` to ``None`` or ``()``.

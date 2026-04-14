@@ -1,5 +1,7 @@
 """Errors for quickie."""
 
+import typing
+
 
 class QuickieError(Exception):
     """Base class for quickie errors."""
@@ -34,6 +36,38 @@ class TasksModuleNotFoundError(QuickieError):
         :param module_name: The name of the module that was not found.
         """
         super().__init__(f"Tasks module {module_name} not found", exit_code=2)
+
+
+class SubprocessExitCodeError(QuickieError):
+    """Raised when a subprocess task exits with an unexpected code."""
+
+    def __init__(
+        self,
+        *,
+        task_name: str,
+        return_code: int,
+        command: str,
+        expected_exit_codes: typing.Iterable[int],
+    ):
+        """Initialize the error.
+
+        :param task_name: The task that executed the subprocess.
+        :param return_code: The actual subprocess return code.
+        :param command: The command or script that was executed.
+        :param expected_exit_codes: Accepted exit codes for the task.
+        """
+        expected = ", ".join(str(code) for code in expected_exit_codes)
+        super().__init__(
+            (
+                f"Task '{task_name}' failed with exit code {return_code}. "
+                f"Expected one of: {expected}. Command: {command}"
+            ),
+            exit_code=return_code,
+        )
+        self.task_name = task_name
+        self.return_code = return_code
+        self.command = command
+        self.expected_exit_codes = expected_exit_codes
 
 
 class Stop(Exception):

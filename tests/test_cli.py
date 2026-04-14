@@ -9,6 +9,7 @@ from pytest import mark, raises
 from quickie import _cli
 from quickie._argparser import AppArgumentParser
 from quickie._namespace import RootNamespace
+from quickie.errors import SubprocessExitCodeError
 from quickie.errors import Skip, Stop
 from quickie.factories import task
 from quickie import app as quickie_app
@@ -201,6 +202,67 @@ def test_stop_iteration(capsys, mocker):
     assert exc_info.value.code == 10
     out, err = capsys.readouterr()
     assert "Stopping: My message" in err
+
+
+def test_cli_uses_last_loaded_task_on_alias_collision(mocker):
+    result = []
+
+    @task(name="first", aliases=["shared"])
+    def first_task():
+        result.append("first")
+
+    @task(name="shared")
+    def second_task():
+        result.append("second")
+
+    tasks = RootNamespace()
+    tasks.register(first_task, namespace="first")
+    tasks.register(first_task, namespace="shared")
+    tasks.register(second_task, namespace="shared")
+
+    mocker.patch("quickie.app._tasks", tasks)
+    mocker.patch("quickie.app.load_tasks")
+
+    with raises(SystemExit) as exc_info:
+        _cli.main(["shared"])
+    assert exc_info.value.code == 0
+    assert result == ["second"]
+
+
+@mark.integration
+def test_namespaced_task_not_found_message(capsys):
+    with raises(SystemExit) as exc_info:
+        _cli.main(["nested:missing"])
+    assert exc_info.value.code == 1
+
+    out, err = capsys.readouterr()
+    assert not out
+    assert "Task 'nested:missing' not found" in err
+
+
+def test_cli_exits_with_subprocess_return_code(capsys, mocker):
+    @task
+    def failing_task():
+        raise SubprocessExitCodeError(
+            task_name="failing-task",
+            return_code=7,
+            command="myprogram --fail",
+            expected_exit_codes=(0,),
+        )
+
+    tasks = RootNamespace()
+    tasks.register(failing_task, namespace="failing-task")
+
+    mocker.patch("quickie.app._tasks", tasks)
+    mocker.patch("quickie.app.load_tasks")
+
+    with raises(SystemExit) as exc_info:
+        _cli.main(["failing-task"])
+    assert exc_info.value.code == 7
+
+    out, err = capsys.readouterr()
+    assert not out
+    assert "Task 'failing-task' failed with exit code 7" in err
 
 
 class TestAutocompletion:

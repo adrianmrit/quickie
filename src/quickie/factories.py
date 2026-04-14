@@ -30,6 +30,7 @@ import functools
 import typing
 
 from quickie import tasks
+from quickie._sentinels import USE_DEFAULT, UseDefault
 from quickie.utils.argparser import Arg
 
 
@@ -163,8 +164,8 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
     You might find this useful when you have a base class for tasks and you want to
     create your own decorator that creates tasks from functions.
 
-    Other decorators like :func:`quickie.task`, :func:`quickie.script`, and :func:`quickie.command` use this
-    function internally.
+    Other decorators like :func:`quickie.task`, :func:`quickie.script`, and
+    :func:`quickie.command` use this function internally.
 
     .. code-block:: python
 
@@ -325,6 +326,7 @@ def script(
     executable: str | None = None,
     env: dict[str, str] | None = None,
     wd: str | None = None,
+    expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Script]: ...
 
@@ -335,6 +337,7 @@ def script(  # noqa: PLR0913
     executable: str | None = None,
     env: dict[str, str] | None = None,
     wd: str | None = None,
+    expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Script]:
     '''Create a script from a function.
@@ -354,13 +357,20 @@ def script(  # noqa: PLR0913
     :param executable: The executable to use for the script.
     :param env: The environment variables for the script.
     :param wd: The working directory for the script.
+    :param expected_exit_codes: Accepted subprocess exit codes for the script.
     :param kwargs: Common keyword arguments for tasks. See `CommonTaskKwargs` for more
         information.
 
     :returns: The task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
-    attrs = {"executable": executable, "env": env, "wd": wd}
+    attrs = {
+        "executable": executable,
+        "env": env,
+        "wd": wd,
+    }
+    if expected_exit_codes is not USE_DEFAULT:
+        attrs["expected_exit_codes"] = expected_exit_codes
     return task_factory_helper(
         obj,
         base=tasks.Script,
@@ -382,6 +392,7 @@ def command(
     *,
     env: dict[str, str] | None = None,
     wd: str | None = None,
+    expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> PartialReturnType[tasks.Command]: ...
 
@@ -391,6 +402,7 @@ def command(  # noqa: PLR0913
     *,
     env: dict[str, str] | None = None,
     wd: str | None = None,
+    expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
     **kwargs: typing.Unpack[CommonTaskKwargs],
 ) -> DecoratorReturnType[tasks.Command]:
     '''Create a command task from a function.
@@ -411,11 +423,14 @@ def command(  # noqa: PLR0913
         information.
     :param env: The environment variables for the command task.
     :param wd: The working directory for the command task.
+    :param expected_exit_codes: Accepted subprocess exit codes for the command.
 
     :returns: The command task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
     attrs = {"env": env, "wd": wd}
+    if expected_exit_codes is not USE_DEFAULT:
+        attrs["expected_exit_codes"] = expected_exit_codes
     return task_factory_helper(
         obj,
         base=tasks.Command,
