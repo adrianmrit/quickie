@@ -4,38 +4,58 @@ import typing
 
 
 class QuickieError(Exception):
-    """Base class for quickie errors."""
+    """Base class for quickie errors.
 
-    def __init__(self, message, *, exit_code):
+    :cvar exit_code: The default exit code used when this error causes the
+        process to exit. Subclasses override this with a class-level attribute.
+    """
+
+    exit_code: int = 1
+
+    def __init__(self, message, *, exit_code: int | None = None):
         """Initialize the error.
 
         :param message: The error message.
-        :param exit_code: The exit code
+        :param exit_code: Override the exit code for this instance. When
+            omitted the class-level :attr:`exit_code` is used.
         """
         super().__init__(message)
-        self.exit_code = exit_code
+        if exit_code is not None:
+            self.exit_code = exit_code
 
 
 class TaskNotFoundError(QuickieError):
-    """Raised when a task is not found."""
+    """Raised when a task is not found.
+
+    :cvar exit_code: ``127`` — mirrors the POSIX shell convention for
+        "command not found".
+    """
+
+    exit_code = 127
 
     def __init__(self, task_name):
         """Initialize the error.
 
         :param task_name: The name of the task that was not found.
         """
-        super().__init__(f"Task '{task_name}' not found", exit_code=1)
+        super().__init__(f"Task '{task_name}' not found")
 
 
 class TasksModuleNotFoundError(QuickieError):
-    """Raised when a module is not found."""
+    """Raised when a tasks module cannot be imported.
+
+    :cvar exit_code: ``78`` — mirrors ``EX_CONFIG`` from :manpage:`sysexits(3)`,
+        indicating a configuration or environment problem.
+    """
+
+    exit_code = 78
 
     def __init__(self, module_name):
         """Initialize the error.
 
         :param module_name: The name of the module that was not found.
         """
-        super().__init__(f"Tasks module {module_name} not found", exit_code=2)
+        super().__init__(f"Tasks module {module_name} not found")
 
 
 class SubprocessExitCodeError(QuickieError):
@@ -71,7 +91,12 @@ class SubprocessExitCodeError(QuickieError):
 
 
 class SubprocessTimeoutError(QuickieError):
-    """Raised when a subprocess task exceeds its configured timeout."""
+    """Raised when a subprocess task exceeds its configured timeout.
+
+    :cvar exit_code: ``124`` — follows the convention used by :manpage:`timeout(1)`.
+    """
+
+    exit_code = 124
 
     def __init__(self, *, task_name: str, command: str, timeout: float):
         """Initialize the error.
@@ -82,7 +107,6 @@ class SubprocessTimeoutError(QuickieError):
         """
         super().__init__(
             (f"Task '{task_name}' timed out after {timeout}s." f" Command: {command}"),
-            exit_code=124,
         )
         self.task_name = task_name
         self.command = command

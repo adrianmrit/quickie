@@ -5,6 +5,10 @@
 - Command and script tasks now fail fast on unexpected non-zero subprocess exit codes.
 - Command and script tasks now support `expected_exit_codes` to allow non-zero results explicitly or disable exit code validation.
 - Command and script tasks now support `timeout` (seconds per attempt), `retries` (additional attempts on failure), and `retry_delay` (seconds between attempts). Timeouts raise `SubprocessTimeoutError` (exit code 124). Both exit-code and timeout errors trigger the retry loop; warnings are logged for each failed attempt and retry.
+- `QuickieError` now declares `exit_code` as a class-level attribute (default `1`); subclasses override it declaratively. The `__init__` `exit_code` parameter is now optional and only used when a per-instance override is needed.
+- `TaskNotFoundError` exit code changed from `1` to `127` (POSIX shell "command not found" convention).
+- `TasksModuleNotFoundError` exit code changed from `2` to `78` (`EX_CONFIG` from sysexits.h — configuration/environment problem).
+- `SubprocessTimeoutError` exit code `124` is now a class-level attribute (previously passed at instance construction).
 
 ## Release 0.6.0
 

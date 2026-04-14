@@ -122,7 +122,7 @@ def test_main_no_args(capsys):
 def test_task_not_found(capsys):
     with raises(SystemExit) as exc_info:
         _cli.main(["nonexistent"])
-    assert exc_info.value.code == 1
+    assert exc_info.value.code == 127
     out, err = capsys.readouterr()
     assert "Task 'nonexistent' not found" in err
 
@@ -233,7 +233,7 @@ def test_cli_uses_last_loaded_task_on_alias_collision(mocker):
 def test_namespaced_task_not_found_message(capsys):
     with raises(SystemExit) as exc_info:
         _cli.main(["nested:missing"])
-    assert exc_info.value.code == 1
+    assert exc_info.value.code == 127
 
     out, err = capsys.readouterr()
     assert not out
