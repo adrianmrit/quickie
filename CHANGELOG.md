@@ -13,6 +13,7 @@
 - `Group.run` now returns `list[Any]` of sub-task results in definition order (previously returned `None`).
 - `ThreadGroup.run` now returns `list[Any]` of sub-task results in **definition order**, not completion order (previously returned `None`).
 - Documented direct task-to-task composition pattern: call a task instance from within another task's `run()` to receive its result. Updated `task.rst` and `dependencies_and_cleanup.rst`.
+- `ThreadGroup` now collects **all** sub-task exceptions and raises them together as an `ExceptionGroup` (previously only the first exception was surfaced; the rest were silently dropped). Use `except*` to handle individual exception types.
 - Command and script tasks now expose an `output_mode` parameter (and class attribute) accepting `OutputMode.STREAM` (default), `OutputMode.CAPTURE`, or `OutputMode.TEE`. `CAPTURE` silences the terminal and populates `CompletedProcess.stdout`/`.stderr` as bytes. `TEE` streams to the terminal *and* captures. String literals `"stream"`, `"capture"`, `"tee"` are accepted and coerced automatically. `OutputMode` is exported from the top-level `quickie` package.
 
 ## Release 0.6.0

@@ -568,8 +568,60 @@ class TestThreadTaskGroup:
         def my_group():
             return [FailingTask()]
 
-        with pytest.raises(ValueError, match="thread error"):
+        with pytest.raises(ExceptionGroup) as exc_info:
             my_group()
+        assert len(exc_info.value.exceptions) == 1
+        assert isinstance(exc_info.value.exceptions[0], ValueError)
+        assert str(exc_info.value.exceptions[0]) == "thread error"
+
+    def test_multiple_failures_all_aggregated(self):
+        """All exceptions from failing tasks are collected, none silently dropped."""
+        import threading
+
+        barrier = threading.Barrier(2)
+
+        class FailingTask(tasks.Task):
+            def __init__(self, msg):
+                super().__init__()
+                self.msg = msg
+
+            def run(self):
+                barrier.wait()
+                raise ValueError(self.msg)
+
+        @thread_group
+        def my_group():
+            return [FailingTask("error1"), FailingTask("error2")]
+
+        with pytest.raises(ExceptionGroup) as exc_info:
+            my_group()
+        messages = {str(e) for e in exc_info.value.exceptions}
+        assert messages == {"error1", "error2"}
+
+    def test_all_tasks_complete_on_failure(self):
+        """Every sibling task runs to completion even when another task raises."""
+        import threading
+
+        barrier = threading.Barrier(2)
+        completed = []
+
+        class FailingTask(tasks.Task):
+            def run(self):
+                barrier.wait()
+                raise ValueError("fail")
+
+        @task
+        def passing_task():
+            barrier.wait()
+            completed.append("done")
+
+        @thread_group
+        def my_group():
+            return [FailingTask(), passing_task]
+
+        with pytest.raises(ExceptionGroup):
+            my_group()
+        assert completed == ["done"]
 
 
 def test_identifier_to_task_name():

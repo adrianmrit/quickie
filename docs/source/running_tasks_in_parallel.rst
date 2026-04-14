@@ -33,7 +33,38 @@ This will return a :class:`quickie.tasks.ThreadGroup` instance, equivalent to:
         def get_tasks(self):
             return [task1, task2]
 
-If one of these tasks fails, the other tasks will continue to run.
+If one of these tasks fails, the other tasks will continue to run to completion.
+Once all tasks have finished, any exceptions that were raised are collected and
+re-raised together as a single :exc:`ExceptionGroup`:
+
+.. code-block:: python
+
+    import quickie
+
+    @quickie.task
+    def fail_a():
+        raise ValueError("A went wrong")
+
+    @quickie.task
+    def fail_b():
+        raise RuntimeError("B went wrong")
+
+    @quickie.thread_group
+    def my_group():
+        return [fail_a, fail_b]
+
+    @quickie.task
+    def run_group():
+        try:
+            my_group()
+        except* ValueError as eg:
+            print("ValueError(s):", eg.exceptions)
+        except* RuntimeError as eg:
+            print("RuntimeError(s):", eg.exceptions)
+
+This means **no exception is silently discarded** — every failure from every
+concurrent task is surfaced.  Use Python 3.11+ ``except*`` syntax to handle
+particular exception types, or catch ``ExceptionGroup`` to inspect them all.
 
 .. WARNING::
     Under the hood, this uses Python threads. This means that pure Python tasks, particularly those that are CPU-bound, will be

@@ -7,6 +7,7 @@ together.
 """
 
 import argparse
+import concurrent.futures
 import enum
 import functools
 import os
@@ -1121,24 +1122,31 @@ class ThreadGroup(_TaskGroup):
     def run(self, *args, **kwargs) -> list[typing.Any]:
         """Run each sub-task concurrently and return their results in definition order.
 
-        All sub-tasks are submitted to a thread pool simultaneously.  If any
-        task raises, the exception propagates immediately after all futures
-        settle; remaining results are still collected in submission order.
+        All sub-tasks are submitted to a thread pool simultaneously.  Every
+        task is allowed to run to completion regardless of failures in sibling
+        tasks.  If one or more tasks raise, all their exceptions are collected
+        and re-raised together as an :exc:`ExceptionGroup` after the pool
+        shuts down.
 
         :returns: A list of each sub-task's return value, in definition order
             (not completion order).
-        :raises: The first exception raised by any sub-task.
+        :raises ExceptionGroup: If one or more sub-tasks raised an exception.
         """
-        import concurrent.futures
-
         tasks = list(self.get_tasks(*args, **kwargs))
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.get_max_workers(),
             thread_name_prefix=f"quickie-parallel-task.{self.name}",
         ) as executor:
             futures = [executor.submit(self._run_task, task) for task in tasks]
-            # surface the first exception while still letting others complete
-            for future in concurrent.futures.as_completed(futures):
-                future.result()
-        # collect in definition (submission) order
-        return [future.result() for future in futures]
+        # All futures are settled once the pool shuts down (wait=True by default).
+        # Collect every exception so none are silently dropped.
+        exceptions: list[Exception] = []
+        for f in futures:
+            exc = f.exception()
+            if isinstance(exc, Exception):
+                exceptions.append(exc)
+            elif exc is not None:
+                raise exc  # BaseException (e.g. KeyboardInterrupt)
+        if exceptions:
+            raise ExceptionGroup("thread group tasks failed", exceptions)
+        return [f.result() for f in futures]
