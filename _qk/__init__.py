@@ -1,16 +1,17 @@
-from quickie import script, task, command, Namespace, OutputMode
+from quickie import script, task, command, OutputMode, namespace
 from quickie import app, console
 from quickie.errors import Skip, Stop
 
-from . import install, test
 
-_ = Namespace(
-    {
+@namespace
+def _():
+    from . import install, test  # noqa: PLC0415
+
+    return {
         "": [install, test],
-        "test": test,
         "install": install,
+        "test": test,
     }
-)
 
 
 def print_name():

@@ -126,8 +126,8 @@ class Main:
             except (QuickieError, KeyError):
                 parser = _parser
             else:
-                # Update _ARGCOMPLETE to the index of the task, so that completion
-                # only considers the task arguments
+                # Update _ARGCOMPLETE to the index of the task, so that
+                # completion only considers the task arguments
                 os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
                 parser = task.parser
 

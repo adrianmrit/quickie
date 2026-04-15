@@ -1,5 +1,6 @@
 """Errors for quickie."""
 
+import difflib
 import typing
 
 
@@ -33,12 +34,41 @@ class TaskNotFoundError(QuickieError):
 
     exit_code = 127
 
-    def __init__(self, task_name):
+    def __init__(
+        self,
+        task_name: str,
+        *,
+        candidates: typing.Sequence[str] | None = None,
+    ):
         """Initialize the error.
 
         :param task_name: The name of the task that was not found.
+        :param candidates: All registered task names, used to suggest close
+            matches.  When omitted no suggestion is shown.
         """
-        super().__init__(f"Task '{task_name}' not found")
+        msg = f"Task '{task_name}' not found"
+        if candidates:
+            close = difflib.get_close_matches(task_name, candidates, n=3, cutoff=0.6)
+            if close:
+                msg += ". Did you mean: " + ", ".join(f"'{m}'" for m in close) + "?"
+        super().__init__(msg)
+
+
+class CircularDependencyError(QuickieError):
+    """Raised when a circular reference is detected while loading namespaces."""
+
+    def __init__(self, namespace_path: str):
+        """Initialize the error.
+
+        :param namespace_path: The namespace path where the cycle was detected.
+            Pass an empty string to indicate the root namespace.
+        """
+        location = (
+            f"namespace '{namespace_path}'" if namespace_path else "the root namespace"
+        )
+        super().__init__(
+            f"Circular reference detected when loading tasks for {location}"
+        )
 
 
 class TasksModuleNotFoundError(QuickieError):

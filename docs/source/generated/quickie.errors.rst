@@ -8,6 +8,7 @@ quickie.errors
 
    .. autosummary::
    
+      CircularDependencyError
       QuickieError
       Skip
       Stop

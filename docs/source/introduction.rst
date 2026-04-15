@@ -189,17 +189,21 @@ Then in the ``__init__.py`` file you can import the tasks from the other files.
 .. code-block:: python
 
     # MyProject/_qk/__init__.py
-    from quickie import Namespace
+    from quickie import namespace
     from . import public
 
-    namespace = Namespace()
-    try:
-        from . import private
-        namespace.add(private, "private")
-    except ImportError:
-        pass
+    @namespace
+    def _():
+        tasks = [public]
+        try:
+            from . import private
+            tasks.append(private)
+            return {"": tasks, "private": [private]}
+        except ImportError:
+            return tasks
 
-    namespace.add(public)
+Because ``@namespace`` is lazy, the optional ``private`` module is only imported when Quickie
+actually needs one of the tasks in this namespace.
 
 
 For most of of the documentation, we will assume tasks are defined in a package.

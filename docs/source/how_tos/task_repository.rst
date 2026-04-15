@@ -10,7 +10,7 @@ For example, it could work like this:
 
 .. code-block:: python
 
-    from quickie import task, Namespace
+    from quickie import task, namespace
     from quickie.utils.imports import import_from_path
 
     # Import the module from the path
@@ -18,12 +18,10 @@ For example, it could work like this:
     # different users could have the projects in different locations
     my_module = import_from_path("/path/to/my/module.py")
 
-    namespace = Namespace(
-        {
-            # Insert tasks from the common module into the root namespace
-            "": my_module.namespace,
-        }
-    )
+    @namespace
+    def _():
+        # Insert tasks from the common module into the root namespace
+        return {"": [my_module.namespace]}
 
     # Use the imported module
     @task
@@ -40,25 +38,23 @@ For example, the project could have a setup like this:
 
     ...
 
-    namespace = Namespace()
-
-    try:
-        # Assuming it is git ignored but can be defined by the user
-        from . import private
-        namespace.add(private)
-    except ImportError:
-        pass
+    @namespace
+    def _():
+        try:
+            # Assuming it is git ignored but can be defined by the user
+            from . import private
+            return [private]
+        except ImportError:
+            return []
 
     # main_project/_qk/private.py
     from quickie.utils.imports import import_from_path
-    from quickie import Namespace
+    from quickie import namespace
 
-    namespace = Namespace(
-        {
-            # Tasks defined in your private project
-            "": import_from_path("/private_repo/tasks.py").namespace,
-        }
-    )
+    @namespace
+    def _():
+        # Tasks defined in your private project
+        return [import_from_path("/private_repo/tasks.py").namespace]
 
 The same idea could be used to use Quickie in a project that is not using it, for example
 add ``_qk`` or ``_qk.py`` to ``.gitignore`` or ``.git/info/exclude`` and either define your

@@ -18,7 +18,7 @@ from quickie.tasks import (
     Task,
     ThreadGroup,
 )
-from quickie._namespace import Namespace
+from quickie._namespace import Namespace, namespace
 from quickie.config import app, console, logger
 from quickie.utils.argparser import Arg
 
@@ -40,6 +40,7 @@ __all__ = [
     "ThreadGroup",
     "OutputMode",
     "Namespace",
+    "namespace",
     "task",
     "script",
     "command",

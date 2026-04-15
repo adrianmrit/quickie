@@ -28,7 +28,6 @@ API
     quickie.conditions
     quickie.conditions.condition
     quickie.conditions.FilesModified
-    quickie.conditions.FilesModified.Algorithm
     quickie.conditions.FirstRun
     quickie.conditions.PathsExist
     quickie.conditions.base
