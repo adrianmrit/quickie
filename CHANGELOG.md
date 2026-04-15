@@ -2,12 +2,24 @@
 
 ## Unreleased
 
+## Release 0.7.0
+
+### Added
+
 - Added `load_env_file(path)` helper that loads a `.env` file and returns a `dict[str, str]` (variables without a value are omitted; empty values are kept). Exported from the top-level `quickie` package.
 - Added `Context.from_env_file(path, *, wd, base_dir, env, inherit_env)` classmethod to build a `Context` pre-populated from a `.env` file. Explicit `env` values take precedence over file-loaded values. Exported from the top-level `quickie` package.
 - Command and script tasks (and their subclasses) now accept an `env_file` attribute and constructor/decorator argument. The `.env` file is loaded lazily at execution time; relative paths are resolved from the quickie tasks root. Explicit `env` values override keys loaded from the file.
 - Command and script tasks now fail fast on unexpected non-zero subprocess exit codes.
 - Command and script tasks now support `expected_exit_codes` to allow non-zero results explicitly or disable exit code validation.
 - Command and script tasks now support `timeout` (seconds per attempt), `retries` (additional attempts on failure), and `retry_delay` (seconds between attempts). Timeouts raise `SubprocessTimeoutError` (exit code 124). Both exit-code and timeout errors trigger the retry loop; warnings are logged for each failed attempt and retry.
+- Command and script tasks now expose an `output_mode` parameter (and class attribute) accepting `OutputMode.STREAM` (default), `OutputMode.CAPTURE`, or `OutputMode.TEE`. `CAPTURE` silences the terminal and populates `CompletedProcess.stdout`/`.stderr` as bytes. `TEE` streams to the terminal *and* captures. String literals `"stream"`, `"capture"`, `"tee"` are accepted and coerced automatically. `OutputMode` is exported from the top-level `quickie` package.
+- Added `@namespace` decorator that converts a plain function into a `Namespace` instance at module level. The function must return a list or dict of tasks/modules; the function name is used as the path prefix by default. Supports `@namespace(path=..., separator=...)` for explicit configuration.
+- `TaskNotFoundError` now suggests close matches when the task name is similar to a registered key.
+- Naming a `@namespace`-decorated function `_` now registers its tasks at the root (no prefix), removing the need to write `@namespace(path="")` explicitly.
+- `Namespace` now supports a `factory` parameter (a zero-argument callable returning a list or dict). The factory is executed **lazily** — only when the namespace's tasks are first needed. `@namespace`-decorated functions automatically use this mechanism, so imports inside the function body are deferred until the namespace is actually accessed.
+
+### Changed
+
 - `QuickieError` now declares `exit_code` as a class-level attribute (default `1`); subclasses override it declaratively. The `__init__` `exit_code` parameter is now optional and only used when a per-instance override is needed.
 - `TaskNotFoundError` exit code changed from `1` to `127` (POSIX shell "command not found" convention).
 - `TasksModuleNotFoundError` exit code changed from `2` to `78` (`EX_CONFIG` from sysexits.h — configuration/environment problem).
@@ -15,16 +27,14 @@
 - `Task.__call__`, `Task.full_run`, and `Task.run` now carry explicit return-type annotations (`Any`). `Command.run` and `Script.run` are annotated `subprocess.CompletedProcess[bytes]`.
 - `Group.run` now returns `list[Any]` of sub-task results in definition order (previously returned `None`).
 - `ThreadGroup.run` now returns `list[Any]` of sub-task results in **definition order**, not completion order (previously returned `None`).
-- Documented direct task-to-task composition pattern: call a task instance from within another task's `run()` to receive its result. Updated `task.rst` and `dependencies_and_cleanup.rst`.
 - `ThreadGroup` now collects **all** sub-task exceptions and raises them together as an `ExceptionGroup` (previously only the first exception was surfaced; the rest were silently dropped). Use `except*` to handle individual exception types.
-- Command and script tasks now expose an `output_mode` parameter (and class attribute) accepting `OutputMode.STREAM` (default), `OutputMode.CAPTURE`, or `OutputMode.TEE`. `CAPTURE` silences the terminal and populates `CompletedProcess.stdout`/`.stderr` as bytes. `TEE` streams to the terminal *and* captures. String literals `"stream"`, `"capture"`, `"tee"` are accepted and coerced automatically. `OutputMode` is exported from the top-level `quickie` package.
-- `Namespace` now accepts a `separator` parameter (default `":"`); the separator is forwarded through all path-building helpers (`_merge_alias`, `_merge_aliases`) so sub-paths within a namespace use a consistent, per-instance separator.
+- `Namespace` now accepts a `separator` parameter (default `":"`); the separator is forwarded through all path-building helpers so sub-paths within a namespace use a consistent, per-instance separator.
 - Circular-reference detection in namespace resolution now uses back-edge (DFS ancestry) tracking instead of global-visit tracking, correctly allowing the same object to appear under multiple namespace keys (shared references / DAGs) while still raising `CircularDependencyError` for genuine cycles.
-- Added `@namespace` decorator that converts a plain function into a `Namespace` instance at module level. The function must return a list or dict of tasks/modules; the function name is used as the path prefix by default. Supports `@namespace(path=..., separator=...)` for explicit configuration.
-- `TaskNotFoundError` now suggests close matches when the task name is similar to a registered key. Pass `candidates=list(rns)` to enable the hint; the message appends `". Did you mean: 'x'?"` for up to three suggestions (via `difflib.get_close_matches`, cutoff 0.6).
-- Naming a `@namespace`-decorated function `_` now registers its tasks at the root (no prefix), removing the need to write `@namespace(path="")` explicitly.
-- `Namespace` now supports a `factory` parameter (a zero-argument callable returning a list or dict). The factory is executed **lazily** — only when the namespace's tasks are first needed. `@namespace`-decorated functions automatically use this mechanism, so imports inside the function body are deferred until the namespace is actually accessed.
-- `RootNamespace.load()` is now **shallow**: `Task` objects found directly on the module are registered immediately, while `Namespace` objects are stored in a pending queue and resolved on demand. Accessing a task key resolves only the namespace(s) whose path is a prefix of the requested key, leaving all others untouched.
+- `RootNamespace.load()` is now **shallow**: `Task` objects found directly on the module are registered immediately, while `Namespace` objects are stored in a pending queue and resolved on demand.
+
+### Fixed
+
+- Documented direct task-to-task composition pattern: call a task instance from within another task's `run()` to receive its result.
 
 ## Release 0.6.0
 
