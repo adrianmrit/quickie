@@ -54,6 +54,7 @@
       ~Script.cleanup
       ~Script.condition
       ~Script.env
+      ~Script.env_file
       ~Script.executable
       ~Script.expected_exit_codes
       ~Script.extra_args

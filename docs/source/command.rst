@@ -39,6 +39,58 @@ For example the followings are all equivalent:
             return "arg1 arg2"  # or ["arg1", "arg2"]
 
 
+Environment variables
+---------------------
+
+Pass per-task environment variables with ``env``::
+
+    from quickie import command
+
+    @command(env={"API_KEY": "secret"})
+    def deploy():
+        return ["my_deploy_tool"]
+
+To load variables from a ``.env`` file, use ``env_file``:
+
+.. code-block:: python
+
+    from quickie import command
+
+    @command(env_file=".env")
+    def deploy():
+        return ["my_deploy_tool"]
+
+Relative paths are resolved from the quickie tasks root directory (the folder
+that contains ``_qk/``). Absolute paths are used as-is.
+
+When both ``env`` and ``env_file`` are supplied, values in ``env`` take
+precedence over values loaded from the file:
+
+.. code-block:: python
+
+    @command(env_file=".env", env={"API_KEY": "override"})
+    def deploy():
+        return ["my_deploy_tool"]
+
+The same attributes are available on subclasses::
+
+    class Deploy(Command):
+        env_file = ".env"
+        env = {"API_KEY": "override"}
+
+You can also import a ``.env`` file as a plain dict independently of any task,
+for example to inspect values or set a global context from your ``_qk/__init__.py``:
+
+.. code-block:: python
+
+    from quickie import load_env_file, Context, app
+
+    env = load_env_file(".env")          # returns dict[str, str]
+
+    # Or build a Context from a .env file and apply it globally:
+    app.set_context(Context.from_env_file(".env"))
+
+
 Exit codes
 ----------
 

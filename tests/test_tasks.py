@@ -2,6 +2,7 @@ import functools
 import io
 import sys
 import types
+from unittest.mock import PropertyMock
 
 import pytest
 
@@ -315,8 +316,88 @@ class TestBaseSubprocessTask:
             "OTHERENV": "othervalue",
         }
 
+    def test_env_file_loaded_at_runtime(self, mocker, tmp_path):
+        env_file = tmp_path / ".env"
+        env_file.write_text("FILE_VAR=from_file\n")
 
-class TestCommand:
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="", env={}, inherit_env=False),
+        )
+        mocker.patch.object(
+            type(app),
+            "tasks_path",
+            new_callable=PropertyMock,
+            return_value=tmp_path / "_qk",
+        )
+
+        task_instance = tasks._BaseSubprocessTask(env_file=str(env_file))
+        assert task_instance.get_env()["FILE_VAR"] == "from_file"
+
+    def test_env_file_relative_resolves_from_tasks_root(self, mocker, tmp_path):
+        env_file = tmp_path / ".env"
+        env_file.write_text("RELATIVE_VAR=yes\n")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="", env={}, inherit_env=False),
+        )
+        # tasks_path = tmp_path/_qk  → parent = tmp_path
+        mocker.patch.object(
+            type(app),
+            "tasks_path",
+            new_callable=PropertyMock,
+            return_value=tmp_path / "_qk",
+        )
+
+        task_instance = tasks._BaseSubprocessTask(env_file=".env")
+        assert task_instance.get_env()["RELATIVE_VAR"] == "yes"
+
+    def test_explicit_env_overrides_env_file(self, mocker, tmp_path):
+        env_file = tmp_path / ".env"
+        env_file.write_text("KEY=from_file\n")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="", env={}, inherit_env=False),
+        )
+        mocker.patch.object(
+            type(app),
+            "tasks_path",
+            new_callable=PropertyMock,
+            return_value=tmp_path / "_qk",
+        )
+
+        task_instance = tasks._BaseSubprocessTask(
+            env={"KEY": "explicit"}, env_file=str(env_file)
+        )
+        assert task_instance.get_env()["KEY"] == "explicit"
+
+    def test_env_file_via_command_decorator(self, mocker, tmp_path):
+        env_file = tmp_path / ".env"
+        env_file.write_text("DECO_VAR=deco_value\n")
+
+        mocker.patch.object(
+            app,
+            "context",
+            Context(wd="", env={}, inherit_env=False),
+        )
+        mocker.patch.object(
+            type(app),
+            "tasks_path",
+            new_callable=PropertyMock,
+            return_value=tmp_path / "_qk",
+        )
+
+        @command(env_file=str(env_file))
+        def my_task():
+            return ["echo"]
+
+        assert my_task.get_env()["DECO_VAR"] == "deco_value"
+
     def test_run(self, mocker):
         subprocess_run = mocker.patch("subprocess.run")
         subprocess_run.return_value = mocker.Mock(returncode=0)

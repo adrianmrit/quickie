@@ -65,6 +65,46 @@ Setting the ``executable`` attribute of the task will change the shell used to r
         return "print('Hello, World!')"
 
 
+Environment variables
+---------------------
+
+Pass per-task environment variables with ``env``::
+
+    from quickie import script
+
+    @script(env={"API_KEY": "secret"})
+    def deploy():
+        return "my_deploy_tool.sh"
+
+To load variables from a ``.env`` file, use ``env_file``:
+
+.. code-block:: python
+
+    from quickie import script
+
+    @script(env_file=".env")
+    def deploy():
+        return "my_deploy_tool.sh"
+
+Relative paths are resolved from the quickie tasks root directory (the folder
+that contains ``_qk/``). Absolute paths are used as-is.
+
+When both ``env`` and ``env_file`` are supplied, values in ``env`` take
+precedence over values loaded from the file:
+
+.. code-block:: python
+
+    @script(env_file=".env", env={"API_KEY": "override"})
+    def deploy():
+        return "my_deploy_tool.sh"
+
+The same attributes are available on subclasses::
+
+    class Deploy(Script):
+        env_file = ".env"
+        env = {"API_KEY": "override"}
+
+
 Exit codes
 ----------
 

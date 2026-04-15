@@ -59,6 +59,7 @@
       ~Command.cmd_args
       ~Command.condition
       ~Command.env
+      ~Command.env_file
       ~Command.expected_exit_codes
       ~Command.extra_args
       ~Command.output_mode

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `load_env_file(path)` helper that loads a `.env` file and returns a `dict[str, str]` (variables without a value are omitted; empty values are kept). Exported from the top-level `quickie` package.
+- Added `Context.from_env_file(path, *, wd, base_dir, env, inherit_env)` classmethod to build a `Context` pre-populated from a `.env` file. Explicit `env` values take precedence over file-loaded values. Exported from the top-level `quickie` package.
+- Command and script tasks (and their subclasses) now accept an `env_file` attribute and constructor/decorator argument. The `.env` file is loaded lazily at execution time; relative paths are resolved from the quickie tasks root. Explicit `env` values override keys loaded from the file.
 - Command and script tasks now fail fast on unexpected non-zero subprocess exit codes.
 - Command and script tasks now support `expected_exit_codes` to allow non-zero results explicitly or disable exit code validation.
 - Command and script tasks now support `timeout` (seconds per attempt), `retries` (additional attempts on failure), and `retry_delay` (seconds between attempts). Timeouts raise `SubprocessTimeoutError` (exit code 124). Both exit-code and timeout errors trigger the retry loop; warnings are logged for each failed attempt and retry.

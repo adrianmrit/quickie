@@ -5,6 +5,47 @@ import os
 from pathlib import Path
 import typing
 
+from dotenv import dotenv_values
+
+
+def load_env_file(path: str | Path) -> dict[str, str]:
+    """Load environment variables from a ``.env`` file and return them as a dict.
+
+    Variables declared without a value (``VAR`` with no ``=``) are omitted;
+    variables with an empty value (``VAR=``) are kept as empty strings.
+
+    This can be used standalone to inspect or forward values:
+
+    .. code-block:: python
+
+        # _qk/__init__.py — apply .env globally before tasks run
+        from quickie import app, Context
+        from quickie.context import load_env_file
+        from pathlib import Path
+
+        _env_path = Path(__file__).parent.parent / ".env"
+        app.set_context(Context.from_env_file(_env_path))
+
+    Or independently, e.g. inside a regular task:
+
+    .. code-block:: python
+
+        from quickie import task
+        from quickie.context import load_env_file
+
+        @task
+        def show_db_url():
+            env = load_env_file(".env")
+            print(env.get("DATABASE_URL"))
+
+    :param path: Path to the ``.env`` file.  Resolve the path before calling
+        when you need base-directory semantics, e.g.
+        ``load_env_file(base_dir / ".env")``.
+
+    :returns: A :class:`dict` mapping variable names to string values.
+    """
+    return {k: v for k, v in dotenv_values(path).items() if v is not None}
+
 
 class Context:
     """The context for a task."""
@@ -50,6 +91,54 @@ class Context:
         return Context(
             wd=os.getcwd(),
             env={},
+        )
+
+    @classmethod
+    def from_env_file(
+        cls,
+        path: str | Path,
+        *,
+        wd: str | Path | None = None,
+        base_dir: str | Path | None = None,
+        env: typing.Mapping[str, str] | None = None,
+        inherit_env: bool = True,
+    ) -> "Context":
+        """Create a :class:`Context` with env variables loaded from a ``.env`` file.
+
+        Explicit *env* values take precedence over values loaded from the file.
+
+        .. code-block:: python
+
+            from quickie.context import Context
+            from quickie import app
+
+            app.set_context(Context.from_env_file(".env", base_dir="/project"))
+
+        :param path: Path to the ``.env`` file. Resolved relative to *base_dir*
+            when given and the path is not absolute.
+        :param wd: The working directory for the new context.  Defaults to the
+            current working directory.
+        :param base_dir: Base directory used to resolve a relative *path*.
+        :param env: Additional explicit environment variables that override
+            values loaded from the file.
+        :param inherit_env: Whether to inherit OS environment variables.
+
+        :returns: A new :class:`Context` containing the merged environment.
+        """
+        file_env: dict[str, str] = load_env_file(
+            os.path.join(base_dir, path)
+            if base_dir is not None and not os.path.isabs(path)
+            else path
+        )
+        if env:
+            # Explicit env overrides file-loaded values
+            merged: typing.Mapping[str, str] = ChainMap(dict(env), file_env)
+        else:
+            merged = file_env
+        return cls(
+            wd=wd if wd is not None else os.getcwd(),
+            env=merged,
+            inherit_env=inherit_env,
         )
 
     def copy(self):

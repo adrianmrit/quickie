@@ -22,6 +22,7 @@ import time
 import typing
 
 from quickie.conditions.base import BaseCondition
+from quickie.context import load_env_file
 from quickie.errors import Skip, SubprocessExitCodeError, SubprocessTimeoutError
 from quickie._sentinels import USE_DEFAULT, UseDefault
 from quickie.config import app
@@ -513,6 +514,13 @@ class _BaseSubprocessTask(Task):
     env: typing.Mapping[str, str] | None = None
     """The environment."""
 
+    env_file: str | Path | None = None
+    """Path to a ``.env`` file whose variables are merged into the environment.
+
+    Relative paths are resolved from the quickie tasks root directory.
+    Values from this file are overridden by :attr:`env`.
+    """
+
     expected_exit_codes: typing.Sequence[int] | None = (0,)
     """Accepted subprocess exit codes."""
 
@@ -546,6 +554,7 @@ class _BaseSubprocessTask(Task):
         self,
         *args,
         env: typing.Mapping[str, str] | None = None,
+        env_file: str | Path | None = None,
         wd: str | Path | None = None,
         expected_exit_codes: typing.Sequence[int] | None | UseDefault = USE_DEFAULT,
         timeout: float | None | UseDefault = USE_DEFAULT,
@@ -558,6 +567,8 @@ class _BaseSubprocessTask(Task):
 
         :param args: Task instance arguments.
         :param env: The environment to use.
+        :param env_file: Path to a ``.env`` file.  Relative paths are resolved
+            from the quickie tasks root.  Values are overridden by *env*.
         :param wd: The working directory.
         :param expected_exit_codes: Accepted subprocess exit codes.
             Pass ``None`` or ``()`` to disable validation.
@@ -572,6 +583,7 @@ class _BaseSubprocessTask(Task):
         super().__init__(*args, **kwargs)
         self.wd = wd if wd is not None else self.wd
         self.env = env if env is not None else self.env
+        self.env_file = env_file if env_file is not None else self.env_file
         if expected_exit_codes is USE_DEFAULT:
             expected_exit_codes = self.expected_exit_codes
         self.expected_exit_codes = self._normalize_expected_exit_codes(
@@ -622,7 +634,18 @@ class _BaseSubprocessTask(Task):
         # Chain maps are supposed to use dicts, but we won't do any updates
         # to this dictionary. So we can allow it to be any sort of mapping.
         env = typing.cast(dict, self.env)
-        return app.context.env.new_child(env).new_child()
+        if self.env_file is not None:
+            base_dir = app.tasks_path.parent
+            env_file_path = (
+                os.path.join(base_dir, self.env_file)
+                if not os.path.isabs(self.env_file)
+                else self.env_file
+            )
+            file_env = typing.cast(dict, load_env_file(env_file_path))
+        else:
+            file_env = {}
+        # Precedence (high → low): explicit env > file env > context env > OS env
+        return app.context.env.new_child(file_env).new_child(env).new_child()
 
     def _normalize_expected_exit_codes(
         self,
