@@ -1,4 +1,4 @@
-quickie.context
+﻿quickie.context
 ===============
 
 .. automodule:: quickie.context

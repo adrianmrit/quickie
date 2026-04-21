@@ -14,6 +14,7 @@ stdio transport.  The server exposes two tools:
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 from fastmcp import FastMCP, Context
 from fastmcp.dependencies import CurrentContext
@@ -21,7 +22,23 @@ from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from quickie._argparser import MCPArgumentParser
+from quickie._launcher import Launcher
 from quickie.config import app
+
+
+class _SubprocessConfig:
+    """Holds the subprocess command resolved once at server startup.
+
+    Using a mutable object avoids bare ``global`` assignments while still
+    letting ``main()`` update state that ``run_task`` reads at call time.
+    """
+
+    qk_exe: Path | None = None
+    extra_args: list[str] = []
+
+
+# Singleton resolved in main(); read-only after that.
+_subprocess_cfg = _SubprocessConfig()
 
 mcp = FastMCP(
     "quickie",
@@ -118,8 +135,14 @@ async def run_task(
         asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL
     )
 
-    # Build command: only include the `--` separator when extra args are given.
-    cmd = [sys.executable, "-m", "quickie", task_name]
+    # Build command using the project-local qk executable when available so
+    # that tasks run inside the project's own venv.  Fall back to the
+    # currently-running Python only when no local executable was resolved.
+    cfg = _subprocess_cfg
+    if cfg.qk_exe is not None:
+        cmd = [str(cfg.qk_exe), *cfg.extra_args, task_name]
+    else:
+        cmd = [sys.executable, "-m", "quickie", *cfg.extra_args, task_name]
     if args:
         cmd += ["--", *args]
 
@@ -184,6 +207,29 @@ def main() -> None:
     app.set_verbosity(namespace.verbosity)
     if namespace.log_file:
         app.set_log_file(namespace.log_file)
+
+    # Build the extra flags that must be forwarded to each task subprocess so
+    # it uses the same configuration as this server.
+    if use_global:
+        _subprocess_cfg.extra_args = ["--global"]
+    elif namespace.module:
+        _subprocess_cfg.extra_args = ["--module", namespace.module]
+
+    # Discover the project-local qk executable so run_task delegates to the
+    # correct venv.
+    if not use_global:
+        launcher = Launcher()
+        project_root = launcher.discover_project_root()
+        if project_root is not None:
+            resolved = launcher.resolve_executable(project_root)
+            if resolved is not None:
+                _subprocess_cfg.qk_exe = resolved
+                app.logger.debug(f"qk-mcp will run tasks via {_subprocess_cfg.qk_exe}")
+            else:
+                app.logger.debug(
+                    "No project-local qk executable found; "
+                    "falling back to current interpreter."
+                )
 
     app.load_tasks()
     mcp.run()  # stdio transport by default

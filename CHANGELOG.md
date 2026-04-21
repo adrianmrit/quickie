@@ -3,6 +3,15 @@
 ## Unreleased
 
 
+## Release 0.8.1
+
+### Fixed
+
+- Fixed `qk-mcp` subprocess resolution to prefer project-local `qk` executable/venv when available.
+- Ensure `run_task` forwards `--module`/`--global` flags and isolates subprocess config.
+- Tests: fixed asyncio mocks and added tests for MCP venv resolution.
+
+
 ## Release 0.8.0
 
 ### Added

@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import asyncio as _asyncio
+import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastmcp import Client
 
-from quickie.mcp import mcp
-import asyncio as _asyncio
 from quickie.config import app
+from quickie.mcp import _subprocess_cfg, mcp
 
 pytestmark = pytest.mark.anyio
 
@@ -18,6 +20,16 @@ pytestmark = pytest.mark.anyio
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def reset_subprocess_cfg():
+    """Reset _subprocess_cfg to defaults before each test."""
+    original_exe = _subprocess_cfg.qk_exe
+    original_args = _subprocess_cfg.extra_args[:]
+    yield
+    _subprocess_cfg.qk_exe = original_exe
+    _subprocess_cfg.extra_args = original_args
 
 
 @pytest.fixture(autouse=True)
@@ -225,3 +237,67 @@ async def test_run_task_timeout():
                     "run_task",
                     {"task_name": "hello", "timeout": 0.1},
                 )
+
+
+# ---------------------------------------------------------------------------
+# run_task — subprocess exe resolution
+# ---------------------------------------------------------------------------
+
+
+async def test_run_task_uses_local_qk_exe_when_set():
+    """When a project-local qk exe is configured it should head the command."""
+    proc = _make_proc_mock([], [], returncode=0)
+    captured_cmd = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        captured_cmd["cmd"] = cmd
+        return proc
+
+    _subprocess_cfg.qk_exe = Path("/project/.venv/bin/qk")
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool("run_task", {"task_name": "hello"})
+
+    assert captured_cmd["cmd"][0] == "/project/.venv/bin/qk"
+    assert "hello" in captured_cmd["cmd"]
+
+
+async def test_run_task_falls_back_to_sys_executable_when_no_local_exe():
+    """When no local exe is resolved, sys.executable -m quickie is used."""
+    proc = _make_proc_mock([], [], returncode=0)
+    captured_cmd = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        captured_cmd["cmd"] = cmd
+        return proc
+
+    _subprocess_cfg.qk_exe = None
+    _subprocess_cfg.extra_args = []
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool("run_task", {"task_name": "hello"})
+
+    assert captured_cmd["cmd"][0] == sys.executable
+    assert "-m" in captured_cmd["cmd"]
+    assert "quickie" in captured_cmd["cmd"]
+
+
+async def test_run_task_forwards_extra_args():
+    """Extra args (e.g. --global) are forwarded between the exe and task name."""
+    proc = _make_proc_mock([], [], returncode=0)
+    captured_cmd = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        captured_cmd["cmd"] = cmd
+        return proc
+
+    _subprocess_cfg.qk_exe = None
+    _subprocess_cfg.extra_args = ["--global"]
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool("run_task", {"task_name": "hello"})
+
+    cmd = captured_cmd["cmd"]
+    assert "--global" in cmd
+    # --global must appear before the task name
+    assert cmd.index("--global") < cmd.index("hello")
