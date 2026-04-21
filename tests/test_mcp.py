@@ -1,0 +1,227 @@
+"""Tests for quickie.mcp — the FastMCP server."""
+
+from __future__ import annotations
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastmcp import Client
+
+from quickie.mcp import mcp
+import asyncio as _asyncio
+from quickie.config import app
+
+pytestmark = pytest.mark.anyio
+
+
+# ---------------------------------------------------------------------------
+# Helpers / fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def load_test_tasks(patch_config):  # patch_config is the autouse fixture in conftest
+    """Ensure the test task namespace is loaded for every MCP test."""
+    app.load_tasks()
+
+
+# ---------------------------------------------------------------------------
+# list_tasks
+# ---------------------------------------------------------------------------
+
+
+async def test_list_tasks_returns_list():
+    async with Client(mcp) as client:
+        result = await client.call_tool("list_tasks", {})
+    assert isinstance(result.data, list)
+    assert len(result.data) > 0
+
+
+async def test_list_tasks_fields():
+    async with Client(mcp) as client:
+        result = await client.call_tool("list_tasks", {})
+    for entry in result.data:
+        assert "name" in entry
+        assert "aliases" in entry
+        assert "short_help" in entry
+        assert "help" in entry
+        assert "usage" in entry
+        assert "location" in entry
+
+
+async def test_list_tasks_no_duplicates():
+    """Each unique task object must appear exactly once."""
+    async with Client(mcp) as client:
+        result = await client.call_tool("list_tasks", {})
+    names = [t["name"] for t in result.data]
+    assert len(names) == len(
+        set(names)
+    ), "Duplicate task names found in list_tasks output"
+
+
+async def test_list_tasks_contains_hello():
+    async with Client(mcp) as client:
+        result = await client.call_tool("list_tasks", {})
+    names = [t["name"] for t in result.data]
+    assert "hello" in names
+
+
+# ---------------------------------------------------------------------------
+# run_task — success cases (subprocess mocked)
+# ---------------------------------------------------------------------------
+
+
+def _make_async_iter(lines: list[bytes]):
+    """Return an async iterator that yields the given byte strings."""
+
+    class _AsyncIter:
+        def __init__(self):
+            self._it = iter(lines)
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            try:
+                return next(self._it)
+            except StopIteration:
+                raise StopAsyncIteration
+
+    return _AsyncIter()
+
+
+def _make_proc_mock(
+    stdout_lines: list[bytes], stderr_lines: list[bytes], returncode: int = 0
+):
+    """Build a minimal mock of an asyncio.subprocess.Process."""
+    proc = MagicMock()
+    proc.returncode = returncode
+    proc.stdout = _make_async_iter(stdout_lines)
+    proc.stderr = _make_async_iter(stderr_lines)
+    proc.stdin = MagicMock()
+    proc.stdin.write = MagicMock()
+    proc.stdin.drain = AsyncMock()
+    proc.stdin.close = MagicMock()
+    proc.wait = AsyncMock(return_value=returncode)
+    proc.kill = MagicMock()
+    return proc
+
+
+async def test_run_task_success():
+    proc = _make_proc_mock([b"Hello world!\n"], [], returncode=0)
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
+        async with Client(mcp) as client:
+            result = await client.call_tool("run_task", {"task_name": "hello"})
+    assert result.data["exit_code"] == 0
+    assert "Hello world!" in result.data["stdout"]
+
+
+async def test_run_task_with_args():
+    proc = _make_proc_mock([b"arg output\n"], [], returncode=0)
+    captured_cmd = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        captured_cmd["cmd"] = cmd
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool(
+                "run_task", {"task_name": "hello", "args": ["--flag", "val"]}
+            )
+
+    assert "--flag" in captured_cmd["cmd"]
+    assert "val" in captured_cmd["cmd"]
+
+
+async def test_run_task_with_stdin():
+    proc = _make_proc_mock([], [], returncode=0)
+    kwargs_captured = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        kwargs_captured.update(kwargs)
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool("run_task", {"task_name": "hello", "stdin": "y\n"})
+
+    # When stdin is provided the subprocess must be given a PIPE, not DEVNULL.
+    assert kwargs_captured["stdin"] == _asyncio.subprocess.PIPE
+    proc.stdin.write.assert_called_once_with(b"y\n")
+    proc.stdin.close.assert_called_once()
+
+
+async def test_run_task_devnull_when_no_stdin():
+    proc = _make_proc_mock([], [], returncode=0)
+    kwargs_captured = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        kwargs_captured.update(kwargs)
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool("run_task", {"task_name": "hello"})
+
+    assert kwargs_captured["stdin"] == _asyncio.subprocess.DEVNULL
+
+
+async def test_run_task_nonzero_exit():
+    proc = _make_proc_mock([], [b"error msg\n"], returncode=1)
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
+        async with Client(mcp) as client:
+            result = await client.call_tool("run_task", {"task_name": "hello"})
+    assert result.data["exit_code"] == 1
+    assert "error msg" in result.data["stderr"]
+
+
+async def test_run_task_launcher_env():
+    proc = _make_proc_mock([], [], returncode=0)
+    kwargs_captured = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        kwargs_captured.update(kwargs)
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool("run_task", {"task_name": "hello"})
+
+    assert kwargs_captured["env"]["QK_LAUNCHER_RUNNING"] == "true"
+
+
+# ---------------------------------------------------------------------------
+# run_task — error cases
+# ---------------------------------------------------------------------------
+
+
+async def test_run_task_unknown_task():
+    async with Client(mcp) as client:
+        with pytest.raises(Exception, match="Task not found"):
+            await client.call_tool("run_task", {"task_name": "__no_such_task__"})
+
+
+async def test_run_task_timeout():
+    async def hanging_exec(*cmd, **kwargs):
+        proc = MagicMock()
+        proc.stdout = _make_async_iter([])
+        proc.stderr = _make_async_iter([])
+        proc.stdin = MagicMock()
+        proc.stdin.close = MagicMock()
+        proc.kill = MagicMock()
+
+        async def never_finish():
+            await asyncio.sleep(999)
+
+        proc.wait = never_finish
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", hanging_exec):
+        async with Client(mcp) as client:
+            with pytest.raises(Exception, match="timeout"):
+                await client.call_tool(
+                    "run_task",
+                    {"task_name": "hello", "timeout": 0.1},
+                )

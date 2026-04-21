@@ -9,13 +9,19 @@ from quickie._meta import __version__ as version
 from quickie.completion._internal import TaskCompleter
 
 
-class AppArgumentParser(ArgumentParser):
-    """Custom argument parser for quickie."""
+class BaseArgumentParser(ArgumentParser):
+    """Base argument parser with common arguments for qk and qk-mcp.
+
+    Includes: verbosity, log-file, version, module path, and global flag.
+    """
 
     @typing.override
-    def __init__(self):
-        super().__init__(description="A CLI tool for quick tasks.")
-        # argument for logging level
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._add_common_arguments()
+
+    def _add_common_arguments(self) -> None:
+        """Add arguments common to both qk and qk-mcp."""
         self.add_argument(
             "-v",
             "--verbose",
@@ -39,10 +45,29 @@ class AppArgumentParser(ArgumentParser):
             help="The file to log to. If not set, logs to stdout.",
         )
         self.add_argument("-V", "--version", action="version", version=version)
-        self.add_argument("-l", "--list", action="store_true", help="List tasks")
         self.add_argument(
             "-m", "--module", type=str, help="The module to load tasks from"
         )
+        self.add_argument(
+            "-g",
+            "--global",
+            action="store_true",
+            dest="use_global",
+            help="Use global tasks from ~/_qkg instead of project tasks",
+        )
+
+
+class AppArgumentParser(BaseArgumentParser):
+    """Custom argument parser for quickie."""
+
+    @typing.override
+    def __init__(self):
+        super().__init__(description="A CLI tool for quick tasks.")
+        self._add_app_arguments()
+
+    def _add_app_arguments(self) -> None:
+        """Add arguments specific to the qk CLI."""
+        self.add_argument("-l", "--list", action="store_true", help="List tasks")
         self.add_argument(
             "--init",
             nargs="?",
@@ -57,13 +82,6 @@ class AppArgumentParser(ArgumentParser):
             choices=["bash", "zsh"],
         ).completer = argcomplete.completers.ChoicesCompleter(  # type: ignore
             ["bash", "zsh"]
-        )
-        self.add_argument(
-            "-g",
-            "--global",
-            action="store_true",
-            dest="use_global",
-            help="Use global tasks from ~/_qkg instead of project tasks",
         )
         self.add_argument("task", nargs="?", help="The task to run").completer = (  # type: ignore
             TaskCompleter()
@@ -113,3 +131,17 @@ class AppArgumentParser(ArgumentParser):
                 task_args = list(args)
 
         return qk_args, task_args
+
+
+class MCPArgumentParser(BaseArgumentParser):
+    """Argument parser for the qk-mcp MCP stdio server.
+
+    Supports common arguments like verbosity, log file, module path, and global flag.
+    """
+
+    @typing.override
+    def __init__(self):
+        super().__init__(
+            prog="qk-mcp",
+            description="MCP stdio server that exposes quickie project tasks.",
+        )

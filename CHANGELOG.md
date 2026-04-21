@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+
+## Release 0.8.0
+
+### Added
+
+- Added `qk-mcp` MCP stdio server.
+
+
 ## Release 0.7.0
 
 ### Added

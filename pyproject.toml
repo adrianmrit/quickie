@@ -26,6 +26,7 @@ dependencies=[
     "python-dotenv~=1.2",
     "rich~=15.0",
     "argcomplete~=3.6",
+    "fastmcp~=3.2",
 ]
 
 [project.urls]
@@ -39,6 +40,7 @@ Changelog = "https://github.com/adrianmrit/quickie/blob/main/CHANGELOG.md"
 
 [project.scripts]
 "qk" = "quickie._cli:main"
+"qk-mcp" = "quickie.mcp:main"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -56,7 +58,8 @@ exclude = ["_qk"]
 addopts = ["-vv"]
 markers = [
     "unit",
-    "integration"
+    "integration",
+    "anyio"
 ]
 python_files = "tests/*.py"
 mock_use_standalone_module = true

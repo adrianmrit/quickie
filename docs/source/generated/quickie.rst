@@ -16,5 +16,6 @@
    context
    errors
    factories
+   mcp
    tasks
    utils
