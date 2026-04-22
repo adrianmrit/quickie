@@ -238,9 +238,22 @@ def main() -> None:
 
     # Discover the project-local qk executable so run_task delegates to the
     # correct venv.
+    #
+    # When --module is given we derive the search root from the module path
+    # itself (its parent directory), because the MCP host may start the
+    # process with a CWD that is completely unrelated to the project (e.g.
+    # the user's home directory).  Resolving the module path against CWD
+    # first handles both absolute and relative --module values.
     if not use_global:
         launcher = Launcher()
-        project_root = launcher.discover_project_root()
+        if namespace.module:
+            module_path = Path(namespace.module).resolve()
+            # If --module points to a file/dir, start discovery from its parent;
+            # otherwise treat the value as a directory name inside CWD.
+            discovery_start = module_path.parent if module_path.exists() else Path.cwd()
+        else:
+            discovery_start = None  # defaults to CWD inside discover_project_root
+        project_root = launcher.discover_project_root(discovery_start)
         if project_root is not None:
             resolved = launcher.resolve_executable(project_root)
             if resolved is not None:

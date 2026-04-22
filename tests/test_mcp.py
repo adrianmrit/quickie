@@ -13,7 +13,7 @@ import pytest
 from fastmcp import Client
 
 from quickie.config import app
-from quickie.mcp import _subprocess_cfg, mcp
+from quickie.mcp import _subprocess_cfg, main, mcp
 
 pytestmark = pytest.mark.anyio
 
@@ -348,3 +348,34 @@ async def test_run_task_forwards_extra_args():
     assert "--global" in cmd
     # --global must appear before the task name
     assert cmd.index("--global") < cmd.index("hello")
+
+
+# ---------------------------------------------------------------------------
+# main() — project discovery
+# ---------------------------------------------------------------------------
+
+
+def test_main_discovers_from_module_path_not_cwd(tmp_path):
+    """When --module is given, discovery starts from the module's parent dir.
+
+    This covers the case where the MCP host starts the process with CWD set
+    to an unrelated directory (e.g. the user's home folder) while the project
+    lives elsewhere.
+    """
+    # Build a fake project tree: tmp_path/myproject/_qk/.venv/bin/qk
+    project_dir = tmp_path / "myproject"
+    qk_dir = project_dir / "_qk"
+    fake_venv = qk_dir / ".venv" / "bin"
+    fake_venv.mkdir(parents=True)
+    fake_exe = fake_venv / "qk"
+    fake_exe.touch(mode=0o755)
+    # Write a minimal pyvenv.cfg so _resolve_uv_venv recognises it as a uv venv
+    (qk_dir / ".venv" / "pyvenv.cfg").write_text("home = /usr/bin\nuv = true\n")
+
+    # Patch argv so MCPArgumentParser picks up --module pointing at qk_dir
+    with patch("sys.argv", ["qk-mcp", "--module", str(qk_dir)]):
+        with patch("quickie.mcp.mcp") as mock_mcp:
+            mock_mcp.run = MagicMock()
+            main()
+
+    assert _subprocess_cfg.qk_exe == fake_exe
