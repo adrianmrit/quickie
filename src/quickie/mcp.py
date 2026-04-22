@@ -12,6 +12,7 @@ stdio transport.  The server exposes two tools:
 """
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -62,8 +63,30 @@ mcp = FastMCP(
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )
-def list_tasks() -> list[dict]:
+async def list_tasks() -> list[dict]:
     """Return metadata for every non-private task registered in this project."""
+    cfg = _subprocess_cfg
+    if cfg.qk_exe is not None:
+        # Delegate to the project-local qk executable so it runs inside the
+        # project's own venv (which has all project-specific dependencies).
+        proc = await asyncio.create_subprocess_exec(
+            str(cfg.qk_exe),
+            *cfg.extra_args,
+            "-qqqqqqqqqqq",  # quiet mode: suppress all output except the JSON result
+            "--list-json",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "QK_LAUNCHER_RUNNING": "true"},
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise ToolError(
+                f"Failed to list tasks (exit {proc.returncode}):\n"
+                + stderr.decode(errors="replace")
+            )
+        return json.loads(stdout.decode())
+
+    # No project-local exe — enumerate tasks loaded in-process.
     cwd = os.getcwd()
 
     # De-duplicate: multiple names may point to the same task object.
@@ -71,14 +94,7 @@ def list_tasks() -> list[dict]:
     for invocation_name, task in app.tasks.items():
         task_id = id(task)
         if task_id not in seen:
-            seen[task_id] = {
-                "name": task.name,
-                "aliases": [],
-                "short_help": task.get_short_help(),
-                "help": task.get_help(),
-                "usage": task.parser.format_usage().strip(),
-                "location": task._get_relative_file_location(cwd),
-            }
+            seen[task_id] = task.to_info_dict(cwd)
         # Collect every invocation name (canonical + aliases) in the aliases list.
         entry = seen[task_id]
         if invocation_name not in entry["aliases"]:
@@ -122,10 +138,16 @@ async def run_task(
     :returns: ``{"exit_code": int, "stdout": str, "stderr": str}``
     """
     args = args or []
+    cfg = _subprocess_cfg
     if task_name not in app.tasks:
-        raise ToolError(
-            f"Task not found: '{task_name}'. Call list_tasks to see available tasks."
-        )
+        # Only reject unknown tasks when we have the in-process registry.
+        # When delegating to a project-local exe the subprocess will report
+        # the error itself.
+        if cfg.qk_exe is None:
+            raise ToolError(
+                f"Task not found: '{task_name}'."
+                " Call list_tasks to see available tasks."
+            )
 
     await ctx.info(
         f"Running task '{task_name}'" + (f" with args {args}" if args else "")
@@ -138,7 +160,6 @@ async def run_task(
     # Build command using the project-local qk executable when available so
     # that tasks run inside the project's own venv.  Fall back to the
     # currently-running Python only when no local executable was resolved.
-    cfg = _subprocess_cfg
     if cfg.qk_exe is not None:
         cmd = [str(cfg.qk_exe), *cfg.extra_args, task_name]
     else:
@@ -231,7 +252,12 @@ def main() -> None:
                     "falling back to current interpreter."
                 )
 
-    app.load_tasks()
+    # Only load tasks in-process when there is no project-local executable.
+    # When a local exe is configured, list_tasks and run_task both delegate to
+    # it, so importing the project's modules here (which may require
+    # project-specific dependencies) is unnecessary and would fail.
+    if _subprocess_cfg.qk_exe is None:
+        app.load_tasks()
     mcp.run()  # stdio transport by default
 
 

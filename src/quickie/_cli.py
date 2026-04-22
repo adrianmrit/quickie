@@ -1,5 +1,6 @@
 """The CLI entry of quickie."""
 
+import json
 import os
 import sys
 from functools import wraps
@@ -146,6 +147,14 @@ class Main:
             app.set_project_path(namespace.module)
         app.set_use_global(use_global)
 
+        # Handle --list-json before any Rich/logger output so that stdout
+        # contains only the raw JSON (used by qk-mcp to enumerate tasks).
+        if namespace.list_json:
+            app.load_tasks()
+            self.list_tasks_json()
+            _parser.exit()
+            return
+
         app.logger.info(f"Running quickie {quickie.__version__}")
         if namespace.init:
             init(namespace.init)
@@ -184,6 +193,23 @@ class Main:
             f'eval "$(register-python-argcomplete {program})"',
             style="bold green",
         )
+
+    def list_tasks_json(self):
+        """Output tasks as JSON for machine-readable consumption (e.g. qk-mcp)."""
+        cwd = os.getcwd()
+        seen: dict[int, dict] = {}
+        for invocation_name, task in app.tasks.items():
+            task_id = id(task)
+            if task_id not in seen:
+                seen[task_id] = task.to_info_dict(cwd)
+            entry = seen[task_id]
+            if invocation_name not in entry["aliases"]:
+                entry["aliases"].append(invocation_name)
+        result = sorted(seen.values(), key=lambda t: t["name"])
+        # Write directly to sys.stdout to bypass Rich and ensure clean JSON.
+        sys.stdout.write(json.dumps(result))
+        sys.stdout.write("\n")
+        sys.stdout.flush()
 
     def list_tasks(self):
         """List the available tasks."""

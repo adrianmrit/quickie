@@ -202,6 +202,28 @@ class Task:
             summary = summary[: MAX_SHORT_HELP_LENGTH - 3] + "..."
         return summary
 
+    def get_plain_usage(self) -> str:
+        """Return the usage string without ANSI escape sequences.
+
+        On Python 3.14+ a temporary ``color=False`` parser is used so no
+        escape codes are ever generated.  On older Python versions ANSI codes
+        are stripped from the normal ``format_usage()`` output.
+        """
+        plain_parser = self.get_parser(color=False)
+        self.add_args(plain_parser)
+        return plain_parser.format_usage().strip()
+
+    def to_info_dict(self, cwd: str) -> dict:
+        """Serialise task metadata to a plain dict suitable for JSON output."""
+        return {
+            "name": self.name,
+            "aliases": [],
+            "short_help": self.get_short_help(),
+            "help": self.get_help(),
+            "usage": self.get_plain_usage(),
+            "location": self._get_relative_file_location(cwd),
+        }
+
     def get_parser(
         self, *, name: str | None = None, **kwargs
     ) -> argparse.ArgumentParser:

@@ -1,7 +1,7 @@
 """Custom argument parser for quickie."""
 
 import typing
-from argparse import ArgumentParser
+from argparse import SUPPRESS, ArgumentParser
 
 import argcomplete
 
@@ -68,6 +68,12 @@ class AppArgumentParser(BaseArgumentParser):
     def _add_app_arguments(self) -> None:
         """Add arguments specific to the qk CLI."""
         self.add_argument("-l", "--list", action="store_true", help="List tasks")
+        self.add_argument(
+            "--list-json",
+            action="store_true",
+            dest="list_json",
+            help=SUPPRESS,
+        )
         self.add_argument(
             "--init",
             nargs="?",

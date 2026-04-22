@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import asyncio as _asyncio
+import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -77,6 +78,52 @@ async def test_list_tasks_contains_hello():
         result = await client.call_tool("list_tasks", {})
     names = [t["name"] for t in result.data]
     assert "hello" in names
+
+
+async def test_list_tasks_delegates_to_local_exe():
+    """When a local exe is configured, list_tasks calls it with --list-json."""
+    fake_tasks = [
+        {
+            "name": "deploy",
+            "aliases": ["deploy"],
+            "short_help": "Deploy the app",
+            "help": "Deploy the app to production",
+            "usage": "usage: qk deploy",
+            "location": "_qk/__init__.py:5",
+        }
+    ]
+
+    proc = MagicMock()
+    proc.returncode = 0
+    proc.communicate = AsyncMock(return_value=(json.dumps(fake_tasks).encode(), b""))
+
+    captured_cmd = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        captured_cmd["cmd"] = cmd
+        return proc
+
+    _subprocess_cfg.qk_exe = Path("/project/.venv/bin/qk")
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            result = await client.call_tool("list_tasks", {})
+
+    assert "--list-json" in captured_cmd["cmd"]
+    assert captured_cmd["cmd"][0] == "/project/.venv/bin/qk"
+    assert result.data == fake_tasks
+
+
+async def test_list_tasks_local_exe_error_raises():
+    """A non-zero exit from the local exe raises a ToolError."""
+    proc = MagicMock()
+    proc.returncode = 1
+    proc.communicate = AsyncMock(return_value=(b"", b"import error"))
+
+    _subprocess_cfg.qk_exe = Path("/project/.venv/bin/qk")
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
+        async with Client(mcp) as client:
+            with pytest.raises(Exception):
+                await client.call_tool("list_tasks", {})
 
 
 # ---------------------------------------------------------------------------
