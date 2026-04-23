@@ -74,6 +74,7 @@ async def list_tasks() -> list[dict]:
             *cfg.extra_args,
             "-qqqqqqqqqqq",  # quiet mode: suppress all output except the JSON result
             "--list-json",
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env={**os.environ, "QK_LAUNCHER_RUNNING": "true"},
