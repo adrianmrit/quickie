@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Changed
+
+- `qk-mcp`: replaced per-call `module` path resolution with a static project
+  registry. Projects are now declared at server startup via `--project NAME:PATH`
+  or `--config FILE`; they cannot be changed by clients at runtime.
+- `qk-mcp`: `list_tasks` and `run_task` now accept a `project` parameter
+  (alias or path) instead of `module`. `list_tasks` returns one entry per
+  project with keys `project`, `project_root`, and `tasks`.
+- `qk-mcp`: `list_tasks` returns tasks for **all** registered projects when
+  `project` is omitted (previously returned only the default project).
+- `qk-mcp`: removed `--module` / `-m` and `--global` / `-g` flags (still
+  supported by the `qk` CLI). Use `--project` to register a project path.
+
 
 ## Release 0.8.1
 

@@ -213,6 +213,45 @@ class Task:
         self.add_args(plain_parser)
         return plain_parser.format_usage().strip()
 
+    def _get_args_schema(self) -> list[dict]:
+        """Return a structured description of every argument accepted by this task.
+
+        Each entry is a dict with keys:
+        - ``flags``: list of CLI flag strings (e.g. ``["-n", "--name"]``).
+        - ``dest``: the attribute name produced by argparse.
+        - ``type``: human-readable type name, or ``None`` for flags.
+        - ``default``: the default value, or ``None``.
+        - ``required``: whether the argument is required.
+        - ``choices``: list of accepted values, or ``None``.
+        - ``help``: the help string, or ``None``.
+        - ``nargs``: nargs specifier (``"?"``, ``"*"``, ``"+"``, int, …), or ``None``.
+        """
+        schema = []
+        for action in self.parser._actions:
+            if isinstance(action, argparse._HelpAction):
+                continue
+            type_name = None
+            if action.type is not None:
+                type_name = getattr(action.type, "__name__", str(action.type))
+            elif not action.option_strings:
+                # Positional without explicit type → string
+                type_name = "str"
+            schema.append(
+                {
+                    "flags": list(action.option_strings) or [action.dest],
+                    "dest": action.dest,
+                    "type": type_name,
+                    "default": action.default
+                    if action.default is not argparse.SUPPRESS
+                    else None,
+                    "required": getattr(action, "required", False),
+                    "choices": list(action.choices) if action.choices else None,
+                    "help": action.help,
+                    "nargs": action.nargs,
+                }
+            )
+        return schema
+
     def to_info_dict(self, cwd: str) -> dict:
         """Serialise task metadata to a plain dict suitable for JSON output."""
         return {
@@ -222,6 +261,7 @@ class Task:
             "help": self.get_help(),
             "usage": self.get_plain_usage(),
             "location": self._get_relative_file_location(cwd),
+            "args_schema": self._get_args_schema(),
         }
 
     def get_parser(

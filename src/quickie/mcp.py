@@ -9,12 +9,17 @@ stdio transport.  The server exposes two tools:
 - ``list_tasks``  – discover all available tasks and their arguments.
 - ``run_task``    – execute a task by name, streaming output to the client in
                     real time and returning the final captured result.
+
+Projects are registered at server startup via ``--project`` or ``--config``.
+A single server can expose tasks from multiple projects simultaneously.
 """
 
 import asyncio
+import dataclasses
 import json
 import os
 import sys
+import tomllib
 from pathlib import Path
 
 from fastmcp import FastMCP, Context
@@ -27,26 +32,125 @@ from quickie._launcher import Launcher
 from quickie.config import app
 
 
-class _SubprocessConfig:
-    """Holds the subprocess command resolved once at server startup.
+# ---------------------------------------------------------------------------
+# Project registry (populated once in main(), then read-only)
+# ---------------------------------------------------------------------------
 
-    Using a mutable object avoids bare ``global`` assignments while still
-    letting ``main()`` update state that ``run_task`` reads at call time.
+
+@dataclasses.dataclass
+class _Project:
+    """A resolved project entry registered at server startup."""
+
+    name: str
+    extra_args: list[str]
+    project_root: Path | None
+    qk_exe: Path | None
+
+
+# alias → _Project; populated in main(), read-only after that.
+_projects: dict[str, _Project] = {}
+
+
+def _lookup_project(project: str | None) -> _Project:
+    """Return the ``_Project`` for *project*, or the sole project when *project* is ``None``.
+
+    :param project: Project alias or path prefix.  ``None`` succeeds only when
+        exactly one project is registered; otherwise raises :class:`ToolError`.
+    :raises ToolError: When *project* does not match any registered project, or
+        when *project* is ``None`` and multiple (or zero) projects are registered.
     """
+    if project is None:
+        if len(_projects) == 1:
+            return next(iter(_projects.values()))
+        if not _projects:
+            raise ToolError(
+                "No projects are configured. "
+                "Start qk-mcp with --project or --config."
+            )
+        names = ", ".join(f"'{n}'" for n in _projects)
+        raise ToolError(
+            "Multiple projects are configured; pass 'project' to select one. "
+            f"Available: {names}"
+        )
 
-    qk_exe: Path | None = None
-    extra_args: list[str] = []
+    # 1. Exact alias match.
+    if project in _projects:
+        return _projects[project]
+
+    # 2. Path-based match: project resolves to the project root or a path under it.
+    resolved = Path(project).resolve()
+    for proj in _projects.values():
+        if proj.project_root is not None:
+            try:
+                resolved.relative_to(proj.project_root)
+                return proj
+            except ValueError:
+                pass
+
+    names = ", ".join(f"'{n}'" for n in _projects)
+    raise ToolError(f"No project found matching '{project}'. " f"Available: {names}")
 
 
-# Singleton resolved in main(); read-only after that.
-_subprocess_cfg = _SubprocessConfig()
+# ---------------------------------------------------------------------------
+# Config file loading
+# ---------------------------------------------------------------------------
+
+
+def _load_config(path: str) -> dict:
+    """Load a TOML (``.toml``) or JSON (``.json``) config file.
+
+    :param path: Path to the file.  Extension determines format.
+    :returns: Parsed config as a plain :class:`dict`.
+    """
+    p = Path(path)
+    if p.suffix.lower() == ".json":
+        return json.loads(p.read_text(encoding="utf-8"))
+    with open(p, "rb") as f:
+        return tomllib.load(f)
+
+
+# ---------------------------------------------------------------------------
+# Subprocess helpers
+# ---------------------------------------------------------------------------
+
+
+async def _fetch_tasks(project: _Project) -> list[dict]:
+    """Spawn a subprocess to list tasks for *project* and return the parsed list."""
+    if project.qk_exe is not None:
+        cmd_prefix = [str(project.qk_exe)]
+        cwd_for_proc = None
+    else:
+        cmd_prefix = [sys.executable, "-m", "quickie"]
+        cwd_for_proc = str(project.project_root) if project.project_root else None
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd_prefix,
+        *project.extra_args,
+        "-qqqqqqqqqqq",  # quiet mode: suppress all output except the JSON result
+        "--list-json",
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd_for_proc,
+        env={**os.environ, "QK_LAUNCHER_RUNNING": "true"},
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise ToolError(
+            f"Failed to list tasks for project '{project.name}' "
+            f"(exit {proc.returncode}):\n" + stderr.decode(errors="replace")
+        )
+    return json.loads(stdout.decode())
+
 
 mcp = FastMCP(
     "quickie",
     instructions=(
         "Exposes quickie project tasks defined in _qk/. "
         "Always call list_tasks first to discover available tasks and their "
-        "required arguments, then use run_task to execute them."
+        "required arguments, then use run_task to execute them. "
+        "Pass 'project' to target a specific project when the server manages "
+        "multiple projects."
     ),
 )
 
@@ -58,51 +162,48 @@ mcp = FastMCP(
 
 @mcp.tool(
     description=(
-        "List all available (non-private) quickie tasks for this project. "
-        "Returns task names, aliases, usage syntax, help text, and source location."
+        "List all available (non-private) quickie tasks. "
+        "Returns one entry per project, each containing the project alias, "
+        "absolute project root, and a list of task metadata dicts "
+        "(name, aliases, usage, help, argument schema, source location). "
+        "Omit 'module' to list all registered projects at once, or pass a "
+        "project alias (or path) to list tasks for that project only."
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )
-async def list_tasks() -> list[dict]:
-    """Return metadata for every non-private task registered in this project."""
-    cfg = _subprocess_cfg
-    if cfg.qk_exe is not None:
-        # Delegate to the project-local qk executable so it runs inside the
-        # project's own venv (which has all project-specific dependencies).
-        proc = await asyncio.create_subprocess_exec(
-            str(cfg.qk_exe),
-            *cfg.extra_args,
-            "-qqqqqqqqqqq",  # quiet mode: suppress all output except the JSON result
-            "--list-json",
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "QK_LAUNCHER_RUNNING": "true"},
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
+async def list_tasks(project: str | None = None) -> list[dict]:
+    """Return task metadata grouped by project.
+
+    Each entry in the returned list has the keys:
+    - ``project``: the project alias.
+    - ``project_root``: absolute path of the project, or ``None``.
+    - ``tasks``: list of task metadata dicts.
+
+    :param project: Optional project alias or path.  When supplied, only that
+        project's tasks are returned.  When omitted, all registered projects
+        are listed.
+    """
+    if project is not None:
+        targets = [_lookup_project(project)]
+    else:
+        if not _projects:
             raise ToolError(
-                f"Failed to list tasks (exit {proc.returncode}):\n"
-                + stderr.decode(errors="replace")
+                "No projects are configured. "
+                "Start qk-mcp with --project or --config."
             )
-        return json.loads(stdout.decode())
+        targets = _projects.values()
 
-    # No project-local exe — enumerate tasks loaded in-process.
-    cwd = os.getcwd()
-
-    # De-duplicate: multiple names may point to the same task object.
-    seen: dict[int, dict] = {}
-    for invocation_name, task in app.tasks.items():
-        task_id = id(task)
-        if task_id not in seen:
-            seen[task_id] = task.to_info_dict(cwd)
-        # Collect every invocation name (canonical + aliases) in the aliases list.
-        entry = seen[task_id]
-        if invocation_name not in entry["aliases"]:
-            entry["aliases"].append(invocation_name)
-
-    # Sort by canonical task name for a stable, readable order.
-    return sorted(seen.values(), key=lambda t: t["name"])
+    results = []
+    for proj in targets:
+        tasks = await _fetch_tasks(proj)
+        results.append(
+            {
+                "project": proj.name,
+                "project_root": (str(proj.project_root) if proj.project_root else None),
+                "tasks": tasks,
+            }
+        )
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +217,9 @@ async def list_tasks() -> list[dict]:
         "Streams stdout to the client as info messages and stderr as warnings "
         "in real time. Returns the captured output and exit code when done. "
         "Supply stdin for tasks that require interactive input (e.g. confirmations). "
-        "Raises an error if the task is not found or if the timeout is exceeded."
+        "Raises an error if the task is not found or if the timeout is exceeded. "
+        "When multiple projects are registered, pass 'module' (alias or path) to "
+        "select the target project; omit it only when a single project is configured."
     ),
 )
 async def run_task(
@@ -124,6 +227,7 @@ async def run_task(
     args: list[str] | None = None,
     stdin: str | None = None,
     timeout: float = 60.0,
+    project: str | None = None,
     ctx: Context = CurrentContext(),
 ) -> dict:
     """Run a task in an isolated subprocess and stream its output.
@@ -135,20 +239,14 @@ async def run_task(
         When omitted the subprocess receives EOF immediately (DEVNULL).
     :param timeout: Maximum wall-clock seconds to wait (default 60). The
         subprocess is killed and a ToolError is raised if exceeded.
+    :param project: Optional project alias or path.  Required when multiple
+        projects are configured; optional (defaults to the sole project) when
+        only one is registered.
     :param ctx: FastMCP context (injected automatically).
     :returns: ``{"exit_code": int, "stdout": str, "stderr": str}``
     """
     args = args or []
-    cfg = _subprocess_cfg
-    if task_name not in app.tasks:
-        # Only reject unknown tasks when we have the in-process registry.
-        # When delegating to a project-local exe the subprocess will report
-        # the error itself.
-        if cfg.qk_exe is None:
-            raise ToolError(
-                f"Task not found: '{task_name}'."
-                " Call list_tasks to see available tasks."
-            )
+    proj = _lookup_project(project)
 
     await ctx.info(
         f"Running task '{task_name}'" + (f" with args {args}" if args else "")
@@ -158,13 +256,13 @@ async def run_task(
         asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL
     )
 
-    # Build command using the project-local qk executable when available so
-    # that tasks run inside the project's own venv.  Fall back to the
-    # currently-running Python only when no local executable was resolved.
-    if cfg.qk_exe is not None:
-        cmd = [str(cfg.qk_exe), *cfg.extra_args, task_name]
+    # Build command: prefer project-local qk, fall back to sys.executable.
+    if proj.qk_exe is not None:
+        cmd = [str(proj.qk_exe), *proj.extra_args, task_name]
+        cwd_for_proc = None
     else:
-        cmd = [sys.executable, "-m", "quickie", *cfg.extra_args, task_name]
+        cmd = [sys.executable, "-m", "quickie", *proj.extra_args, task_name]
+        cwd_for_proc = str(proj.project_root) if proj.project_root else None
     if args:
         cmd += ["--", *args]
 
@@ -173,6 +271,7 @@ async def run_task(
         stdin=stdin_pipe,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        cwd=cwd_for_proc,
         env={**os.environ, "QK_LAUNCHER_RUNNING": "true"},
     )
 
@@ -216,62 +315,79 @@ async def run_task(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_project_entry(alias: str, path: str) -> _Project:
+    """Resolve a ``(alias, path)`` pair into a :class:`_Project`.
+
+    :param alias: Human-readable project name.
+    :param path: Path to the ``_qk`` module/dir.
+    """
+    launcher = Launcher()
+    module_path = Path(path).resolve()
+    discovery_start = module_path.parent if module_path.exists() else Path.cwd()
+    project_root = launcher.discover_project_root(discovery_start)
+    qk_exe = launcher.resolve_executable(project_root) if project_root else None
+
+    app.logger.debug(
+        f"Project '{alias}': root={project_root}, "
+        + (f"exe={qk_exe}" if qk_exe else "no local exe")
+    )
+    return _Project(
+        name=alias,
+        extra_args=["--module", path],
+        project_root=project_root,
+        qk_exe=qk_exe,
+    )
+
+
 def main() -> None:
     """Entrypoint for the ``qk-mcp`` console script."""
     parser = MCPArgumentParser()
     namespace = parser.parse_args()
 
-    # Apply configuration from parsed arguments
-    use_global = namespace.use_global
-    if not use_global and namespace.module:
-        app.set_project_path(namespace.module)
-    app.set_use_global(use_global)
     app.set_verbosity(namespace.verbosity)
     if namespace.log_file:
         app.set_log_file(namespace.log_file)
 
-    # Build the extra flags that must be forwarded to each task subprocess so
-    # it uses the same configuration as this server.
-    if use_global:
-        _subprocess_cfg.extra_args = ["--global"]
-    elif namespace.module:
-        _subprocess_cfg.extra_args = ["--module", namespace.module]
+    # Collect (alias, path) pairs from all declaration sources.
+    # Later entries win on alias conflict: config < --project.
+    raw: dict[str, str] = {}
 
-    # Discover the project-local qk executable so run_task delegates to the
-    # correct venv.
-    #
-    # When --module is given we derive the search root from the module path
-    # itself (its parent directory), because the MCP host may start the
-    # process with a CWD that is completely unrelated to the project (e.g.
-    # the user's home directory).  Resolving the module path against CWD
-    # first handles both absolute and relative --module values.
-    if not use_global:
+    # 1. Config file (lowest priority).
+    if namespace.config:
+        cfg = _load_config(namespace.config)
+        for cfg_alias, cfg_path in cfg.get("projects", {}).items():
+            raw[cfg_alias] = cfg_path
+
+    # 2. --project alias:path flags (override config on name conflict).
+    for spec in namespace.projects or []:
+        alias, _, path = spec.partition(":")
+        alias = alias.strip()
+        path = path.strip()
+        if not alias or not path:
+            parser.error(f"--project requires 'NAME:PATH' format, got '{spec}'")
+        raw[alias] = path
+
+    # 3. CWD-based default when nothing else was specified.
+    if not raw:
         launcher = Launcher()
-        if namespace.module:
-            module_path = Path(namespace.module).resolve()
-            # If --module points to a file/dir, start discovery from its parent;
-            # otherwise treat the value as a directory name inside CWD.
-            discovery_start = module_path.parent if module_path.exists() else Path.cwd()
-        else:
-            discovery_start = None  # defaults to CWD inside discover_project_root
-        project_root = launcher.discover_project_root(discovery_start)
-        if project_root is not None:
-            resolved = launcher.resolve_executable(project_root)
-            if resolved is not None:
-                _subprocess_cfg.qk_exe = resolved
-                app.logger.debug(f"qk-mcp will run tasks via {_subprocess_cfg.qk_exe}")
-            else:
-                app.logger.debug(
-                    "No project-local qk executable found; "
-                    "falling back to current interpreter."
-                )
+        project_root = launcher.discover_project_root()
+        qk_exe = launcher.resolve_executable(project_root) if project_root else None
+        alias = project_root.name if project_root else "default"
+        _projects[alias] = _Project(
+            name=alias,
+            extra_args=[],
+            project_root=project_root,
+            qk_exe=qk_exe,
+        )
+        app.logger.debug(
+            f"CWD project '{alias}': root={project_root}, "
+            + (f"exe={qk_exe}" if qk_exe else "no local exe")
+        )
 
-    # Only load tasks in-process when there is no project-local executable.
-    # When a local exe is configured, list_tasks and run_task both delegate to
-    # it, so importing the project's modules here (which may require
-    # project-specific dependencies) is unnecessary and would fail.
-    if _subprocess_cfg.qk_exe is None:
-        app.load_tasks()
+    # Resolve all explicitly declared projects.
+    for alias, path in raw.items():
+        _projects[alias] = _resolve_project_entry(alias, path)
+
     mcp.run()  # stdio transport by default
 
 
