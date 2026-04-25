@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+
+## Release 0.9.0
+
 ### Changed
 
 - `qk-mcp`: replaced per-call `module` path resolution with a static project
