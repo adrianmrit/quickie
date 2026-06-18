@@ -20,6 +20,7 @@ from quickie.tasks import (
 )
 from quickie._namespace import Namespace, namespace
 from quickie.config import app, console, logger
+from quickie import context
 from quickie.context import Context, load_env_file
 from quickie.utils.argparser import Arg
 
@@ -34,6 +35,7 @@ __all__ = [
     "app",
     "console",
     "logger",
+    "context",
     "Context",
     "load_env_file",
     "Task",

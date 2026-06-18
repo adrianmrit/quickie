@@ -22,6 +22,7 @@
       ~Task.get_cleanup
       ~Task.get_help
       ~Task.get_parser
+      ~Task.get_plain_usage
       ~Task.get_short_help
       ~Task.log_task_execution
       ~Task.log_task_execution_details
@@ -31,6 +32,7 @@
       ~Task.run_after
       ~Task.run_before
       ~Task.run_cleanup
+      ~Task.to_info_dict
    
    
 

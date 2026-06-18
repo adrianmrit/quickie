@@ -1,6 +1,6 @@
 """Metadata for the package."""
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 __author__ = "Adrian Martinez Rodriguez"
 __email__ = "adrianmrit@gmail.com"
 __home__ = "https://github.com/adrianmrit/quickie"

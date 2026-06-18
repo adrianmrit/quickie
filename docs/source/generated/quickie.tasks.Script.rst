@@ -24,6 +24,7 @@
       ~Script.get_expected_exit_codes
       ~Script.get_help
       ~Script.get_parser
+      ~Script.get_plain_usage
       ~Script.get_retries
       ~Script.get_retry_delay
       ~Script.get_script
@@ -38,6 +39,7 @@
       ~Script.run_after
       ~Script.run_before
       ~Script.run_cleanup
+      ~Script.to_info_dict
       ~Script.validate_exit_code
    
    

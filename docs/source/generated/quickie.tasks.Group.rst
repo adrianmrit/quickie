@@ -22,6 +22,7 @@
       ~Group.get_cleanup
       ~Group.get_help
       ~Group.get_parser
+      ~Group.get_plain_usage
       ~Group.get_short_help
       ~Group.get_tasks
       ~Group.log_task_execution
@@ -32,6 +33,7 @@
       ~Group.run_after
       ~Group.run_before
       ~Group.run_cleanup
+      ~Group.to_info_dict
    
    
 

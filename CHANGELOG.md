@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## Release 0.9.1
+
+### Changed
+
+- Upgraded dependencies
 
 ## Release 0.9.0
 

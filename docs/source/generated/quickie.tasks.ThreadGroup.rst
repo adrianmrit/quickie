@@ -23,6 +23,7 @@
       ~ThreadGroup.get_help
       ~ThreadGroup.get_max_workers
       ~ThreadGroup.get_parser
+      ~ThreadGroup.get_plain_usage
       ~ThreadGroup.get_short_help
       ~ThreadGroup.get_tasks
       ~ThreadGroup.log_task_execution
@@ -33,6 +34,7 @@
       ~ThreadGroup.run_after
       ~ThreadGroup.run_before
       ~ThreadGroup.run_cleanup
+      ~ThreadGroup.to_info_dict
    
    
 

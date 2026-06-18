@@ -115,7 +115,7 @@ Or with a config file:
 
 Then from a client:
 
-.. code-block:: json
+.. code-block:: javascript
 
     // Step 1 — discover tasks in all projects
     list_tasks({})

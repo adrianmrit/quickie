@@ -27,6 +27,7 @@
       ~Command.get_expected_exit_codes
       ~Command.get_help
       ~Command.get_parser
+      ~Command.get_plain_usage
       ~Command.get_retries
       ~Command.get_retry_delay
       ~Command.get_short_help
@@ -41,6 +42,7 @@
       ~Command.run_before
       ~Command.run_cleanup
       ~Command.split_cmd_args
+      ~Command.to_info_dict
       ~Command.validate_exit_code
    
    
