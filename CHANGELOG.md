@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Changed
+
+- Paths prefixed with ``./`` (e.g. ``"./subdir"``) in task ``wd`` and
+  ``PathCompleter`` now resolve relative to the tasks module parent directory
+  (the project root), independently of the current working directory. This
+  aligns ``./`` with the existing ``"."`` (bare dot) behaviour.
+
+### Added
+
+- `PathCompleter` now accepts an optional `wd` parameter to control the
+  directory paths are resolved relative to, following the same rules as task
+  working directories.
+- Added `resolve_wd()` function in `quickie.context` that encapsulates the
+  working directory resolution logic, shared by `_BaseSubprocessTask` and
+  `PathCompleter`.
+
 ## Release 0.9.1
 
 ### Changed

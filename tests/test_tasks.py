@@ -286,13 +286,21 @@ class TestBaseSubprocessTask:
             ("../other", "/example/other"),
             ("other", "/example/cwd/other"),
             ("/absolute", "/absolute"),
-            ("./relative", "/example/cwd/relative"),
+            ("./relative", "/example/project/relative"),
             ("", "/example/cwd"),
             (None, "/example/cwd"),
         ],
     )
     def test_wd(self, attr, expected, mocker):
+        from pathlib import Path
+
         mocker.patch.object(app, "context", Context(wd="/example/cwd", env={}))
+        mocker.patch.object(
+            type(app),
+            "tasks_path",
+            new_callable=PropertyMock,
+            return_value=Path("/example/project/_qk"),
+        )
 
         class MyTask(tasks._BaseSubprocessTask):
             wd = attr

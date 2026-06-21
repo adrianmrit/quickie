@@ -22,7 +22,7 @@ import time
 import typing
 
 from quickie.conditions.base import BaseCondition
-from quickie.context import load_env_file
+from quickie.context import load_env_file, resolve_wd
 from quickie.errors import Skip, SubprocessExitCodeError, SubprocessTimeoutError
 from quickie._sentinels import USE_DEFAULT, UseDefault
 from quickie.config import app
@@ -672,18 +672,7 @@ class _BaseSubprocessTask(Task):
 
         :returns: The working directory.
         """
-        if self.wd is None:
-            path = app.context.wd
-        elif self.wd == ".":
-            path = app.tasks_path.parent
-            app.logger.debug(f"Using current working directory: {path}")
-        elif not os.path.isabs(self.wd):
-            # If the path is relative, join it with the current working directory
-            # to get the absolute path.
-            path = os.path.join(app.context.wd, self.wd)
-        else:
-            path = self.wd
-        return os.path.abspath(path)
+        return resolve_wd(self.wd)
 
     def get_env(self, *args, **kwargs) -> typing.Mapping[str, str]:
         """Get the environment.

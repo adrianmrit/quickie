@@ -5,6 +5,7 @@ from quickie.completion.python import PytestCompleter
 from quickie.completion.base import BaseCompleter
 from quickie.errors import TasksModuleNotFoundError
 from quickie.completion import PathCompleter
+import os
 import pytest
 
 
@@ -166,6 +167,36 @@ class TestPathCompleter:
         completer = PathCompleter()
         result = list(completer.get_pre_filtered_paths("/nonexistent/path/xyz_abc123"))
         assert result == []
+
+    def test_get_pre_filtered_paths_with_wd(self, tmp_path):
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "file1.txt").write_text("")
+        (subdir / "file2.txt").write_text("")
+
+        completer = PathCompleter(wd=str(tmp_path))
+        result = sorted(completer.get_pre_filtered_paths("subdir"))
+        assert result == ["file1.txt", "file2.txt"]
+
+    def test_get_pre_filtered_paths_empty_target_uses_wd(self, tmp_path):
+        (tmp_path / "foo.txt").write_text("")
+
+        completer = PathCompleter(wd=str(tmp_path))
+        result = list(completer.get_pre_filtered_paths(""))
+        assert "foo.txt" in result
+
+    def test_absolute_path_ignores_wd(self, tmp_path):
+        other_dir = tmp_path / "other"
+        other_dir.mkdir()
+        (other_dir / "bar.txt").write_text("")
+
+        completer = PathCompleter(wd=str(tmp_path))
+        result = list(completer.get_pre_filtered_paths(str(other_dir)))
+        assert "bar.txt" in result
+
+    def test_none_wd_falls_back_to_context(self, mocker):
+        completer = PathCompleter(wd=None)
+        assert completer.get_wd() == os.path.abspath(app.context.wd)
 
 
 class TestPytestCompleterReadFile:

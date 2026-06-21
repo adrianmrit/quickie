@@ -16,6 +16,7 @@
       ~PytestCompleter.__init__
       ~PytestCompleter.complete
       ~PytestCompleter.get_pre_filtered_paths
+      ~PytestCompleter.get_wd
    
    
 

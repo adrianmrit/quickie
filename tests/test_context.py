@@ -1,6 +1,43 @@
 from collections import ChainMap
+import os
 from pathlib import Path
-from quickie.context import Context, load_env_file
+from quickie import app
+from quickie.context import Context, load_env_file, resolve_wd
+from unittest.mock import PropertyMock
+
+
+class TestResolveWd:
+    def test_none_uses_context_wd(self):
+        result = resolve_wd(None)
+        assert result == os.path.abspath(app.context.wd)
+
+    def test_dot_uses_tasks_path_parent(self, mocker):
+        mocker.patch.object(
+            type(app),
+            "tasks_path",
+            new_callable=PropertyMock,
+            return_value=Path("/some/project/_qk"),
+        )
+        result = resolve_wd(".")
+        assert result == os.path.abspath("/some/project")
+
+    def test_dot_slash_resolves_relative_to_tasks_parent(self, mocker):
+        mocker.patch.object(
+            type(app),
+            "tasks_path",
+            new_callable=PropertyMock,
+            return_value=Path("/some/project/_qk"),
+        )
+        result = resolve_wd("./sub/dir")
+        assert result == os.path.abspath("/some/project/sub/dir")
+
+    def test_relative_joined_with_context_wd(self):
+        result = resolve_wd("sub/dir")
+        assert result == os.path.abspath(os.path.join(app.context.wd, "sub/dir"))
+
+    def test_absolute_used_as_is(self):
+        result = resolve_wd("/absolute/path")
+        assert result == os.path.abspath("/absolute/path")
 
 
 class TestLoadEnvFile:

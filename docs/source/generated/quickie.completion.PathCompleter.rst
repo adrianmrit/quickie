@@ -16,6 +16,7 @@
       ~PathCompleter.__init__
       ~PathCompleter.complete
       ~PathCompleter.get_pre_filtered_paths
+      ~PathCompleter.get_wd
    
    
 

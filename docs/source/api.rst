@@ -38,6 +38,7 @@ API
     quickie.config.App
     quickie.context
     quickie.context.Context
+    quickie.context.resolve_wd
     quickie.errors
     quickie.errors.QuickieError
     quickie.errors.Stop

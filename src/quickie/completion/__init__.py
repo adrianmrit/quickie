@@ -6,9 +6,11 @@ suggests possible values for an argument based on the current input.
 
 import argparse
 import os
+from pathlib import Path
 import typing
 
 from quickie.completion.base import BaseCompleter
+from quickie.context import resolve_wd
 
 __all__ = ["BaseCompleter", "PathCompleter"]
 
@@ -16,10 +18,28 @@ __all__ = ["BaseCompleter", "PathCompleter"]
 class PathCompleter(BaseCompleter):
     """For auto-completing file paths."""
 
+    def __init__(self, wd: str | Path | None = None):
+        """Initialize the completer.
+
+        :param wd: The working directory to resolve paths relative to.
+            Follows the same resolution rules as task working directories:
+            ``None`` uses ``app.context.wd``, ``"."`` uses the tasks module
+            parent directory, ``"./path"`` is resolved relative to the tasks
+            module parent directory, other relative paths are joined with
+            ``app.context.wd``, and absolute paths are used as-is.
+        """
+        self.wd = wd
+
+    def get_wd(self) -> str:
+        """Get the resolved working directory."""
+        return resolve_wd(self.wd)
+
     def get_pre_filtered_paths(self, target_dir: str) -> typing.Iterable[str]:
         """Get path names in the target directory."""
         try:
-            return os.listdir(target_dir or ".")
+            if target_dir and not os.path.isabs(target_dir):
+                target_dir = os.path.join(self.get_wd(), target_dir)
+            return os.listdir(target_dir or self.get_wd())
         except Exception:
             return []
 

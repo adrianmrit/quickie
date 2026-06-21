@@ -47,6 +47,36 @@ def load_env_file(path: str | Path) -> dict[str, str]:
     return {k: v for k, v in dotenv_values(path).items() if v is not None}
 
 
+def resolve_wd(wd: str | Path | None) -> str:
+    """Resolve a working directory value to an absolute path.
+
+    Follows the same resolution rules as task working directories:
+
+    - ``None`` — uses :attr:`app.context.wd <quickie.config.App.context>`
+    - ``"."`` — uses the parent of the tasks module directory
+    - ``"./some/path"`` — resolved relative to the parent of the tasks module
+      directory
+    - Other relative path — joined with ``app.context.wd``
+    - Absolute path — used as-is
+
+    :param wd: The working directory value to resolve.
+    :returns: An absolute path string.
+    """
+    from quickie import app  # noqa: PLC0415
+
+    if wd is None:
+        path = app.context.wd
+    elif wd == ".":
+        path = app.tasks_path.parent
+    elif isinstance(wd, str) and wd.startswith("./"):
+        path = os.path.join(app.tasks_path.parent, wd)
+    elif not os.path.isabs(wd):
+        path = os.path.join(app.context.wd, wd)
+    else:
+        path = wd
+    return os.path.abspath(path)
+
+
 class Context:
     """The context for a task."""
 
