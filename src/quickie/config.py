@@ -98,6 +98,21 @@ class App:
         return self._tasks
 
     @property
+    def cached_task_names(self) -> dict[str, dict] | None:
+        """Cached task name→metadata mapping from disk, or ``None``."""
+        return getattr(self, "_cached_task_names", None)
+
+    def _try_load_task_cache(self) -> None:
+        """Attempt to load task metadata from the disk cache.
+
+        Populates :attr:`_cached_task_names` on success.
+        """
+        from quickie._cache import TaskCache
+        from quickie._meta import __version__
+
+        self._cached_task_names = TaskCache.load(self.tasks_path, __version__)
+
+    @property
     def home_path(self) -> Path:
         """The path to the global quickie directory. Usually `~._qkg`."""
         if not hasattr(self, "_home_path"):
@@ -309,6 +324,16 @@ class App:
         module = imports.import_from_path(self.tasks_path)
         self._tasks = RootNamespace()
         self._tasks.load(module)
+
+        # Populate disk cache for fast autocomplete
+        from quickie._cache import TaskCache, build_cache_entry
+        from quickie._meta import __version__
+
+        task_dict: dict[str, dict] = {}
+        for name, task in self._tasks.items():
+            task_dict[name] = build_cache_entry(task)
+        TaskCache.save(self.tasks_path, task_dict, __version__)
+        self._cached_task_names = task_dict
 
 
 app = App()

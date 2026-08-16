@@ -15,6 +15,14 @@ class TaskCompleter(BaseCompleter):
     @typing.override
     def complete(self, *, prefix: str, **_):
         try:
+            # Fast path: use disk cache if available
+            if app.cached_task_names is not None:
+                return {
+                    key: entry["help"]
+                    for key, entry in app.cached_task_names.items()
+                    if key.startswith(prefix)
+                }
+            # Slow path: iterate full task objects
             return {
                 key: task.get_short_help()
                 for key, task in app.tasks.items()

@@ -81,7 +81,7 @@ select = [
     "D",   # pydocstyle
 ]
 fixable = ["ALL"]
-ignore = ["D106"]
+ignore = ["D106", "PLC0415"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

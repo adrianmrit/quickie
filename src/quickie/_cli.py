@@ -116,24 +116,47 @@ class Main:
             app.set_project_path(namespace.module)
         app.set_use_global(use_global)
 
-        try:
-            app.load_tasks()
-        except QuickieError:
-            pass  # Outside a project; TaskCompleter returns empty gracefully
+        # --- Fast path: try the disk cache ---
+        app._try_load_task_cache()
+        cache_available = app.cached_task_names is not None
 
-        if namespace.task:
-            try:
-                task = self.get_task(namespace.task)
-            except (QuickieError, KeyError):
-                parser = _parser
-            else:
-                # Update _ARGCOMPLETE to the index of the task, so that
-                # completion only considers the task arguments
-                os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
-                parser = task.parser
-
-        else:
+        if not namespace.task:
+            # Task-name completion — cache is sufficient
+            if not cache_available:
+                try:
+                    app.load_tasks()
+                except QuickieError:
+                    pass
             parser = _parser
+        else:
+            # Task-argument completion — try cache first
+            task_cache_entry = (
+                app.cached_task_names.get(namespace.task) if cache_available else None
+            )
+            cached_args = task_cache_entry.get("args") if task_cache_entry else None
+
+            if cached_args is not None and not cached_args.get(
+                "has_unknown_completers", True
+            ):
+                # Rebuild a lightweight parser from cached metadata
+                from quickie._cache import rebuild_parser
+
+                os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
+                parser = rebuild_parser(namespace.task, cached_args)
+            else:
+                # Fall back to full import
+                try:
+                    app.load_tasks()
+                except QuickieError:
+                    pass
+                try:
+                    task = self.get_task(namespace.task)
+                except (QuickieError, KeyError):
+                    parser = _parser
+                else:
+                    os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
+                    parser = task.parser
+
         argcomplete.autocomplete(parser)
         sys.exit(0)
 

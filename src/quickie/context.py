@@ -62,7 +62,7 @@ def resolve_wd(wd: str | Path | None) -> str:
     :param wd: The working directory value to resolve.
     :returns: An absolute path string.
     """
-    from quickie import app  # noqa: PLC0415
+    from quickie import app
 
     if wd is None:
         path = app.context.wd

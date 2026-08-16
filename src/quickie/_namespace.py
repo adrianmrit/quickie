@@ -16,7 +16,7 @@ _NamespaceFactory = typing.Callable[[], typing.Any]
 
 
 def is_task_instance(obj) -> typing.TypeGuard["Task"]:
-    from quickie.tasks import Task  # noqa: PLC0415
+    from quickie.tasks import Task
 
     return isinstance(obj, Task)
 

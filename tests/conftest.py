@@ -23,3 +23,4 @@ def patch_config(tmpdir_factory, mocker):
     # Reset the namespace every time
     mocker.patch("quickie.app._tasks", RootNamespace(), create=True)
     mocker.patch("quickie.app.program_name", "qk")
+    mocker.patch("quickie.app._cached_task_names", None, create=True)

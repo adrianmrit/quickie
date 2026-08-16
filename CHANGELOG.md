@@ -17,6 +17,13 @@
 - Added `resolve_wd()` function in `quickie.context` that encapsulates the
   working directory resolution logic, shared by `_BaseSubprocessTask` and
   `PathCompleter`.
+- Added a disk-based task metadata cache (`.quickie_cache/task_names.json`)
+  that speeds up CLI tab-completion by avoiding full module imports.  The
+  cache stores task names, help text, and argument metadata and is
+  automatically invalidated when any ``.py`` file in the tasks directory
+  changes.  Completers that can be rebuilt from cache (``PathCompleter``,
+  ``PytestCompleter``) are reconstructed lazily; tasks with unknown
+  completers gracefully fall back to a full import.
 
 ## Release 0.9.1
 
