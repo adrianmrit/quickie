@@ -138,9 +138,9 @@ async def test_list_tasks_no_duplicates():
         async with Client(mcp) as client:
             result = await client.call_tool("list_tasks", {})
     names = [t["name"] for t in result.data[0]["tasks"]]
-    assert len(names) == len(
-        set(names)
-    ), "Duplicate task names found in list_tasks output"
+    assert len(names) == len(set(names)), (
+        "Duplicate task names found in list_tasks output"
+    )
 
 
 async def test_list_tasks_contains_hello():

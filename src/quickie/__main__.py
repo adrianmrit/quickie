@@ -2,7 +2,6 @@
 # PYTHON_ARGCOMPLETE_OK
 """Entry point for the application script."""
 
-
 import sys
 
 from ._cli import main

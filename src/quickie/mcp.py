@@ -64,8 +64,7 @@ def _lookup_project(project: str | None) -> _Project:
             return next(iter(_projects.values()))
         if not _projects:
             raise ToolError(
-                "No projects are configured. "
-                "Start qk-mcp with --project or --config."
+                "No projects are configured. Start qk-mcp with --project or --config."
             )
         names = ", ".join(f"'{n}'" for n in _projects)
         raise ToolError(
@@ -88,7 +87,7 @@ def _lookup_project(project: str | None) -> _Project:
                 pass
 
     names = ", ".join(f"'{n}'" for n in _projects)
-    raise ToolError(f"No project found matching '{project}'. " f"Available: {names}")
+    raise ToolError(f"No project found matching '{project}'. Available: {names}")
 
 
 # ---------------------------------------------------------------------------
@@ -188,8 +187,7 @@ async def list_tasks(project: str | None = None) -> list[dict]:
     else:
         if not _projects:
             raise ToolError(
-                "No projects are configured. "
-                "Start qk-mcp with --project or --config."
+                "No projects are configured. Start qk-mcp with --project or --config."
             )
         targets = _projects.values()
 

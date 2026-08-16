@@ -21,12 +21,12 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies=[
-    "frozendict~=2.4",
-    "oslex~=2.0",
-    "python-dotenv~=1.2",
-    "rich~=15.0",
-    "argcomplete~=3.6",
-    "fastmcp~=3.4",
+    "frozendict>=2.4",
+    "oslex>=2.0",
+    "python-dotenv>=1.2",
+    "rich>=15.0",
+    "argcomplete>=3.6",
+    "fastmcp>=3.4",
 ]
 
 [project.urls]
@@ -91,14 +91,15 @@ convention = "google"
 
 [dependency-groups]
 dev = [
-    "sphinx~=9.1",
-    "sphinx-toolbox~=4.2",
-    "sphinx-rtd-theme~=3.1",
-    "pytest~=9.1",
-    "pytest-cov~=7.1",
-    "pytest-mock~=3.15",
-    "pre-commit~=4.6",
-    "mock~=5.2",
-    "twine~=6.2",
-    "build~=1.5",
+    "sphinx>=9.1",
+    "sphinx-toolbox>=4.3",
+    "sphinx-rtd-theme>=3.1",
+    "pytest>=9.1",
+    "pytest-cov>=7.1",
+    "pytest-mock>=3.15",
+    "pre-commit>=4.6",
+    "mock>=5.2",
+    "twine>=7.0",
+    "build>=1.5",
+    "ruff>=0.16",
 ]

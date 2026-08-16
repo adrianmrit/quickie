@@ -136,7 +136,7 @@ class SubprocessTimeoutError(QuickieError):
         :param timeout: The timeout value in seconds.
         """
         super().__init__(
-            (f"Task '{task_name}' timed out after {timeout}s." f" Command: {command}"),
+            (f"Task '{task_name}' timed out after {timeout}s. Command: {command}"),
         )
         self.task_name = task_name
         self.command = command

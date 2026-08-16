@@ -17,3 +17,11 @@ dist/
 
 # Ignore .log, .log1, etc files
 *.log
+
+## Tooling caches ##
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+## Documentation build output ##
+docs/build/
