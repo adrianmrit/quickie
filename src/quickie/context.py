@@ -5,8 +5,6 @@ import os
 from pathlib import Path
 import typing
 
-from dotenv import dotenv_values
-
 
 def load_env_file(path: str | Path) -> dict[str, str]:
     """Load environment variables from a ``.env`` file and return them as a dict.
@@ -44,6 +42,8 @@ def load_env_file(path: str | Path) -> dict[str, str]:
 
     :returns: A :class:`dict` mapping variable names to string values.
     """
+    from dotenv import dotenv_values
+
     return {k: v for k, v in dotenv_values(path).items() if v is not None}
 
 

@@ -73,6 +73,9 @@ class Launcher:
     # Environment variable guard to prevent infinite recursion
     _RECURSION_GUARD_ENV = "QK_LAUNCHER_RUNNING"
 
+    # Class-level cache for project root discovery: {start_path: (result, mtime)}
+    _root_cache: dict[Path, tuple[Path | None, float]] = {}
+
     def __init__(self):
         """Initialize the launcher."""
         self.project_root: Path | None = None
@@ -89,36 +92,95 @@ class Launcher:
     def discover_project_root(self, start_path: Path | None = None) -> Path | None:
         """Discover project root by searching for _qk directory or file.
 
+        Uses a class-level cache keyed by start_path with mtime-based
+        invalidation to avoid redundant directory walks.
+
         :param start_path: Path to start search from. Defaults to current directory.
         :return: Path to project root, or None if not found.
         """
         if start_path is None:
             start_path = Path.cwd()
 
+        cache_key = start_path.resolve()
+
+        # Check cache
+        if cache_key in self._root_cache:
+            cached_result, cached_mtime = self._root_cache[cache_key]
+            if cached_result is not None:
+                # Verify the found marker still exists and hasn't changed
+                marker = cached_result / "_qk"
+                if not marker.is_dir():
+                    marker = cached_result / "_qk.py"
+                if marker.exists():
+                    try:
+                        current_mtime = marker.stat().st_mtime
+                        if current_mtime == cached_mtime:
+                            self.project_root = cached_result
+                            app.logger.debug(
+                                f"Found project root at {cached_result} (cached)"
+                            )
+                            return cached_result
+                    except OSError:
+                        pass
+                # Cache stale — fall through to re-walk
+            else:
+                # Cached as not found — verify no new _qk appeared
+                if not self._has_qk_marker(cache_key):
+                    self.project_root = None
+                    return None
+
+        # Walk the directory tree
+        result, marker_mtime = self._walk_for_project_root(start_path)
+
+        # Store in cache
+        self._root_cache[cache_key] = (result, marker_mtime)
+        self.project_root = result
+
+        if result is not None:
+            app.logger.debug(f"Found project root at {result}")
+        else:
+            app.logger.debug(f"No project found from {start_path}")
+
+        return result
+
+    @staticmethod
+    def _has_qk_marker(path: Path) -> bool:
+        """Check if a path has a _qk directory or file."""
+        return (path / "_qk").is_dir() or (path / "_qk.py").is_file()
+
+    @staticmethod
+    def _walk_for_project_root(start_path: Path) -> tuple[Path | None, float]:
+        """Walk up from start_path looking for _qk directory or file.
+
+        :return: Tuple of (project_root_path, marker_mtime) where marker_mtime
+            is the mtime of the found marker (0.0 if not found).
+        """
         current = start_path
-        attempted = []
 
         while True:
             qk_dir = current / "_qk"
-            attempted.append(qk_dir)
             if qk_dir.is_dir():
-                self.project_root = current
-                app.logger.debug(f"Found project root at {current}")
-                return current
+                try:
+                    return current, qk_dir.stat().st_mtime
+                except OSError:
+                    return current, 0.0
 
             qk_file = current / "_qk.py"
-            attempted.append(qk_file)
             if qk_file.is_file():
-                self.project_root = current
-                app.logger.debug(f"Found project root at {current}")
-                return current
+                try:
+                    return current, qk_file.stat().st_mtime
+                except OSError:
+                    return current, 0.0
 
             if current == current.parent:
-                app.logger.debug(f"No project found. Attempted: {attempted}")
-                self.project_root = None
-                return None
+                return None, 0.0
 
             current = current.parent
+
+    @classmethod
+    def _invalidate_cache(cls):
+        """Clear the project root discovery cache."""
+        cls._root_cache.clear()
 
     def resolve_executable(self, project_root: Path) -> Path | None:
         """Resolve qk executable from project environment.

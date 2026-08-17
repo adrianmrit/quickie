@@ -8,6 +8,9 @@
   ``PathCompleter`` now resolve relative to the tasks module parent directory
   (the project root), independently of the current working directory. This
   aligns ``./`` with the existing ``"."`` (bare dot) behaviour.
+- Improved ``import quickie`` startup time by deferring heavy imports
+  until first use, via lazy ``__init__`` loading and inline imports in
+  ``_cli``, ``context``, and ``config``.
 
 ### Added
 
@@ -24,6 +27,8 @@
   changes.  Completers that can be rebuilt from cache (``PathCompleter``,
   ``PytestCompleter``) are reconstructed lazily; tasks with unknown
   completers gracefully fall back to a full import.
+- Added mtime-based caching to ``Launcher.discover_project_root()`` to
+  avoid redundant directory walks when discovering the project root.
 
 ## Release 0.9.1
 

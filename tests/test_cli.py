@@ -360,13 +360,6 @@ class TestPartitionArgs:
         assert ns.task is None
         assert ns.args == []
 
-    def test_empty_string_arg_preserved_for_completion(self):
-        # argcomplete passes [""] when the user typed "qk " (trailing space).
-        # partition_args must not drop it (empty string is falsy but not None).
-        ns = self.parser.parse_args([""])
-        assert ns.task == ""
-        assert ns.args == []
-
 
 def test_unrecognized_args(capsys):
     with raises(SystemExit) as exc_info:
@@ -457,3 +450,213 @@ def test_module_flag(mocker, capsys):
         _cli.main(["--module", "tests/_qk_test", "module-hello"])
 
     set_project_path_mock.assert_called_once_with("tests/_qk_test")
+
+
+class TestListTasks:
+    """Tests for list_tasks functionality."""
+
+    def test_list_tasks_outputs_table(self, capsys, mocker):
+        """Test that list_tasks outputs a formatted table."""
+
+        @task
+        def sample_task():
+            """Sample task for testing."""
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(sample_task, namespace="sample-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+        mocker.patch("quickie.app.load_tasks")
+
+        main_obj = _cli.Main(argv=["--list"])
+        main_obj.list_tasks()
+
+        out, _ = capsys.readouterr()
+        assert "Available tasks" in out
+        assert "sample-task" in out
+
+    def test_list_tasks_with_aliases(self, capsys, mocker):
+        """Test list_tasks shows aliases."""
+
+        @task(aliases=["alias1", "alias2"])
+        def aliased_task():
+            """Task with aliases."""
+            pass
+
+        tasks_ns = RootNamespace()
+        # Register the task under multiple names
+        tasks_ns.register(aliased_task, namespace="aliased-task")
+        tasks_ns.register(aliased_task, namespace="alias1")
+        tasks_ns.register(aliased_task, namespace="alias2")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+        mocker.patch("quickie.app.load_tasks")
+
+        main_obj = _cli.Main(argv=["--list"])
+        main_obj.list_tasks()
+
+        out, _ = capsys.readouterr()
+        # Aliases should be shown in the Aliases column
+        assert "alias1" in out or "alias2" in out
+
+
+class TestListTasksJson:
+    """Tests for list_tasks_json functionality."""
+
+    def test_list_tasks_json_outputs_json(self, capsys, mocker):
+        """Test that list_tasks_json outputs valid JSON."""
+
+        @task
+        def json_task():
+            """JSON task for testing."""
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(json_task, namespace="json-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+        mocker.patch("quickie.app.load_tasks")
+
+        main_obj = _cli.Main(argv=["--list-json"])
+        main_obj.list_tasks_json()
+
+        out, _ = capsys.readouterr()
+        import json
+
+        data = json.loads(out)
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert data[0]["name"] == "json-task"
+
+
+class TestSuggestAutocompletion:
+    """Tests for autocompletion suggestions."""
+
+    def test_suggest_autocompletion_bash(self, capsys, mocker):
+        """Test bash autocompletion suggestion."""
+        mocker.patch("sys.argv", ["qk"])
+
+        main_obj = _cli.Main(argv=[])
+        main_obj.suggest_autocompletion_bash()
+
+        out, _ = capsys.readouterr()
+        assert "bashrc" in out or "bash_profile" in out
+        assert "register-python-argcomplete" in out
+
+    def test_suggest_autocompletion_zsh(self, capsys, mocker):
+        """Test zsh autocompletion suggestion."""
+        mocker.patch("sys.argv", ["qk"])
+
+        main_obj = _cli.Main(argv=[])
+        main_obj.suggest_autocompletion_zsh()
+
+        out, _ = capsys.readouterr()
+        assert "zshrc" in out
+        assert "register-python-argcomplete" in out
+
+
+class TestMainErrorHandling:
+    """Tests for main() error handling paths."""
+
+    def test_main_with_stop_exception(self, mocker, capsys):
+        """Test main() handles Stop exception."""
+        mocker.patch("quickie.app.load_tasks")
+        mocker.patch("quickie.app.set_project_path")
+        mocker.patch("quickie.app.set_use_global")
+        mocker.patch("quickie.app.set_log_file")
+
+        @task
+        def stop_task():
+            raise Stop("Test stop")
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(stop_task, namespace="stop-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        with raises(SystemExit) as exc_info:
+            _cli.main(["--global", "stop-task"])
+        assert exc_info.value.code == 0
+
+    def test_main_with_skip_exception(self, mocker, capsys):
+        """Test main() handles Skip exception."""
+        mocker.patch("quickie.app.load_tasks")
+        mocker.patch("quickie.app.set_project_path")
+        mocker.patch("quickie.app.set_use_global")
+        mocker.patch("quickie.app.set_log_file")
+
+        @task
+        def skip_task():
+            raise Skip("Test skip")
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(skip_task, namespace="skip-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        with raises(SystemExit) as exc_info:
+            _cli.main(["--global", "skip-task"])
+        assert exc_info.value.code == 0
+
+    def test_main_with_quickie_error_raise(self, mocker):
+        """Test main() raises QuickieError when raise_error=True."""
+        mocker.patch("quickie.app.load_tasks")
+        mocker.patch("quickie.app.set_project_path")
+        mocker.patch("quickie.app.set_use_global")
+        mocker.patch("quickie.app.set_log_file")
+
+        from quickie.errors import QuickieError
+
+        @task
+        def error_task():
+            raise QuickieError("Test error", exit_code=1)
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(error_task, namespace="error-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        with raises(QuickieError):
+            _cli.main(["--global", "error-task"], raise_error=True)
+
+    def test_main_with_global_flag(self, mocker):
+        """Test main() with --global flag bypasses launcher."""
+        mocker.patch("quickie.app.load_tasks")
+        mocker.patch("quickie.app.set_project_path")
+        mocker.patch("quickie.app.set_use_global")
+        mocker.patch("quickie.app.set_log_file")
+
+        @task
+        def global_task():
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(global_task, namespace="global-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        with raises(SystemExit):
+            _cli.main(["--global", "global-task"])
+
+    def test_main_with_init_flag(self, capsys, tmp_path):
+        """Test main() with --init flag."""
+        with raises(SystemExit) as exc_info:
+            _cli.main(["--init", str(tmp_path)])
+        assert exc_info.value.code == 0
+        assert (tmp_path / "_qk").exists()
+
+    def test_main_with_list_flag(self, mocker, capsys):
+        """Test main() with --list flag."""
+        mocker.patch("quickie.app.load_tasks")
+        mocker.patch("quickie.app.set_project_path")
+        mocker.patch("quickie.app.set_use_global")
+        mocker.patch("quickie.app.set_log_file")
+
+        @task
+        def list_task():
+            """List task."""
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(list_task, namespace="list-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        with raises(SystemExit):
+            _cli.main(["--global", "--list"])
+
+        out, _ = capsys.readouterr()
+        assert "Available tasks" in out

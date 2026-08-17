@@ -12,7 +12,6 @@ from frozendict import frozendict
 from quickie.context import Context
 from quickie.utils import imports
 from quickie.utils.console import QkConsole
-import rich.traceback
 from rich.theme import Theme
 from rich.text import Text
 from rich.logging import RichHandler
@@ -243,6 +242,8 @@ class App:
         if self.log_level > logging.DEBUG:
             sys.excepthook = self._simple_error_hook
         else:
+            import rich.traceback
+
             rich.traceback.install(suppress=[quickie])
 
     def _simple_error_hook(

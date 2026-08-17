@@ -312,3 +312,176 @@ class TestLauncherIntegration:
             # Falls back to the currently-running binary
             called_exe = mock_delegate.call_args[0][0]
             assert isinstance(called_exe, Path)
+
+
+class TestLauncherCache:
+    """Tests for project root discovery cache."""
+
+    def setup_method(self):
+        """Clear cache before each test."""
+        Launcher._invalidate_cache()
+
+    def test_cache_hit_skips_walk(self, tmp_path):
+        """Test that a cached result skips the directory walk."""
+        qk_dir = tmp_path / "_qk"
+        qk_dir.mkdir()
+        (qk_dir / "__init__.py").touch()
+
+        launcher = Launcher()
+        result1 = launcher.discover_project_root(start_path=tmp_path)
+        assert result1 == tmp_path
+
+        # Second call should hit cache and not call _walk_for_project_root
+        with patch.object(Launcher, "_walk_for_project_root") as mock_walk:
+            result2 = launcher.discover_project_root(start_path=tmp_path)
+            assert result2 == tmp_path
+            mock_walk.assert_not_called()
+
+    def test_cache_hit_for_not_found_skips_walk(self, tmp_path):
+        """Test that a cached not-found result skips the walk and still returns None."""
+        launcher = Launcher()
+        result1 = launcher.discover_project_root(start_path=tmp_path)
+        assert result1 is None
+
+        # Second call should hit cache and not call _walk_for_project_root
+        with patch.object(Launcher, "_walk_for_project_root") as mock_walk:
+            result2 = launcher.discover_project_root(start_path=tmp_path)
+            assert result2 is None
+            mock_walk.assert_not_called()
+
+    def test_cache_invalidation_on_mtime_change(self, tmp_path):
+        """Test that a stale mtime causes the cache to be bypassed."""
+        import time
+
+        qk_dir = tmp_path / "_qk"
+        qk_dir.mkdir()
+        (qk_dir / "__init__.py").touch()
+
+        launcher = Launcher()
+        result1 = launcher.discover_project_root(start_path=tmp_path)
+        assert result1 == tmp_path
+
+        # Record the cached mtime
+        cached_mtime = Launcher._root_cache[tmp_path.resolve()][1]
+
+        # Touch the _qk dir so its mtime advances
+        time.sleep(0.01)
+        qk_dir.touch()
+        current_mtime = qk_dir.stat().st_mtime
+
+        assert current_mtime > cached_mtime, "mtime should have advanced after touch"
+
+        # The cache entry is now stale — _walk_for_project_root must be called
+        with patch.object(
+            Launcher, "_walk_for_project_root", wraps=Launcher._walk_for_project_root
+        ) as mock_walk:
+            result2 = launcher.discover_project_root(start_path=tmp_path)
+            assert result2 == tmp_path
+            mock_walk.assert_called_once()
+
+    def test_cache_invalidation_on_marker_removal(self, tmp_path):
+        """Test that removing the marker invalidates the cache."""
+        import shutil
+
+        qk_dir = tmp_path / "_qk"
+        qk_dir.mkdir()
+        (qk_dir / "__init__.py").touch()
+
+        launcher = Launcher()
+        result1 = launcher.discover_project_root(start_path=tmp_path)
+        assert result1 == tmp_path
+
+        # Remove the marker
+        shutil.rmtree(qk_dir)
+
+        # The cached marker no longer exists — cache must be bypassed
+        with patch.object(
+            Launcher, "_walk_for_project_root", wraps=Launcher._walk_for_project_root
+        ) as mock_walk:
+            result2 = launcher.discover_project_root(start_path=tmp_path)
+            assert result2 is None
+            mock_walk.assert_called_once()
+
+    def test_cache_not_found_validated_via_has_qk_marker(self, tmp_path):
+        """Test that a cached not-found result checks for new markers."""
+        launcher = Launcher()
+        result1 = launcher.discover_project_root(start_path=tmp_path)
+        assert result1 is None
+
+        # Create a _qk dir after the first call — cache should notice
+        qk_dir = tmp_path / "_qk"
+        qk_dir.mkdir()
+        (qk_dir / "__init__.py").touch()
+
+        # _has_qk_marker will return True, so _walk_for_project_root is called
+        with patch.object(
+            Launcher, "_walk_for_project_root", wraps=Launcher._walk_for_project_root
+        ) as mock_walk:
+            result2 = launcher.discover_project_root(start_path=tmp_path)
+            assert result2 == tmp_path
+            mock_walk.assert_called_once()
+
+    def test_invalidate_cache_clears_all(self, tmp_path):
+        """Test that _invalidate_cache clears the entire cache."""
+        qk_dir = tmp_path / "_qk"
+        qk_dir.mkdir()
+        (qk_dir / "__init__.py").touch()
+
+        launcher = Launcher()
+        launcher.discover_project_root(start_path=tmp_path)
+        assert tmp_path.resolve() in Launcher._root_cache
+
+        Launcher._invalidate_cache()
+        assert len(Launcher._root_cache) == 0
+
+    def test_walk_for_project_root_oserror_on_stat(self, tmp_path):
+        """Test OSError handling in _walk_for_project_root."""
+        qk_dir = tmp_path / "_qk"
+        qk_dir.mkdir()
+        (qk_dir / "__init__.py").touch()
+
+        with patch.object(Path, "stat", side_effect=OSError("Permission denied")):
+            result, mtime = Launcher._walk_for_project_root(tmp_path)
+            # Should still find the directory, just with mtime=0.0
+            assert result == tmp_path
+            assert mtime == 0.0
+
+    def test_walk_for_project_root_reaches_root(self, tmp_path, monkeypatch):
+        """Test that walk stops at filesystem root."""
+        # Start from a path that has no _qk anywhere
+        monkeypatch.chdir(tmp_path)
+        result, mtime = Launcher._walk_for_project_root(tmp_path)
+        # Should return None when reaching root without finding _qk
+        assert result is None
+        assert mtime == 0.0
+
+    def test_has_qk_marker_with_directory(self, tmp_path):
+        """Test _has_qk_marker with _qk directory."""
+        qk_dir = tmp_path / "_qk"
+        qk_dir.mkdir()
+        assert Launcher._has_qk_marker(tmp_path) is True
+
+    def test_has_qk_marker_with_file(self, tmp_path):
+        """Test _has_qk_marker with _qk.py file."""
+        qk_file = tmp_path / "_qk.py"
+        qk_file.touch()
+        assert Launcher._has_qk_marker(tmp_path) is True
+
+    def test_has_qk_marker_returns_false(self, tmp_path):
+        """Test _has_qk_marker returns False when no marker exists."""
+        assert Launcher._has_qk_marker(tmp_path) is False
+
+    def test_cache_with_qk_py_file(self, tmp_path):
+        """Test caching works with _qk.py file marker."""
+        qk_file = tmp_path / "_qk.py"
+        qk_file.touch()
+
+        launcher = Launcher()
+        result1 = launcher.discover_project_root(start_path=tmp_path)
+        assert result1 == tmp_path
+
+        # Second call should hit cache
+        with patch.object(Launcher, "_walk_for_project_root") as mock_walk:
+            result2 = launcher.discover_project_root(start_path=tmp_path)
+            assert result2 == tmp_path
+            mock_walk.assert_not_called()

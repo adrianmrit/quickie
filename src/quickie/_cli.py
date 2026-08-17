@@ -6,10 +6,6 @@ import sys
 from functools import wraps
 
 import argcomplete
-import rich.box
-import rich.table
-import rich.text
-from rich import traceback
 
 import quickie
 from quickie import app
@@ -36,6 +32,8 @@ def _clean_exit(func):
 @_clean_exit
 def main(argv=None, *, raise_error=False, global_=False):
     """Run the CLI."""
+    from rich import traceback
+
     traceback.install(suppress=[quickie])
 
     if argv is None:
@@ -236,6 +234,10 @@ class Main:
 
     def list_tasks(self):
         """List the available tasks."""
+        import rich.box
+        import rich.table
+        import rich.text
+
         table = rich.table.Table(title="Available tasks", box=rich.box.SIMPLE)
         table.add_column("Task", style="bold yellow")
         table.add_column("Aliases", style="bold yellow")
