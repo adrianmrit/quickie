@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## Release 0.10.0
+
 ### Changed
 
 - Paths prefixed with ``./`` (e.g. ``"./subdir"``) in task ``wd`` and
