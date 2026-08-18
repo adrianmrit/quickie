@@ -278,6 +278,60 @@ class TestTask:
         call_tasks()
         assert result == ["a_and_b", "a_or_b"]
 
+    def test_watch_attributes_defaults(self):
+        """Task class defaults for watch attributes."""
+
+        @task
+        def my_task():
+            pass
+
+        assert my_task.watch_paths == ()
+        assert my_task.watch_exclude == ()
+        assert my_task.watch_debounce is None
+        assert my_task.watch_interval is None
+
+    def test_watch_attributes_via_decorator(self):
+        """@task decorator passes watch configuration to the task."""
+
+        @task(
+            watch_paths=["src/"],
+            watch_exclude=["tests/"],
+            watch_debounce=1.0,
+            watch_interval=0.5,
+        )
+        def my_task():
+            pass
+
+        assert list(my_task.watch_paths) == ["src/"]
+        assert list(my_task.watch_exclude) == ["tests/"]
+        assert my_task.watch_debounce == 1.0
+        assert my_task.watch_interval == 0.5
+
+    def test_watch_attributes_via_class(self):
+        """Task subclasses can define watch configuration as class attributes."""
+
+        class MyTask(tasks.Task):
+            watch_paths = ["lib/"]
+            watch_exclude = [".venv"]
+            watch_debounce = 2.0
+            watch_interval = 0.1
+
+        t = MyTask()
+        assert list(t.watch_paths) == ["lib/"]
+        assert list(t.watch_exclude) == [".venv"]
+        assert t.watch_debounce == 2.0
+        assert t.watch_interval == 0.1
+
+    def test_watch_attributes_override(self):
+        """Constructor args override class-level watch defaults."""
+
+        class MyTask(tasks.Task):
+            watch_paths = ["src/"]
+
+        t = MyTask(watch_paths=["lib/"], watch_debounce=1.5)
+        assert list(t.watch_paths) == ["lib/"]
+        assert t.watch_debounce == 1.5
+
 
 class TestBaseSubprocessTask:
     @pytest.mark.parametrize(

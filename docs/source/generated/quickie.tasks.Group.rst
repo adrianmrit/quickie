@@ -51,5 +51,9 @@
       ~Group.extra_args
       ~Group.parser
       ~Group.tasks
+      ~Group.watch_debounce
+      ~Group.watch_exclude
+      ~Group.watch_interval
+      ~Group.watch_paths
    
    

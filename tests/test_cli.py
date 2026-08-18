@@ -660,3 +660,207 @@ class TestMainErrorHandling:
 
         out, _ = capsys.readouterr()
         assert "Available tasks" in out
+
+
+@mark.integration
+class TestWatchTask:
+    """Tests for the watch_task method."""
+
+    def _register_task(self, mocker, task_obj, name="watch-me"):
+        """Helper to register a task in the namespace."""
+        ns = RootNamespace()
+        ns.register(task_obj, namespace=name)
+        mocker.patch("quickie.app._tasks", ns)
+        mocker.patch("quickie.app.load_tasks")
+
+    def test_watch_task_runs_task_once(self, mocker, capsys):
+        """watch_task runs the task immediately on start."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task
+        def watch_me():
+            print("task ran")
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(["--watch", "watch-me"])
+
+        out, _ = capsys.readouterr()
+        assert "Watching for changes" in out
+        assert "task ran" in out
+
+    def test_watch_task_reruns_on_changes(self, mocker, capsys):
+        """watch_task re-runs when changes are detected."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = [False, True, KeyboardInterrupt]
+
+        @task
+        def watch_me():
+            print("ran")
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(["--watch", "watch-me"])
+
+        out, _ = capsys.readouterr()
+        assert "Changes detected" in out
+
+    def test_watch_task_with_exclude(self, mocker, capsys):
+        """watch_task prints exclude patterns."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(
+                [
+                    "--watch",
+                    "--watch-exclude",
+                    "build/",
+                    "watch-me",
+                ]
+            )
+
+        out, _ = capsys.readouterr()
+        assert "build/" in out
+
+    def test_watch_task_custom_debounce_and_interval(self, mocker):
+        """watch_task passes debounce and poll_interval to FileWatcher."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(
+                [
+                    "--watch",
+                    "--watch-debounce",
+                    "2.0",
+                    "--watch-interval",
+                    "0.1",
+                    "watch-me",
+                ]
+            )
+
+        _, kwargs = mock_watcher_class.call_args
+        assert kwargs["debounce"] == 2.0
+
+    def test_watch_task_uses_task_defaults(self, mocker):
+        """watch_task falls back to task-defined watch_paths."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task(watch_paths=["src/"], watch_exclude=["tests/"])
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(["--watch", "watch-me"])
+
+        _, kwargs = mock_watcher_class.call_args
+        assert kwargs["watch_paths"] == ["src/"]
+        assert "tests/" in kwargs["exclude"]
+
+    def test_watch_task_cli_overrides_task_defaults(self, mocker):
+        """CLI args override task-defined defaults."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task(watch_paths=["src/"])
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(
+                [
+                    "--watch",
+                    "--watch-paths",
+                    "lib/",
+                    "watch-me",
+                ]
+            )
+
+        _, kwargs = mock_watcher_class.call_args
+        assert kwargs["watch_paths"] == ["lib/"]
+
+    def test_watch_task_stop_message(self, mocker, capsys):
+        """Ctrl+C prints watching stopped message."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(["--watch", "watch-me"])
+
+        out, _ = capsys.readouterr()
+        assert "Watching stopped" in out
+
+    def test_watch_without_task_exits_with_error(self, capsys):
+        """--watch without a task exits with error."""
+        with raises(SystemExit) as exc_info:
+            _cli.main(["--watch"])
+        assert exc_info.value.code == 1
+
+    def test_watch_task_default_watch_paths(self, mocker):
+        """watch_task defaults to ['.'] when no paths given."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(["--watch", "watch-me"])
+
+        _, kwargs = mock_watcher_class.call_args
+        assert kwargs["watch_paths"] == ["."]
+
+    def test_watch_task_stops_watcher_on_exit(self, mocker):
+        """watch_task calls watcher.stop() in finally block."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.has_changes.side_effect = KeyboardInterrupt
+
+        @task
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(["--watch", "watch-me"])
+
+        instance.stop.assert_called_once()

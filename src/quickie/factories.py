@@ -51,6 +51,10 @@ class CommonTaskKwargs(typing.TypedDict, total=False):
     before: typing.Sequence[typing.Callable] | None
     after: typing.Sequence[typing.Callable] | None
     cleanup: typing.Sequence[typing.Callable] | None
+    watch_paths: typing.Sequence[str]
+    watch_exclude: typing.Sequence[str]
+    watch_debounce: float | None
+    watch_interval: float | None
 
 
 type PartialReturnType[T: tasks.Task] = typing.Callable[[typing.Callable | type[T]], T]
@@ -307,6 +311,19 @@ def task(  # noqa: PLR0913
     :returns: The task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
+    # Extract watch-related keys so they flow through the `kwargs` dict
+    # to the Task constructor, rather than being unpacked as explicit
+    # parameters of task_factory_helper (which doesn't accept them).
+    _WATCH_KEYS = ("watch_paths", "watch_exclude", "watch_debounce", "watch_interval")
+    watch_params = {}
+    for k in list(kwargs):
+        if k in _WATCH_KEYS:
+            watch_params[k] = kwargs.pop(k)
+    if watch_params:
+        extra = kwargs.get("kwargs") or {}
+        extra.update(watch_params)
+        kwargs["kwargs"] = extra
+
     return task_factory_helper(
         obj,
         **kwargs,

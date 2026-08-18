@@ -69,6 +69,10 @@
       ~Command.retries
       ~Command.retry_delay
       ~Command.timeout
+      ~Command.watch_debounce
+      ~Command.watch_exclude
+      ~Command.watch_interval
+      ~Command.watch_paths
       ~Command.wd
    
    

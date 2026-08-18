@@ -66,6 +66,10 @@
       ~Script.retry_delay
       ~Script.script
       ~Script.timeout
+      ~Script.watch_debounce
+      ~Script.watch_exclude
+      ~Script.watch_interval
+      ~Script.watch_paths
       ~Script.wd
    
    

@@ -106,6 +106,33 @@ class Task:
     If one of the cleanup tasks fails, the remaining cleanup tasks are still run.
     """
 
+    watch_paths: typing.Sequence[str] = ()
+    """Default glob patterns or directories to watch when ``--watch`` is used.
+
+    Resolved relative to the project root.  When empty, defaults to
+    ``["."]`` (the project root).  CLI ``--watch-paths`` overrides this.
+    """
+
+    watch_exclude: typing.Sequence[str] = ()
+    """Default patterns to exclude from watching when ``--watch`` is used.
+
+    When empty, uses the built-in defaults (``.git``, ``__pycache__``,
+    ``*.pyc``, ``.quickie_cache``, ``tmp``).  CLI ``--watch-exclude``
+    overrides this.
+    """
+
+    watch_debounce: float | None = None
+    """Seconds to wait after a file change before re-running.
+
+    ``None`` uses the default (0.5 s).
+    """
+
+    watch_interval: float | None = None
+    """Seconds between file-change polls.
+
+    ``None`` uses the default (0.25 s).
+    """
+
     def __init__(  # noqa: PLR0913
         self,
         name: str | None = None,
@@ -119,6 +146,10 @@ class Task:
         before: typing.Sequence[typing.Callable] | None = None,
         after: typing.Sequence[typing.Callable] | None = None,
         cleanup: typing.Sequence[typing.Callable] | None = None,
+        watch_paths: typing.Sequence[str] | None = None,
+        watch_exclude: typing.Sequence[str] | None = None,
+        watch_debounce: float | None = None,
+        watch_interval: float | None = None,
     ):
         """Initialize the task.
 
@@ -143,6 +174,14 @@ class Task:
         :param cleanup: The tasks to run at the end, even if the task, or before or
             after tasks fail. If not provided, it defaults to the class attribute
             :attr:`cleanup`.
+        :param watch_paths: Glob patterns or directories to watch.  If not
+            provided, it defaults to the class attribute :attr:`watch_paths`.
+        :param watch_exclude: Patterns to exclude from watching.  If not
+            provided, it defaults to the class attribute :attr:`watch_exclude`.
+        :param watch_debounce: Debounce seconds for watch mode.  If not
+            provided, it defaults to the class attribute :attr:`watch_debounce`.
+        :param watch_interval: Poll interval for watch mode.  If not provided,
+            it defaults to the class attribute :attr:`watch_interval`.
         """
         self.name = name or identifier_to_task_name(self.__class__.__name__)
         self.aliases = aliases or ()
@@ -158,6 +197,16 @@ class Task:
         self.before = before if before is not None else self.before
         self.after = after if after is not None else self.after
         self.cleanup = cleanup if cleanup is not None else self.cleanup
+        self.watch_paths = watch_paths if watch_paths is not None else self.watch_paths
+        self.watch_exclude = (
+            watch_exclude if watch_exclude is not None else self.watch_exclude
+        )
+        self.watch_debounce = (
+            watch_debounce if watch_debounce is not None else self.watch_debounce
+        )
+        self.watch_interval = (
+            watch_interval if watch_interval is not None else self.watch_interval
+        )
 
     def _get_relative_file_location(self, basedir) -> str | None:
         """Returns the file and line number where the class was defined."""

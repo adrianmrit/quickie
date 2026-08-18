@@ -49,5 +49,9 @@
       ~Task.condition
       ~Task.extra_args
       ~Task.parser
+      ~Task.watch_debounce
+      ~Task.watch_exclude
+      ~Task.watch_interval
+      ~Task.watch_paths
    
    

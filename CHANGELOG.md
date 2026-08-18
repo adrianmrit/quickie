@@ -14,6 +14,13 @@
 
 ### Added
 
+- Watch mode (``-w``/``--watch``): re-runs a task automatically when files change.
+  Uses `watchdog` for OS-native file watching (FSEvents on macOS, inotify on Linux).  Supports
+  ``--watch-paths``, ``--watch-exclude``, ``--watch-debounce``, and
+  ``--watch-interval`` for fine-grained control.  Tasks can declare watch
+  configuration via class attributes or the ``@task`` decorator
+  (``watch=True``, ``watch_paths=[...]``, etc.) so that ``qk --watch <task>``
+  works without repeating paths on the command line.
 - `PathCompleter` now accepts an optional `wd` parameter to control the
   directory paths are resolved relative to, following the same rules as task
   working directories.

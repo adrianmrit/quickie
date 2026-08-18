@@ -32,6 +32,7 @@
 
    .. autosummary::
    
+      ~App.cached_task_names
       ~App.console
       ~App.console_style
       ~App.error_console

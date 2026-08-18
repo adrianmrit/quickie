@@ -53,5 +53,9 @@
       ~ThreadGroup.max_workers
       ~ThreadGroup.parser
       ~ThreadGroup.tasks
+      ~ThreadGroup.watch_debounce
+      ~ThreadGroup.watch_exclude
+      ~ThreadGroup.watch_interval
+      ~ThreadGroup.watch_paths
    
    

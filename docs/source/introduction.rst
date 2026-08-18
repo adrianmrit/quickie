@@ -21,6 +21,7 @@ Some features include:
 * Conditions to run tasks only if certain conditions are met.
 * Dependencies between tasks.
 * Namespaces to organize tasks.
+* Watch mode to re-run tasks automatically on file changes.
 
 Requirements
 --------------
