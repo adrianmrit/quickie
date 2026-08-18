@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## Release 0.10.1
+
+### Changed
+
+- Watch configuration passed to ``@task``, ``@script``, ``@command``, and other
+  task decorators is now forwarded consistently through the shared task factory.
+- Project-root discovery now tolerates filesystem errors while checking marker
+  directories and files.
+- Task usage generation is compatible with Python versions whose
+  ``argparse.ArgumentParser`` does not support the ``color`` keyword.
+
+### Fixed
+
+- Fixed ``TypeError`` when using ``watch_paths`` and related watch options with
+  ``@script`` or other decorators backed by the shared task factory.
+
 ## Release 0.10.0
 
 ### Changed

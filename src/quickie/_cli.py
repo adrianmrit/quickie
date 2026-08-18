@@ -208,7 +208,9 @@ class Main:
             app.console.print("[error]--watch requires a task to run.[/error]")
             _parser.exit(1)
         else:
-            app.console.print(self.get_usage())
+            from rich.text import Text
+
+            app.console.print(Text.from_ansi(self.get_usage()))
         _parser.exit()
 
     def suggest_autocompletion_bash(self):

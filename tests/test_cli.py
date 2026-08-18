@@ -97,6 +97,7 @@ def test_default(capsys):
     out = re.sub(r"\s+", " ", out)
 
     assert "[-h]" in out
+    assert "\x1b[" not in out
 
 
 @mark.integration

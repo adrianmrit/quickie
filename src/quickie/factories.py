@@ -96,6 +96,10 @@ def task_factory_helper[T: tasks.Task](
     before: typing.Sequence[typing.Callable] | None,
     after: typing.Sequence[typing.Callable] | None,
     cleanup: typing.Sequence[typing.Callable] | None,
+    watch_paths: typing.Sequence[str] = (),
+    watch_exclude: typing.Sequence[str] = (),
+    watch_debounce: float | None = None,
+    watch_interval: float | None = None,
     base: type[T],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
@@ -119,6 +123,10 @@ def task_factory_helper[T: tasks.Task](
     before: typing.Sequence[typing.Callable] | None,
     after: typing.Sequence[typing.Callable] | None,
     cleanup: typing.Sequence[typing.Callable] | None,
+    watch_paths: typing.Sequence[str] | None = None,
+    watch_exclude: typing.Sequence[str] | None = None,
+    watch_debounce: float | None = None,
+    watch_interval: float | None = None,
 ) -> PartialReturnType[T]: ...
 
 
@@ -136,6 +144,10 @@ def task_factory_helper[T: tasks.Task](
     before: typing.Sequence[typing.Callable] | None = None,
     after: typing.Sequence[typing.Callable] | None = None,
     cleanup: typing.Sequence[typing.Callable] | None = None,
+    watch_paths: typing.Sequence[str] | None = None,
+    watch_exclude: typing.Sequence[str] | None = None,
+    watch_debounce: float | None = None,
+    watch_interval: float | None = None,
     base: type[T],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
@@ -159,6 +171,10 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
     before: typing.Sequence[typing.Callable] | None = None,
     after: typing.Sequence[typing.Callable] | None = None,
     cleanup: typing.Sequence[typing.Callable] | None = None,
+    watch_paths: typing.Sequence[str] | None = None,
+    watch_exclude: typing.Sequence[str] | None = None,
+    watch_debounce: float | None = None,
+    watch_interval: float | None = None,
     base: type[T],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
@@ -212,6 +228,10 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
     :param bind: If true, the first parameter of the function will be the
         task class instance.
     :param condition: The condition to check before running the task.
+    :param watch_paths: Glob patterns or directories to watch in watch mode.
+    :param watch_exclude: Patterns to exclude from watching.
+    :param watch_debounce: Seconds to wait after a file change before rerunning.
+    :param watch_interval: Seconds between file-change polls.
     :param before: The tasks to run before the task.
     :param after: The tasks to run after the task.
     :param cleanup: The tasks to run after the task, even if it fails.
@@ -225,22 +245,29 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
         used as a decorator for a function.
     '''
     if obj is None:
-        return functools.partial(
-            task_factory_helper,
-            name=name,
-            aliases=aliases,
-            args=args,
-            extra_args=extra_args,
-            bind=bind,
-            condition=condition,
-            before=before,
-            after=after,
-            cleanup=cleanup,
-            base=base,
-            override_method=override_method,
-            attrs=attrs,
-            kwargs=kwargs,
-            private=private,
+        return typing.cast(
+            PartialReturnType[T],
+            functools.partial(
+                task_factory_helper,
+                name=name,
+                aliases=aliases,
+                args=args,
+                extra_args=extra_args,
+                bind=bind,
+                condition=condition,
+                before=before,
+                after=after,
+                cleanup=cleanup,
+                watch_paths=watch_paths,
+                watch_exclude=watch_exclude,
+                watch_debounce=watch_debounce,
+                watch_interval=watch_interval,
+                base=base,
+                override_method=override_method,
+                attrs=attrs,
+                kwargs=kwargs,
+                private=private,
+            ),
         )
 
     if isinstance(obj, type):
@@ -271,6 +298,10 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
         before=before,
         after=after,
         cleanup=cleanup,
+        watch_paths=watch_paths,
+        watch_exclude=watch_exclude,
+        watch_debounce=watch_debounce,
+        watch_interval=watch_interval,
         **(kwargs or {}),
     )
 
@@ -311,19 +342,6 @@ def task(  # noqa: PLR0913
     :returns: The task class, or, if `obj` is None, a partial function to be
         used as a decorator for a function.
     '''
-    # Extract watch-related keys so they flow through the `kwargs` dict
-    # to the Task constructor, rather than being unpacked as explicit
-    # parameters of task_factory_helper (which doesn't accept them).
-    _WATCH_KEYS = ("watch_paths", "watch_exclude", "watch_debounce", "watch_interval")
-    watch_params = {}
-    for k in list(kwargs):
-        if k in _WATCH_KEYS:
-            watch_params[k] = kwargs.pop(k)
-    if watch_params:
-        extra = kwargs.get("kwargs") or {}
-        extra.update(watch_params)
-        kwargs["kwargs"] = extra
-
     return task_factory_helper(
         obj,
         **kwargs,

@@ -307,6 +307,33 @@ class TestTask:
         assert my_task.watch_debounce == 1.0
         assert my_task.watch_interval == 0.5
 
+    def test_watch_attributes_via_script_decorator(self):
+        """@script passes watch configuration to the task."""
+
+        @script(
+            watch_paths=["src/"],
+            watch_exclude=["tests/"],
+            watch_debounce=1.0,
+            watch_interval=0.5,
+        )
+        def my_script():
+            return "echo test"
+
+        assert list(my_script.watch_paths) == ["src/"]
+        assert list(my_script.watch_exclude) == ["tests/"]
+        assert my_script.watch_debounce == 1.0
+        assert my_script.watch_interval == 0.5
+
+    def test_watch_attributes_via_command_decorator(self):
+        """@command passes watch configuration to the task."""
+
+        @command(watch_paths=["src/"], watch_debounce=1.0)
+        def my_command():
+            return ["echo", "test"]
+
+        assert list(my_command.watch_paths) == ["src/"]
+        assert my_command.watch_debounce == 1.0
+
     def test_watch_attributes_via_class(self):
         """Task subclasses can define watch configuration as class attributes."""
 

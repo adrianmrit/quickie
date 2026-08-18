@@ -1,6 +1,7 @@
 from quickie import script, task, command, OutputMode, namespace
 from quickie import app, console
 from quickie.errors import Skip, Stop
+from quickie.utils.argparser import Arg
 
 
 @namespace
@@ -19,7 +20,7 @@ def print_name():
     print(__file__)
 
 
-@task
+@task(watch_paths=["./src/quickie"])
 def hello():
     console.print("Hello world!")
     console.print_info("This is an info message.")
@@ -28,11 +29,7 @@ def hello():
     console.print_success("This is a success message.")
 
 
-@script(
-    env={"OTHER": "Other"},
-    bind=True,
-    wd=".",
-)
+@script(env={"OTHER": "Other"}, bind=True, wd=".", watch_paths=["./src/quickie"])
 def script_example(task):
     """Example script that runs a command."""
     return """
@@ -136,3 +133,65 @@ def show_captured_command():
     """Run capture_command_example and show the captured bytes."""
     result = capture_command_example()
     console.print(f"[bold]stdout:[/bold] {result.stdout!r}")
+
+
+@command
+def _ensure_no_unstaged_changes():
+    return "git diff --quiet"
+
+
+@task
+def _pre_release_checks(version):
+    from quickie._meta import __version__
+
+    assert __version__ == version, f"Version mismatch: {__version__} != {version}"
+
+    # Check that the changelog has an entry for the version
+    changelog_path = "CHANGELOG.md"
+    with open(changelog_path) as f:
+        changelog = f.read()
+    assert f"## Release {version}" in changelog, (
+        f"Changelog does not have an entry for version {version}"
+    )
+
+
+@script
+def _commit_release(message, version):
+    """Release a new version."""
+    # Check version matches the version in _meta.py
+
+    return f"""
+    git commit -m "{message}"
+    git tag {version}
+    git push origin main --tags
+    """
+
+
+@task(
+    args=[
+        Arg("-m", "--message", help="Commit message", required=True),
+        Arg("-v", "--version", help="Version to release", required=True),
+    ],
+    before=[
+        _ensure_no_unstaged_changes,
+        build,
+        build_docs,
+        _ensure_no_unstaged_changes,
+    ],
+    after=[
+        upload,
+    ],
+)
+def release(version, message):
+    """Release a new version."""
+    _pre_release_checks(version)
+    _ensure_no_unstaged_changes()
+    build()
+    build_docs()
+    # Again, to manually inspect the docs changes if anything new was generated.
+    _ensure_no_unstaged_changes()
+    _commit_release(message, version)
+    # Again, pre-commit might have made changes
+    _ensure_no_unstaged_changes()
+    # Finally, upload the package to PyPI
+    upload()

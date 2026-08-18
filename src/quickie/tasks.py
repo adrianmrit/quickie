@@ -10,6 +10,7 @@ import argparse
 import concurrent.futures
 import enum
 import functools
+import inspect
 import os
 from pathlib import Path
 import re
@@ -254,11 +255,14 @@ class Task:
     def get_plain_usage(self) -> str:
         """Return the usage string without ANSI escape sequences.
 
-        On Python 3.14+ a temporary ``color=False`` parser is used so no
-        escape codes are ever generated.  On older Python versions ANSI codes
-        are stripped from the normal ``format_usage()`` output.
+        When supported by the runtime, a temporary ``color=False`` parser is
+        used so no escape codes are generated.  Older ``argparse`` versions do
+        not accept the ``color`` keyword and produce plain usage text by default.
         """
-        plain_parser = self.get_parser(color=False)
+        parser_kwargs = {}
+        if "color" in inspect.signature(argparse.ArgumentParser).parameters:
+            parser_kwargs["color"] = False
+        plain_parser = self.get_parser(**parser_kwargs)
         self.add_args(plain_parser)
         return plain_parser.format_usage().strip()
 

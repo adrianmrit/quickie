@@ -159,18 +159,15 @@ class Launcher:
 
         while True:
             qk_dir = current / "_qk"
-            if qk_dir.is_dir():
-                try:
+            try:
+                if qk_dir.is_dir():
                     return current, qk_dir.stat().st_mtime
-                except OSError:
-                    return current, 0.0
 
-            qk_file = current / "_qk.py"
-            if qk_file.is_file():
-                try:
+                qk_file = current / "_qk.py"
+                if qk_file.is_file():
                     return current, qk_file.stat().st_mtime
-                except OSError:
-                    return current, 0.0
+            except OSError:
+                return current, 0.0
 
             if current == current.parent:
                 return None, 0.0
