@@ -259,6 +259,23 @@ async def test_list_tasks_delegates_to_local_exe():
             assert actual[key] == value
 
 
+async def test_list_tasks_forwards_filter():
+    captured_cmd = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        captured_cmd["cmd"] = cmd
+        return _fake_list_proc()
+
+    _register_project("myproject", exe=Path("/project/.venv/bin/qk"))
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        async with Client(mcp) as client:
+            await client.call_tool("list_tasks", {"filter": "deploy"})
+
+    assert "--list-filter" in captured_cmd["cmd"]
+    index = captured_cmd["cmd"].index("--list-filter")
+    assert captured_cmd["cmd"][index + 1] == "deploy"
+
+
 async def test_list_tasks_local_exe_error_raises():
     """A non-zero exit from the local exe raises a ToolError."""
     proc = MagicMock()

@@ -69,6 +69,14 @@ class AppArgumentParser(BaseArgumentParser):
         )
         self.add_argument("-l", "--list", action="store_true", help="List tasks")
         self.add_argument(
+            "-lf",
+            "--list-filter",
+            nargs="?",
+            const="",
+            metavar="TEXT",
+            help="Filter listed tasks by invocation name or alias",
+        )
+        self.add_argument(
             "--list-json",
             action="store_true",
             dest="list_json",

@@ -62,6 +62,8 @@ Parameters:
 - ``project`` *(optional)* — Alias or path of a registered project.
   When supplied, only that project's tasks are returned.
   When omitted, tasks for **all** registered projects are returned.
+- ``filter`` *(optional)* — Case-insensitive substring matched against
+  invocation names and aliases.
 
 Each entry in the returned list contains:
 
@@ -70,8 +72,10 @@ Each entry in the returned list contains:
   ``null`` if the root could not be determined.
 - ``tasks`` — list of task metadata dicts, each with:
 
-  - ``name`` — canonical task name.
-  - ``aliases`` — all invocation aliases.
+  - ``name`` — preferred invocable path; the plain task name when directly
+    available, otherwise the namespaced path ending in the declared task name.
+  - ``aliases`` — alternative invocation paths for the same task, including
+    namespaced paths.
   - ``short_help``, ``help`` — description strings.
   - ``usage`` — CLI usage line.
   - ``location`` — source file and line.
@@ -127,3 +131,6 @@ Then from a client:
 
     // Step 3 — list tasks in infra only
     list_tasks({"project": "infra"})
+
+    // Step 4 — find tasks by invocation name or alias
+    list_tasks({"project": "infra", "filter": "deploy"})

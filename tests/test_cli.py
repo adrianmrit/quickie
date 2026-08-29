@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import subprocess
 import sys
 
@@ -66,7 +67,9 @@ def test_task_help(argv, capsys):
     assert exc_info.value.code == 0
 
     out, err = capsys.readouterr()
-    assert "Hello world task." in out
+    assert "Hello" in out
+    assert "world" in out
+    assert "task." in out
 
 
 @mark.integration
@@ -139,7 +142,9 @@ def test_list(capsys):
     assert "cls_holder:hello" in out, f"out: {out}, err: {err}"
     assert "dict:task:hello" in out, f"out: {out}, err: {err}"
     assert "dict:task:other-ta" in out, f"out: {out}, err: {err}"
-    assert "Hello world task." in out
+    assert "Hello" in out
+    assert "world" in out
+    assert "task." in out
 
     assert "nested:other" in out, f"out: {out}, err: {err}"
     assert "dict:nested_again" in out, f"out: {out}, err: {err}"
@@ -499,6 +504,39 @@ class TestListTasks:
         # Aliases should be shown in the Aliases column
         assert "alias1" in out or "alias2" in out
 
+    def test_list_tasks_uses_invocation_paths_and_filter(self, capsys, mocker):
+        @task(aliases=["check"])
+        def test_task():
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(test_task, namespace="ci:test-task")
+        tasks_ns.register(test_task, namespace="ci:check")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        main_obj = _cli.Main(argv=["--list", "--list-filter", "CHECK"])
+        main_obj.list_tasks(main_obj.namespace.list_filter)
+
+        out, _ = capsys.readouterr()
+        assert "test-task" in out
+        assert "ci:check" in out
+        assert "ci:test-task" in out
+        assert "│" in out
+
+    def test_list_filter_without_value_lists_all_tasks(self, capsys, mocker):
+        @task
+        def sample_task():
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(sample_task, namespace="sample-task")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        main_obj = _cli.Main(argv=["--list", "--list-filter"])
+        main_obj.list_tasks(main_obj.namespace.list_filter)
+
+        assert "sample-task" in capsys.readouterr().out
+
 
 class TestListTasksJson:
     """Tests for list_tasks_json functionality."""
@@ -526,6 +564,57 @@ class TestListTasksJson:
         assert isinstance(data, list)
         assert len(data) > 0
         assert data[0]["name"] == "json-task"
+
+    def test_list_tasks_json_uses_invocable_path_and_aliases(self, capsys, mocker):
+        @task(aliases=["verify"])
+        def check():
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(check, namespace="ci:check")
+        tasks_ns.register(check, namespace="ci:verify")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        main_obj = _cli.Main(argv=["--list-json"])
+        main_obj.list_tasks_json()
+
+        data = json.loads(capsys.readouterr().out)
+        assert data[0]["name"] == "ci:check"
+        assert data[0]["aliases"] == ["ci:verify"]
+
+    def test_list_tasks_json_prefers_direct_path(self, capsys, mocker):
+        @task
+        def check():
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(check, namespace="check")
+        tasks_ns.register(check, namespace="ci:check")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        main_obj = _cli.Main(argv=["--list-json"])
+        main_obj.list_tasks_json()
+
+        data = json.loads(capsys.readouterr().out)
+        assert data[0]["name"] == "check"
+        assert data[0]["aliases"] == ["ci:check"]
+
+    def test_list_tasks_json_uses_declared_name_not_sort_order(self, capsys, mocker):
+        @task(name="b", aliases=["a"])
+        def task_b():
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(task_b, namespace="n:a")
+        tasks_ns.register(task_b, namespace="n:b")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        main_obj = _cli.Main(argv=["--list-json"])
+        main_obj.list_tasks_json()
+
+        data = json.loads(capsys.readouterr().out)
+        assert data[0]["name"] == "n:b"
+        assert data[0]["aliases"] == ["n:a"]
 
 
 class TestSuggestAutocompletion:

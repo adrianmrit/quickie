@@ -173,7 +173,7 @@ class Main:
         # contains only the raw JSON (used by qk-mcp to enumerate tasks).
         if namespace.list_json:
             app.load_tasks()
-            self.list_tasks_json()
+            self.list_tasks_json(namespace.list_filter)
             _parser.exit()
             return
 
@@ -187,7 +187,7 @@ class Main:
                 self.suggest_autocompletion_zsh()
         elif namespace.list:
             app.load_tasks()
-            self.list_tasks()
+            self.list_tasks(namespace.list_filter)
         elif namespace.task is not None:
             app.load_tasks()
             if namespace.watch:
@@ -231,58 +231,65 @@ class Main:
             style="bold green",
         )
 
-    def list_tasks_json(self):
-        """Output tasks as JSON for machine-readable consumption (e.g. qk-mcp)."""
+    @staticmethod
+    def _task_list_entries(filter_text: str | None = None) -> list[dict]:
+        """Build task metadata grouped by the namespace they invoke from."""
         cwd = os.getcwd()
-        seen: dict[int, dict] = {}
+        grouped: dict[int, tuple[quickie.Task, list[str]]] = {}
         for invocation_name, task in app.tasks.items():
-            task_id = id(task)
-            if task_id not in seen:
-                seen[task_id] = task.to_info_dict(cwd)
-            entry = seen[task_id]
-            if invocation_name not in entry["aliases"]:
-                entry["aliases"].append(invocation_name)
-        result = sorted(seen.values(), key=lambda t: t["name"])
+            grouped.setdefault(id(task), (task, []))[1].append(invocation_name)
+
+        entries = []
+        for task, invocation_names in grouped.values():
+            entry = task.to_info_dict(cwd)
+            if task.name in invocation_names:
+                entry["name"] = task.name
+            else:
+                canonical_paths = [
+                    name for name in invocation_names if name.endswith(f":{task.name}")
+                ]
+                entry["name"] = min(canonical_paths, key=lambda name: name.split(":"))
+            entry["aliases"] = sorted(
+                name for name in invocation_names if name != entry["name"]
+            )
+            entries.append(entry)
+
+        if filter_text:
+            needle = filter_text.casefold()
+            entries = [
+                entry
+                for entry in entries
+                if needle in entry["name"].casefold()
+                or any(needle in alias.casefold() for alias in entry["aliases"])
+            ]
+        return sorted(entries, key=lambda entry: entry["name"])
+
+    def list_tasks_json(self, filter_text: str | None = None):
+        """Output tasks as JSON for machine-readable consumption (e.g. qk-mcp)."""
+        result = self._task_list_entries(filter_text)
         # Write directly to sys.stdout to bypass Rich and ensure clean JSON.
         sys.stdout.write(json.dumps(result))
         sys.stdout.write("\n")
         sys.stdout.flush()
 
-    def list_tasks(self):
+    def list_tasks(self, filter_text: str | None = None):
         """List the available tasks."""
         import rich.box
         import rich.table
         import rich.text
 
-        table = rich.table.Table(title="Available tasks", box=rich.box.SIMPLE)
-        table.add_column("Task", style="bold yellow")
-        table.add_column("Aliases", style="bold yellow")
+        table = rich.table.Table(title="Available tasks", box=rich.box.ROUNDED)
+        table.show_lines = True
+        table.add_column("Task", style="bold yellow", no_wrap=True)
+        table.add_column("Aliases", style="bold yellow", no_wrap=True)
         table.add_column("Short Description", style="bold yellow")
-        table.add_column("Location", style="bold yellow")
+        table.add_column("Location")
 
-        # Invert the task dictionary to group by class
-        cwd = os.getcwd()
-        names_by_task: dict[quickie.Task, list[str]] = {}
-        for invocation_name, task in sorted(
-            app.tasks.items(),
-            key=lambda x: (
-                x[1]._get_relative_file_location(cwd) or "",
-                x[0].count(":"),
-                x[0].split(":"),
-            ),
-        ):
-            names_by_task.setdefault(task, []).append(invocation_name)
-
-        for task, task_names in names_by_task.items():
-            aliases = ", ".join(
-                sorted(name for name in task_names if name != task.name)
-            )
-            rich_task_name = rich.text.Text(task.name, style="bold")
-            rich_aliases = rich.text.Text(aliases, style="dim")
-            task_location = rich.text.Text(
-                task._get_relative_file_location(cwd) or "", style="dim"
-            )
-            short_help = rich.text.Text(task.get_short_help(), style="green")
+        for entry in self._task_list_entries(filter_text):
+            rich_task_name = rich.text.Text(entry["name"], style="bold")
+            rich_aliases = rich.text.Text("\n".join(entry["aliases"]), style="dim")
+            task_location = rich.text.Text(entry["location"] or "", style="dim")
+            short_help = rich.text.Text(entry["short_help"], style="green")
             table.add_row(rich_task_name, rich_aliases, short_help, task_location)
 
         app.console.print(table)

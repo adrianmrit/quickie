@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- Added `--list-filter` to filter task listings by invocation name or alias.
+  Passing the option without a value lists all tasks.
+
+### Changed
+
+- Task listings now show each task once, using the declared task name as the
+  canonical name. Namespaced invocations are shown as aliases unless the task
+  is only available through a namespace, in which case the declared name is
+  shown with its namespace prefix.
+- Human-readable task listings now include bordered rows. MCP task listings
+  expose the same canonical-name and alias behavior.
+
 ## Release 0.10.1
 
 ### Changed

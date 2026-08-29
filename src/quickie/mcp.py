@@ -113,7 +113,7 @@ def _load_config(path: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def _fetch_tasks(project: _Project) -> list[dict]:
+async def _fetch_tasks(project: _Project, filter_text: str | None = None) -> list[dict]:
     """Spawn a subprocess to list tasks for *project* and return the parsed list."""
     if project.qk_exe is not None:
         cmd_prefix = [str(project.qk_exe)]
@@ -122,11 +122,12 @@ async def _fetch_tasks(project: _Project) -> list[dict]:
         cmd_prefix = [sys.executable, "-m", "quickie"]
         cwd_for_proc = str(project.project_root) if project.project_root else None
 
+    list_args = [*project.extra_args, "-qqqqqqqqqqq", "--list-json"]
+    if filter_text:
+        list_args.extend(["--list-filter", filter_text])
     proc = await asyncio.create_subprocess_exec(
         *cmd_prefix,
-        *project.extra_args,
-        "-qqqqqqqqqqq",  # quiet mode: suppress all output except the JSON result
-        "--list-json",
+        *list_args,
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -162,15 +163,18 @@ mcp = FastMCP(
 @mcp.tool(
     description=(
         "List all available (non-private) quickie tasks. "
+        "Optionally filter by invocation name or alias. "
         "Returns one entry per project, each containing the project alias, "
         "absolute project root, and a list of task metadata dicts "
         "(name, aliases, usage, help, argument schema, source location). "
-        "Omit 'module' to list all registered projects at once, or pass a "
+        "Omit 'project' to list all registered projects at once, or pass a "
         "project alias (or path) to list tasks for that project only."
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )
-async def list_tasks(project: str | None = None) -> list[dict]:
+async def list_tasks(
+    project: str | None = None, filter: str | None = None
+) -> list[dict]:
     """Return task metadata grouped by project.
 
     Each entry in the returned list has the keys:
@@ -178,9 +182,11 @@ async def list_tasks(project: str | None = None) -> list[dict]:
     - ``project_root``: absolute path of the project, or ``None``.
     - ``tasks``: list of task metadata dicts.
 
-    :param project: Optional project alias or path.  When supplied, only that
-        project's tasks are returned.  When omitted, all registered projects
+    :param project: Optional project alias or path. When supplied, only that
+        project's tasks are returned. When omitted, all registered projects
         are listed.
+    :param filter: Optional case-insensitive substring matched against task
+        invocation names and aliases.
     """
     if project is not None:
         targets = [_lookup_project(project)]
@@ -193,7 +199,7 @@ async def list_tasks(project: str | None = None) -> list[dict]:
 
     results = []
     for proj in targets:
-        tasks = await _fetch_tasks(proj)
+        tasks = await _fetch_tasks(proj, filter)
         results.append(
             {
                 "project": proj.name,
