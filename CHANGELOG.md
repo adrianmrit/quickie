@@ -1,6 +1,6 @@
 # Quickie Change Log
 
-## Unreleased
+## Release 0.11.0
 
 ### Added
 

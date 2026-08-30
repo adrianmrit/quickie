@@ -135,12 +135,12 @@ def show_captured_command():
     console.print(f"[bold]stdout:[/bold] {result.stdout!r}")
 
 
-@command
+@command(private=True)
 def _ensure_no_unstaged_changes():
     return "git diff --quiet"
 
 
-@task
+@task(private=True)
 def _pre_release_checks(version):
     from quickie._meta import __version__
 
@@ -155,7 +155,7 @@ def _pre_release_checks(version):
     )
 
 
-@script
+@script(private=True)
 def _commit_release(message, version):
     """Release a new version."""
     # Check version matches the version in _meta.py
