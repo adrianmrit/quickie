@@ -286,48 +286,57 @@ class TestTask:
             pass
 
         assert my_task.watch_paths == ()
-        assert my_task.watch_exclude == ()
+        assert my_task.watch_ignore_paths == ()
+        assert my_task.watch_patterns == ()
+        assert my_task.watch_ignore_patterns == ()
         assert my_task.watch_debounce is None
-        assert my_task.watch_interval is None
 
     def test_watch_attributes_via_decorator(self):
         """@task decorator passes watch configuration to the task."""
 
         @task(
             watch_paths=["src/"],
-            watch_exclude=["tests/"],
+            watch_ignore_paths=["tests/"],
             watch_debounce=1.0,
-            watch_interval=0.5,
         )
         def my_task():
             pass
 
         assert list(my_task.watch_paths) == ["src/"]
-        assert list(my_task.watch_exclude) == ["tests/"]
+        assert list(my_task.watch_ignore_paths) == ["tests/"]
         assert my_task.watch_debounce == 1.0
-        assert my_task.watch_interval == 0.5
+        assert my_task.watch_recursive is None
 
     def test_watch_attributes_via_script_decorator(self):
         """@script passes watch configuration to the task."""
 
         @script(
             watch_paths=["src/"],
-            watch_exclude=["tests/"],
+            watch_ignore_paths=["tests/"],
             watch_debounce=1.0,
-            watch_interval=0.5,
         )
         def my_script():
             return "echo test"
 
         assert list(my_script.watch_paths) == ["src/"]
-        assert list(my_script.watch_exclude) == ["tests/"]
+        assert list(my_script.watch_ignore_paths) == ["tests/"]
         assert my_script.watch_debounce == 1.0
-        assert my_script.watch_interval == 0.5
+
+    def test_watch_recursive_configuration(self):
+        """Tasks can configure recursive watching."""
+
+        @task(watch_recursive=True)
+        def my_task():
+            pass
+
+        assert my_task.watch_recursive is True
 
     def test_watch_attributes_via_command_decorator(self):
         """@command passes watch configuration to the task."""
 
-        @command(watch_paths=["src/"], watch_debounce=1.0)
+        @command(
+            watch_paths=["src/"], watch_ignore_paths=["tests/"], watch_debounce=1.0
+        )
         def my_command():
             return ["echo", "test"]
 
@@ -339,15 +348,13 @@ class TestTask:
 
         class MyTask(tasks.Task):
             watch_paths = ["lib/"]
-            watch_exclude = [".venv"]
+            watch_ignore_paths = [".venv"]
             watch_debounce = 2.0
-            watch_interval = 0.1
 
         t = MyTask()
         assert list(t.watch_paths) == ["lib/"]
-        assert list(t.watch_exclude) == [".venv"]
+        assert list(t.watch_ignore_paths) == [".venv"]
         assert t.watch_debounce == 2.0
-        assert t.watch_interval == 0.1
 
     def test_watch_attributes_override(self):
         """Constructor args override class-level watch defaults."""
@@ -388,6 +395,17 @@ class TestBaseSubprocessTask:
 
         task_instance = MyTask()
         assert task_instance.get_wd() == expected
+
+    def test_watch_config_uses_task_wd(self, mocker):
+        """Subprocess watch configuration shares the task working directory."""
+        mocker.patch.object(app, "context", Context(wd="/example/cwd", env={}))
+
+        class MyTask(tasks._BaseSubprocessTask):
+            wd = "subdir"
+
+        task_instance = MyTask(watch_paths=["src"])
+        config = task_instance.get_watch_config()
+        assert config["wd"] == "/example/cwd/subdir"
 
     def test_env(self, mocker):
         mocker.patch.object(

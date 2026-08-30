@@ -9,6 +9,20 @@
 
 ### Changed
 
+- Watch configuration now separates watched directories, ignored directories,
+  included file patterns, and ignored file patterns, matching
+  ``watchmedo log`` semantics.
+- Watch paths are treated as literal directory values, while pattern options
+  support repeatable and semicolon-separated watchdog wildcard patterns.
+- Added recursive watching and consistent resolution of relative watch paths
+  against the task's effective working directory.
+- Watch mode now runs the initial task before starting the observer and prints
+  the paths that triggered each re-run, making watcher configuration easier to
+  diagnose.
+- Watch mode now waits for debounced filesystem changes directly instead of
+  polling, and stopping the watcher wakes any blocked wait immediately.
+- Removed the obsolete ``--watch-interval`` option and task configuration;
+  ``watch_debounce`` is now the only watch timing control.
 - Task listings now show each task once, using the declared task name as the
   canonical name. Namespaced invocations are shown as aliases unless the task
   is only available through a namespace, in which case the declared name is

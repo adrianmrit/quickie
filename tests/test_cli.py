@@ -767,7 +767,7 @@ class TestWatchTask:
         """watch_task runs the task immediately on start."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
         @task
         def watch_me():
@@ -782,11 +782,31 @@ class TestWatchTask:
         assert "Watching for changes" in out
         assert "task ran" in out
 
+    def test_watch_task_starts_watcher_after_initial_run(self, mocker):
+        """Initial task changes are not treated as a watch trigger."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
+        events = []
+        instance.start.side_effect = lambda: events.append("start")
+
+        @task
+        def watch_me():
+            events.append("task")
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(["--watch", "watch-me"])
+
+        assert events == ["task", "start"]
+
     def test_watch_task_reruns_on_changes(self, mocker, capsys):
         """watch_task re-runs when changes are detected."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = [False, True, KeyboardInterrupt]
+        instance.wait_for_changes.side_effect = [True, KeyboardInterrupt]
+        instance.changed_paths.return_value = ["src/example.py"]
 
         @task
         def watch_me():
@@ -799,12 +819,13 @@ class TestWatchTask:
 
         out, _ = capsys.readouterr()
         assert "Changes detected" in out
+        assert "src/example.py" in out
 
-    def test_watch_task_with_exclude(self, mocker, capsys):
-        """watch_task prints exclude patterns."""
+    def test_watch_task_with_ignore_pattern(self, mocker, capsys):
+        """watch_task prints ignore patterns."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
         @task
         def watch_me():
@@ -816,7 +837,7 @@ class TestWatchTask:
             _cli.main(
                 [
                     "--watch",
-                    "--watch-exclude",
+                    "--watch-ignore-patterns",
                     "build/",
                     "watch-me",
                 ]
@@ -825,11 +846,11 @@ class TestWatchTask:
         out, _ = capsys.readouterr()
         assert "build/" in out
 
-    def test_watch_task_custom_debounce_and_interval(self, mocker):
-        """watch_task passes debounce and poll_interval to FileWatcher."""
+    def test_watch_task_custom_debounce(self, mocker):
+        """watch_task passes debounce to FileWatcher."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
         @task
         def watch_me():
@@ -843,8 +864,6 @@ class TestWatchTask:
                     "--watch",
                     "--watch-debounce",
                     "2.0",
-                    "--watch-interval",
-                    "0.1",
                     "watch-me",
                 ]
             )
@@ -856,9 +875,9 @@ class TestWatchTask:
         """watch_task falls back to task-defined watch_paths."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
-        @task(watch_paths=["src/"], watch_exclude=["tests/"])
+        @task(watch_paths=["src/"], watch_ignore_patterns=["tests/"])
         def watch_me():
             pass
 
@@ -869,13 +888,13 @@ class TestWatchTask:
 
         _, kwargs = mock_watcher_class.call_args
         assert kwargs["watch_paths"] == ["src/"]
-        assert "tests/" in kwargs["exclude"]
+        assert "tests/" in kwargs["ignore_patterns"]
 
     def test_watch_task_cli_overrides_task_defaults(self, mocker):
         """CLI args override task-defined defaults."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
         @task(watch_paths=["src/"])
         def watch_me():
@@ -896,11 +915,41 @@ class TestWatchTask:
         _, kwargs = mock_watcher_class.call_args
         assert kwargs["watch_paths"] == ["lib/"]
 
+    def test_watch_task_splits_cli_patterns_and_passes_recursive(self, mocker):
+        """CLI watch patterns use semicolons and recursive reaches watcher."""
+        mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
+        instance = mock_watcher_class.return_value
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
+
+        @task
+        def watch_me():
+            pass
+
+        self._register_task(mocker, watch_me)
+
+        with raises(SystemExit):
+            _cli.main(
+                [
+                    "--watch",
+                    "--watch-paths",
+                    "src",
+                    "--watch-patterns",
+                    "*.py;*.pyi",
+                    "--watch-recursive",
+                    "watch-me",
+                ]
+            )
+
+        _, kwargs = mock_watcher_class.call_args
+        assert kwargs["watch_paths"] == ["src"]
+        assert kwargs["patterns"] == ["*.py", "*.pyi"]
+        assert kwargs["recursive"] is True
+
     def test_watch_task_stop_message(self, mocker, capsys):
         """Ctrl+C prints watching stopped message."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
         @task
         def watch_me():
@@ -924,7 +973,7 @@ class TestWatchTask:
         """watch_task defaults to ['.'] when no paths given."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
         @task
         def watch_me():
@@ -942,7 +991,7 @@ class TestWatchTask:
         """watch_task calls watcher.stop() in finally block."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
         instance = mock_watcher_class.return_value
-        instance.has_changes.side_effect = KeyboardInterrupt
+        instance.wait_for_changes.side_effect = KeyboardInterrupt
 
         @task
         def watch_me():

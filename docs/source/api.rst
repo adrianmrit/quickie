@@ -16,7 +16,6 @@ API
     quickie.group
     quickie.thread_group
     quickie.load_env_file
-    quickie.Context
     quickie.tasks.Task
     quickie.tasks.Script
     quickie.tasks.Command

@@ -109,16 +109,36 @@ class AppArgumentParser(BaseArgumentParser):
             action="append",
             dest="watch_paths",
             metavar="PATH",
-            help="Glob patterns or directories to watch (repeatable). "
-            "Defaults to the project root.",
+            help="Directory paths to watch (repeatable). Defaults to the task "
+            "working directory.",
         )
         self.add_argument(
-            "--watch-exclude",
+            "--watch-ignore-paths",
             action="append",
-            dest="watch_exclude",
+            dest="watch_ignore_paths",
+            metavar="PATH",
+            help="Directory paths to ignore (repeatable).",
+        )
+        self.add_argument(
+            "--watch-patterns",
+            action="append",
+            dest="watch_patterns",
             metavar="PATTERN",
-            help="Glob patterns or directories to exclude from watching (repeatable). "
-            "Defaults to .git, __pycache__, *.pyc, .quickie_cache, tmp.",
+            help="Patterns for changed files (repeatable; separate patterns with ';').",
+        )
+        self.add_argument(
+            "--watch-ignore-patterns",
+            action="append",
+            dest="watch_ignore_patterns",
+            metavar="PATTERN",
+            help="Patterns to ignore (repeatable; separate patterns with ';').",
+        )
+        self.add_argument(
+            "--watch-recursive",
+            action="store_true",
+            dest="watch_recursive",
+            default=None,
+            help="Watch directories recursively (default: false).",
         )
         self.add_argument(
             "--watch-debounce",
@@ -128,15 +148,6 @@ class AppArgumentParser(BaseArgumentParser):
             default=None,
             help="Seconds to wait after a change before re-running (default: 0.5). "
             "Prevents rapid re-runs when multiple files change at once.",
-        )
-        self.add_argument(
-            "--watch-interval",
-            type=float,
-            dest="watch_interval",
-            metavar="SECS",
-            default=None,
-            help="Seconds between file-change polls (default: 0.25). "
-            "Lower values make watch mode more responsive but use more CPU.",
         )
         self.add_argument("task", nargs="?", help="The task to run").completer = (  # type: ignore
             TaskCompleter()

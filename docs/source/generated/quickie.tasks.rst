@@ -26,4 +26,5 @@ quickie.tasks
       Script
       Task
       ThreadGroup
+      WatchConfig
    

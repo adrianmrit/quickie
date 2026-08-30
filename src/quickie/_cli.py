@@ -3,7 +3,6 @@
 import json
 import os
 import sys
-import time
 from functools import wraps
 
 import argcomplete
@@ -16,6 +15,11 @@ from quickie._launcher import Launcher
 from quickie.errors import QuickieError, Skip, Stop
 
 _parser = AppArgumentParser()
+
+
+def _split_watch_values(values: list[str]) -> list[str]:
+    """Split watchmedo-style semicolon-separated values."""
+    return [part for value in values for part in value.split(";") if part]
 
 
 def _clean_exit(func):
@@ -195,9 +199,11 @@ class Main:
                     task_name=namespace.task,
                     args=namespace.args,
                     watch_paths=namespace.watch_paths,
-                    watch_exclude=namespace.watch_exclude,
+                    watch_ignore_paths=namespace.watch_ignore_paths,
+                    watch_patterns=namespace.watch_patterns,
+                    watch_ignore_patterns=namespace.watch_ignore_patterns,
                     debounce=namespace.watch_debounce,
-                    poll_interval=namespace.watch_interval,
+                    recursive=namespace.watch_recursive,
                 )
             else:
                 self.run_task(
@@ -307,57 +313,78 @@ class Main:
         task = self.get_task(task_name)
         return task.parse_and_run(args)
 
-    def watch_task(
+    def watch_task(  # noqa: PLR0912 PLR0913 PLR0915
         self,
         task_name: str,
         *,
         args: list[str],
         watch_paths: list[str] | None,
-        watch_exclude: list[str] | None,
+        watch_ignore_paths: list[str] | None,
+        watch_patterns: list[str] | None,
+        watch_ignore_patterns: list[str] | None,
         debounce: float | None = None,
-        poll_interval: float | None = None,
+        recursive: bool | None = None,
     ):
         """Run a task in watch mode, re-running on file changes.
 
         :param task_name: The name of the task to run.
         :param args: Arguments to pass to the task.
-        :param watch_paths: Glob patterns or directories to watch.
-        :param watch_exclude: Glob patterns or directories to exclude.
+        :param watch_paths: Directories to watch.
+        :param watch_ignore_paths: Directory paths to ignore.
+        :param watch_patterns: Patterns for changed files.
+        :param watch_ignore_patterns: Patterns to ignore.
         :param debounce: Seconds to wait after a change before re-running.
-        :param poll_interval: Seconds between file-change polls.
+        :param recursive: Whether to watch directories recursively.
         """
         from quickie._watcher import (
             FileWatcher,
             DEFAULT_DEBOUNCE,
-            DEFAULT_POLL_INTERVAL,
+            _DEFAULT_EXCLUDE,
         )
-        from quickie.context import resolve_wd
 
         task = self.get_task(task_name)
-        wd = resolve_wd(None)
-
-        # Fall back to task-defined watch configuration when CLI args are
-        # not explicitly provided.
+        extra_args, task_kwargs = task.parse_args(
+            parser=task.parser,
+            args=args,
+            extra_args=task.extra_args,
+        )
+        config = task.get_watch_config(extra_args, **task_kwargs)
+        if watch_paths is None:
+            watch_paths = config["watch_paths"] or ["."]
+        if watch_ignore_paths is None:
+            watch_ignore_paths = config["watch_ignore_paths"]
+        if watch_patterns is None:
+            watch_patterns = config["watch_patterns"]
+        else:
+            watch_patterns = _split_watch_values(watch_patterns)
+        if watch_ignore_patterns is None:
+            watch_ignore_patterns = config["watch_ignore_patterns"]
+        else:
+            watch_ignore_patterns = _split_watch_values(watch_ignore_patterns)
         if debounce is None:
-            debounce = task.watch_debounce
-        if poll_interval is None:
-            poll_interval = task.watch_interval
-        if not watch_paths:
-            watch_paths = list(task.watch_paths) or ["."]
-        if not watch_exclude and task.watch_exclude:
-            watch_exclude = list(task.watch_exclude)
+            debounce = config["watch_debounce"]
+        if recursive is None:
+            recursive = config["watch_recursive"]
 
         # Final fallback to module-level defaults
         if debounce is None:
             debounce = DEFAULT_DEBOUNCE
-        if poll_interval is None:
-            poll_interval = DEFAULT_POLL_INTERVAL
+
+        if recursive is None:
+            recursive = False
+        wd = config["wd"]
+
+        ignore_paths = [*(watch_ignore_paths or []), str(app.tmp_path)]
+        ignore_patterns = list(watch_ignore_patterns or _DEFAULT_EXCLUDE)
 
         watcher = FileWatcher(
             watch_paths=watch_paths,
-            exclude=watch_exclude,
+            patterns=watch_patterns,
+            ignore_paths=ignore_paths,
+            ignore_patterns=ignore_patterns,
             wd=wd,
             debounce=debounce,
+            recursive=recursive,
         )
 
         app.console.print(
@@ -365,26 +392,37 @@ class Main:
         )
         app.console.print(f"  Task: [bold yellow]{task_name}[/bold yellow]")
         app.console.print(f"  Paths: [dim]{', '.join(watch_paths)}[/dim]")
-        if watch_exclude:
-            app.console.print(f"  Exclude: [dim]{', '.join(watch_exclude)}[/dim]")
+        if watch_ignore_paths:
+            app.console.print(
+                f"  Ignore paths: [dim]{', '.join(watch_ignore_paths)}[/dim]"
+            )
+        if watch_patterns:
+            app.console.print(f"  Patterns: [dim]{'; '.join(watch_patterns)}[/dim]")
+        if watch_ignore_patterns:
+            app.console.print(
+                f"  Ignore patterns: [dim]{'; '.join(watch_ignore_patterns)}[/dim]"
+            )
         app.console.print()
 
-        watcher.start()
         try:
-            # Run the task immediately on first start
-            app.console.print(f"[bold green]Running {task_name}...[/bold green]")
+            # Run once before observing, so task-generated file events do not
+            # become an immediate watch trigger.
+            app.console.print(f"[bold green]Running {task_name}...[/bold green]\n")
             task.parse_and_run(args)
             app.console.print()
 
-            # Poll for changes
-            while True:
-                if watcher.has_changes():
-                    msg = f"Changes detected, re-running {task_name}..."
-                    app.console.print(f"[bold yellow]{msg}[/bold yellow]")
-                    watcher.reset()
-                    task.parse_and_run(args)
-                    app.console.print()
-                time.sleep(poll_interval)
+            watcher.start()
+
+            while watcher.wait_for_changes():
+                changed_paths = watcher.changed_paths()
+                msg = f"Changes detected, re-running {task_name}..."
+                app.console.print(f"[bold yellow]{msg}[/bold yellow]")
+                for path in changed_paths:
+                    app.console.print(f"  [dim]{path}[/dim]")
+                app.console.print()
+                watcher.reset()
+                task.parse_and_run(args)
+                app.console.print()
         except KeyboardInterrupt:
             app.console.print("\n[bold red]Watching stopped.[/bold red]")
         finally:

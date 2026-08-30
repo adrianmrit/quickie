@@ -26,6 +26,7 @@
       ~ThreadGroup.get_plain_usage
       ~ThreadGroup.get_short_help
       ~ThreadGroup.get_tasks
+      ~ThreadGroup.get_watch_config
       ~ThreadGroup.log_task_execution
       ~ThreadGroup.log_task_execution_details
       ~ThreadGroup.parse_and_run
@@ -54,8 +55,10 @@
       ~ThreadGroup.parser
       ~ThreadGroup.tasks
       ~ThreadGroup.watch_debounce
-      ~ThreadGroup.watch_exclude
-      ~ThreadGroup.watch_interval
+      ~ThreadGroup.watch_ignore_paths
+      ~ThreadGroup.watch_ignore_patterns
       ~ThreadGroup.watch_paths
+      ~ThreadGroup.watch_patterns
+      ~ThreadGroup.watch_recursive
    
    

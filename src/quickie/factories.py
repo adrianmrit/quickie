@@ -52,9 +52,11 @@ class CommonTaskKwargs(typing.TypedDict, total=False):
     after: typing.Sequence[typing.Callable] | None
     cleanup: typing.Sequence[typing.Callable] | None
     watch_paths: typing.Sequence[str]
-    watch_exclude: typing.Sequence[str]
+    watch_ignore_paths: typing.Sequence[str]
+    watch_patterns: typing.Sequence[str]
+    watch_ignore_patterns: typing.Sequence[str]
     watch_debounce: float | None
-    watch_interval: float | None
+    watch_recursive: bool | None
 
 
 type PartialReturnType[T: tasks.Task] = typing.Callable[[typing.Callable | type[T]], T]
@@ -97,9 +99,11 @@ def task_factory_helper[T: tasks.Task](
     after: typing.Sequence[typing.Callable] | None,
     cleanup: typing.Sequence[typing.Callable] | None,
     watch_paths: typing.Sequence[str] = (),
-    watch_exclude: typing.Sequence[str] = (),
+    watch_ignore_paths: typing.Sequence[str] = (),
+    watch_patterns: typing.Sequence[str] = (),
+    watch_ignore_patterns: typing.Sequence[str] = (),
     watch_debounce: float | None = None,
-    watch_interval: float | None = None,
+    watch_recursive: bool | None = None,
     base: type[T],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
@@ -124,9 +128,11 @@ def task_factory_helper[T: tasks.Task](
     after: typing.Sequence[typing.Callable] | None,
     cleanup: typing.Sequence[typing.Callable] | None,
     watch_paths: typing.Sequence[str] | None = None,
-    watch_exclude: typing.Sequence[str] | None = None,
+    watch_ignore_paths: typing.Sequence[str] | None = None,
+    watch_patterns: typing.Sequence[str] | None = None,
+    watch_ignore_patterns: typing.Sequence[str] | None = None,
     watch_debounce: float | None = None,
-    watch_interval: float | None = None,
+    watch_recursive: bool | None = None,
 ) -> PartialReturnType[T]: ...
 
 
@@ -145,9 +151,11 @@ def task_factory_helper[T: tasks.Task](
     after: typing.Sequence[typing.Callable] | None = None,
     cleanup: typing.Sequence[typing.Callable] | None = None,
     watch_paths: typing.Sequence[str] | None = None,
-    watch_exclude: typing.Sequence[str] | None = None,
+    watch_ignore_paths: typing.Sequence[str] | None = None,
+    watch_patterns: typing.Sequence[str] | None = None,
+    watch_ignore_patterns: typing.Sequence[str] | None = None,
     watch_debounce: float | None = None,
-    watch_interval: float | None = None,
+    watch_recursive: bool | None = None,
     base: type[T],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
@@ -172,9 +180,11 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
     after: typing.Sequence[typing.Callable] | None = None,
     cleanup: typing.Sequence[typing.Callable] | None = None,
     watch_paths: typing.Sequence[str] | None = None,
-    watch_exclude: typing.Sequence[str] | None = None,
+    watch_ignore_paths: typing.Sequence[str] | None = None,
+    watch_patterns: typing.Sequence[str] | None = None,
+    watch_ignore_patterns: typing.Sequence[str] | None = None,
     watch_debounce: float | None = None,
-    watch_interval: float | None = None,
+    watch_recursive: bool | None = None,
     base: type[T],
     override_method: str,
     attrs: dict[str, typing.Any] | None = None,
@@ -228,10 +238,12 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
     :param bind: If true, the first parameter of the function will be the
         task class instance.
     :param condition: The condition to check before running the task.
-    :param watch_paths: Glob patterns or directories to watch in watch mode.
-    :param watch_exclude: Patterns to exclude from watching.
+    :param watch_paths: Directories to watch in watch mode.
+    :param watch_ignore_paths: Directory paths to ignore.
+    :param watch_patterns: Patterns for changed files.
+    :param watch_ignore_patterns: Patterns to ignore.
     :param watch_debounce: Seconds to wait after a file change before rerunning.
-    :param watch_interval: Seconds between file-change polls.
+    :param watch_recursive: Whether to watch directories recursively.
     :param before: The tasks to run before the task.
     :param after: The tasks to run after the task.
     :param cleanup: The tasks to run after the task, even if it fails.
@@ -259,9 +271,11 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
                 after=after,
                 cleanup=cleanup,
                 watch_paths=watch_paths,
-                watch_exclude=watch_exclude,
+                watch_ignore_paths=watch_ignore_paths,
+                watch_patterns=watch_patterns,
+                watch_ignore_patterns=watch_ignore_patterns,
                 watch_debounce=watch_debounce,
-                watch_interval=watch_interval,
+                watch_recursive=watch_recursive,
                 base=base,
                 override_method=override_method,
                 attrs=attrs,
@@ -299,9 +313,11 @@ def task_factory_helper[  # noqa: PLR0913 PLR0912
         after=after,
         cleanup=cleanup,
         watch_paths=watch_paths,
-        watch_exclude=watch_exclude,
+        watch_ignore_paths=watch_ignore_paths,
+        watch_patterns=watch_patterns,
+        watch_ignore_patterns=watch_ignore_patterns,
         watch_debounce=watch_debounce,
-        watch_interval=watch_interval,
+        watch_recursive=watch_recursive,
         **(kwargs or {}),
     )
 

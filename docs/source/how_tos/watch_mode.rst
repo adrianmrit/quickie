@@ -22,20 +22,29 @@ CLI Options
    Enable watch mode.  Requires a task name.
 
 ``--watch-paths PATH``
-   Glob patterns or directories to watch.  Repeatable.  Defaults to the
-   project root (the parent of the ``_qk`` directory).
+   Directory paths to watch.  Repeatable.  Values are not split on ``;``.
+   Paths resolve relative to the task's effective working directory.  Defaults
+   to that directory.
 
    .. code-block:: bash
 
-      qk --watch --watch-paths src/ --watch-paths lib/ my-task
+      qk --watch --watch-paths src --watch-paths lib my-task
 
-``--watch-exclude PATTERN``
-   Glob patterns or directories to exclude.  Repeatable.  Defaults to
-   ``.git``, ``__pycache__``, ``*.pyc``, ``.quickie_cache``, ``tmp``.
+``--watch-ignore-paths PATH``
+   Directory paths to ignore.  Repeatable.  Values are not split on ``;``.
 
-   .. code-block:: bash
+``--watch-patterns PATTERN``
+   Patterns for changed files.  Repeatable.  Patterns in one value may be
+   separated with ``;``, matching ``watchmedo log``.  Use watchdog wildcard
+   syntax such as ``**/*.py`` for nested paths.
 
-      qk --watch --watch-exclude build/ --watch-exclude vendor/ my-task
+``--watch-ignore-patterns PATTERN``
+   Patterns for changed files to ignore.  Repeatable.  Patterns in one value
+   may be separated with ``;``.
+
+``--watch-recursive``
+   Watch directories recursively.  Disabled by default, matching
+   ``watchmedo log``.
 
 ``--watch-debounce SECS``
    Seconds to wait after a change before re-running (default: ``0.5``).
@@ -44,14 +53,6 @@ CLI Options
    .. code-block:: bash
 
       qk --watch --watch-debounce 1.0 my-task
-
-``--watch-interval SECS``
-   Seconds between file-change polls (default: ``0.25``).  Lower values make
-   watch mode more responsive but use more CPU.
-
-   .. code-block:: bash
-
-      qk --watch --watch-interval 0.1 my-task
 
 How It Works
 ------------
@@ -70,7 +71,7 @@ the task is re-run.  This prevents rapid re-runs during multi-file saves.
 Declarative Watch Configuration
 --------------------------------
 
-Instead of passing ``--watch-paths`` and ``--watch-exclude`` on every
+Instead of passing the watch options on every
 invocation, you can declare them directly on the task.  When ``qk --watch``
 is used, the CLI picks up these defaults automatically.
 
@@ -82,9 +83,10 @@ is used, the CLI picks up these defaults automatically.
 
    @task(
        watch_paths=["src/"],
-       watch_exclude=["tests/", "__pycache__"],
+       watch_ignore_paths=["vendor/"],
+       watch_patterns=["*.py"],
+       watch_ignore_patterns=["*_generated.py", "*.pyc"],
        watch_debounce=1.0,
-       watch_interval=0.5,
    )
    def lint():
        """Run linter on source files."""
@@ -104,20 +106,33 @@ Then just run:
 
    class LintTask(tasks.Command):
        watch_paths = ["src/"]
-       watch_exclude = ["tests/"]
+       watch_ignore_paths = ["tests/"]
 
        def get_cmd_args(self):
            return ["ruff", "check", "src/"]
 
 Available watch attributes (used as defaults when ``--watch`` is passed):
 
-- ``watch_paths`` — Glob patterns or directories to watch.
-- ``watch_exclude`` — Patterns to exclude from watching.
+- ``watch_paths`` — Directories to watch.
+- ``watch_ignore_paths`` — Directory paths to ignore.
+- ``watch_patterns`` — Patterns for changed files.
+- ``watch_ignore_patterns`` — Patterns for changed files to ignore.
 - ``watch_debounce`` — Seconds to wait after a change before re-running.
-- ``watch_interval`` — Seconds between file-change polls.
+- ``watch_recursive`` — Whether to watch directories recursively.
 
-Explicit CLI arguments (``--watch-paths``, ``--watch-exclude``, etc.)
+Task-defined values remain lists.  Both task-defined paths and CLI paths resolve
+relative to the task's effective ``wd``.  Subprocess tasks use their configured
+``wd``; other tasks use the invocation directory.  Only CLI pattern values are
+split on ``;``; path values are passed literally.
+
+Explicit CLI arguments (``--watch-paths``, ``--watch-patterns``, etc.)
 always override task-defined defaults.
+
+The quickie temporary directory is always excluded, so tasks writing to it do
+not trigger an endless re-run loop.
+
+When a change triggers a re-run, quickie prints the changed paths.  Use this
+information to refine ``--watch-paths`` or ``--watch-ignore-patterns``.
 
 Examples
 --------
@@ -138,4 +153,4 @@ Examples
 
 .. code-block:: bash
 
-   qk --watch --watch-paths src/ --watch-exclude tests/ lint
+   qk --watch --watch-paths src/ --watch-ignore-paths tests/ lint

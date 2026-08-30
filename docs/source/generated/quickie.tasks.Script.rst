@@ -30,6 +30,7 @@
       ~Script.get_script
       ~Script.get_short_help
       ~Script.get_timeout
+      ~Script.get_watch_config
       ~Script.get_wd
       ~Script.log_task_execution
       ~Script.log_task_execution_details
@@ -67,9 +68,11 @@
       ~Script.script
       ~Script.timeout
       ~Script.watch_debounce
-      ~Script.watch_exclude
-      ~Script.watch_interval
+      ~Script.watch_ignore_paths
+      ~Script.watch_ignore_patterns
       ~Script.watch_paths
+      ~Script.watch_patterns
+      ~Script.watch_recursive
       ~Script.wd
    
    

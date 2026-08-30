@@ -32,6 +32,7 @@
       ~Command.get_retry_delay
       ~Command.get_short_help
       ~Command.get_timeout
+      ~Command.get_watch_config
       ~Command.get_wd
       ~Command.log_task_execution
       ~Command.log_task_execution_details
@@ -70,9 +71,11 @@
       ~Command.retry_delay
       ~Command.timeout
       ~Command.watch_debounce
-      ~Command.watch_exclude
-      ~Command.watch_interval
+      ~Command.watch_ignore_paths
+      ~Command.watch_ignore_patterns
       ~Command.watch_paths
+      ~Command.watch_patterns
+      ~Command.watch_recursive
       ~Command.wd
    
    

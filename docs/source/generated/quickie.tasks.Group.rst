@@ -25,6 +25,7 @@
       ~Group.get_plain_usage
       ~Group.get_short_help
       ~Group.get_tasks
+      ~Group.get_watch_config
       ~Group.log_task_execution
       ~Group.log_task_execution_details
       ~Group.parse_and_run
@@ -52,8 +53,10 @@
       ~Group.parser
       ~Group.tasks
       ~Group.watch_debounce
-      ~Group.watch_exclude
-      ~Group.watch_interval
+      ~Group.watch_ignore_paths
+      ~Group.watch_ignore_patterns
       ~Group.watch_paths
+      ~Group.watch_patterns
+      ~Group.watch_recursive
    
    
