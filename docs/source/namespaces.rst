@@ -173,6 +173,10 @@ Multiple namespaces can also be defined in the same module:
     def _tools():
         return [module3]
 
+Nested namespaces retain every parent path segment. For example, a namespace
+declared in ``test.py`` and exposed from a parent namespace under ``test`` makes
+its tasks available as ``test:<task-name>`` (along with any task aliases).
+
 The ``Namespace`` class
 ------------------------
 

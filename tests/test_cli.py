@@ -25,8 +25,8 @@ BIN_LOCATION = os.path.join(BIN_FOLDER, "qk")
     "argv",
     [
         [BIN_LOCATION, "-h"],
-        [PYTHON_PATH, "-m", "quickie", "-h", "hello"],
-        [PYTHON_PATH, "-m", "quickie", "hello"],
+        [PYTHON_PATH, "-m", "quickie", "-h", "examples:hello"],
+        [PYTHON_PATH, "-m", "quickie", "examples:hello"],
         [PYTHON_PATH, "-m", "quickie", "-h"],
     ],
 )  # yapf: disable
@@ -615,6 +615,23 @@ class TestListTasksJson:
         data = json.loads(capsys.readouterr().out)
         assert data[0]["name"] == "n:b"
         assert data[0]["aliases"] == ["n:a"]
+
+    def test_list_tasks_json_falls_back_when_no_canonical_path(self, capsys, mocker):
+        @task(name="declared")
+        def task_obj():
+            pass
+
+        tasks_ns = RootNamespace()
+        tasks_ns.register(task_obj, namespace="n:z")
+        tasks_ns.register(task_obj, namespace="n:a")
+        mocker.patch("quickie.app._tasks", tasks_ns)
+
+        main_obj = _cli.Main(argv=["--list-json"])
+        main_obj.list_tasks_json()
+
+        data = json.loads(capsys.readouterr().out)
+        assert data[0]["name"] == "n:a"
+        assert data[0]["aliases"] == ["n:z"]
 
 
 class TestSuggestAutocompletion:

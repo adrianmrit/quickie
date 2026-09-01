@@ -1,5 +1,13 @@
 # Quickie Change Log
 
+## Unreleased
+
+### Fixed
+
+- Nested namespaces now preserve their parent path when tasks are discovered.
+- Task listings no longer fail when a task has no invocation path matching its
+  declared name; the lexicographically first invocation path is used instead.
+
 ## Release 0.11.0
 
 ### Added

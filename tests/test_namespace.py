@@ -85,6 +85,18 @@ class TestNamespaceSeparatorWired:
         # Namespace path "root.sub" is built with "."; task name joins with ":".
         assert any(k.startswith("root.sub") for k in rns)
 
+    def test_nested_namespace_keeps_parent_path(self):
+        @task(name="t")
+        def t():
+            pass
+
+        inner = Namespace({"": [t]})
+        outer = _mod(inner=inner)
+        rns = RootNamespace()
+        rns.load(_mod(ns=Namespace({"test": [outer]})))
+
+        assert "test:t" in rns
+
 
 # ---------------------------------------------------------------------------
 # Phase 2 — circular reference detection (back-edge, not shared-ref)

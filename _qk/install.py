@@ -9,6 +9,7 @@ from quickie import Arg, script
     extra_args=True,
 )
 def install(editable=False, dev=False):
+    """Install the package with optional editable and development dependencies."""
     editable = "-e" if editable else ""
     dev = "[dev]" if dev else ""
     return f"""

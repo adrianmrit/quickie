@@ -74,6 +74,8 @@ Each entry in the returned list contains:
 
   - ``name`` — preferred invocable path; the plain task name when directly
     available, otherwise the namespaced path ending in the declared task name.
+    If no invocation matches the declared task name, the lexicographically
+    first invocation path is selected.
   - ``aliases`` — alternative invocation paths for the same task, including
     namespaced paths.
   - ``short_help``, ``help`` — description strings.

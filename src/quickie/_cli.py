@@ -254,7 +254,10 @@ class Main:
                 canonical_paths = [
                     name for name in invocation_names if name.endswith(f":{task.name}")
                 ]
-                entry["name"] = min(canonical_paths, key=lambda name: name.split(":"))
+                entry["name"] = min(
+                    canonical_paths or invocation_names,
+                    key=lambda name: name.split(":"),
+                )
             entry["aliases"] = sorted(
                 name for name in invocation_names if name != entry["name"]
             )

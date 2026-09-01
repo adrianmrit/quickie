@@ -10,7 +10,7 @@ def test(*args):
 
 
 @script(extra_args=True)
-def test_matrix(*args):
+def matrix(*args):
     """Run tests with Python 3.12, 3.13, and 3.14 via uv."""
     pytest_args = shlex.join(args)
     commands = [

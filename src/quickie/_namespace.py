@@ -55,7 +55,7 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
 
     def __init__(self):
         self._mappings: dict[str, "Task"] = {}
-        self._pending: dict[str, list["Namespace"]] = {}
+        self._pending: dict[str, list[tuple["Namespace", str]]] = {}
         self._resolving: set[int] = set()  # ids of namespaces currently being resolved
 
     # ------------------------------------------------------------------
@@ -106,10 +106,11 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
             for p in _merge_aliases(path, (task.name, *task.aliases)):
                 self.register(task, namespace=p)
 
-    def _defer_namespace(self, ns: "Namespace") -> None:
+    def _defer_namespace(self, ns: "Namespace", parent_path: str = "") -> None:
+        path = _merge_alias(parent_path, ns.path, ns.separator)
         if id(ns) in self._resolving:
             raise CircularDependencyError(ns.path)
-        self._pending.setdefault(ns.path, []).append(ns)
+        self._pending.setdefault(path, []).append((ns, parent_path))
 
     def _scan_obj(self, obj, path: str) -> None:
         """Register tasks and defer namespaces found directly on *obj.__dict__*."""
@@ -117,7 +118,7 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
             if is_task_instance(v):
                 self._register_task(path, v)
             elif isinstance(v, Namespace):
-                self._defer_namespace(v)
+                self._defer_namespace(v, path)
 
     def load(self, obj):
         """Shallow-load tasks from an object (usually a module).
@@ -143,9 +144,9 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
                 if is_task_instance(obj):
                     self._register_task(path, obj)
                 elif isinstance(obj, Namespace):
-                    self._defer_namespace(obj)
+                    self._defer_namespace(obj, path)
                 elif isinstance(obj, collections.abc.Mapping):
-                    self._defer_namespace(Namespace(mapping=obj, path=path))
+                    self._defer_namespace(Namespace(mapping=obj), path)
                 elif isinstance(obj, list):
                     self._process_items(path, obj, seen_lists)
                 elif hasattr(obj, "__dict__"):
@@ -153,7 +154,7 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
         finally:
             seen_lists.discard(list_id)
 
-    def _resolve_one(self, ns: "Namespace") -> None:
+    def _resolve_one(self, ns: "Namespace", parent_path: str = "") -> None:
         """Traverse one :class:`Namespace` and register its tasks.
 
         Sub-namespaces found during traversal are stored back into
@@ -165,7 +166,8 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
         self._resolving.add(ns_id)
         try:
             for path, obj_list in ns.items():
-                self._process_items(path, obj_list, set())
+                full_path = _merge_alias(parent_path, path, ns.separator)
+                self._process_items(full_path, obj_list, set())
         finally:
             self._resolving.discard(ns_id)
 
@@ -186,8 +188,8 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
 
     def _resolve_pending(self, path: str) -> None:
         """Resolve all pending namespaces registered under *path*."""
-        for ns in self._pending.pop(path, []):
-            self._resolve_one(ns)
+        for ns, parent_path in self._pending.pop(path, []):
+            self._resolve_one(ns, parent_path)
 
     def _resolve_all(self) -> None:
         """Resolve all remaining pending namespaces."""
