@@ -10,49 +10,56 @@ Quick Start
 
 .. code-block:: bash
 
-   qk --watch my-task
+   qk :watch my-task
 
 The task runs immediately, then watches for file changes and re-runs whenever a
 change is detected.  Press ``Ctrl+C`` to stop.
 
+Place watch options before the task name. All arguments after the task name
+are passed unchanged to the task:
+
+.. code-block:: bash
+
+   qk :watch --paths src hello --name alice
+
 CLI Options
 -----------
 
-``-w`` / ``--watch``
+``:watch``
    Enable watch mode.  Requires a task name.
 
-``--watch-paths PATH``
+``--paths PATH``
    Directory paths to watch.  Repeatable.  Values are not split on ``;``.
    Paths resolve relative to the task's effective working directory.  Defaults
    to that directory.
 
    .. code-block:: bash
 
-      qk --watch --watch-paths src --watch-paths lib my-task
+      qk :watch --paths src --paths lib my-task
 
-``--watch-ignore-paths PATH``
+``--ignore-paths PATH``
    Directory paths to ignore.  Repeatable.  Values are not split on ``;``.
 
-``--watch-patterns PATTERN``
+``--patterns PATTERN``
    Patterns for changed files.  Repeatable.  Patterns in one value may be
    separated with ``;``, matching ``watchmedo log``.  Use watchdog wildcard
    syntax such as ``**/*.py`` for nested paths.
 
-``--watch-ignore-patterns PATTERN``
+``--ignore-patterns PATTERN``
    Patterns for changed files to ignore.  Repeatable.  Patterns in one value
    may be separated with ``;``.
 
-``--watch-recursive``
+``--recursive``
    Watch directories recursively.  Disabled by default, matching
    ``watchmedo log``.
 
-``--watch-debounce SECS``
+``--debounce SECS``
    Seconds to wait after a change before re-running (default: ``0.5``).
    Prevents rapid re-runs when an IDE auto-formats multiple files on save.
 
    .. code-block:: bash
 
-      qk --watch --watch-debounce 1.0 my-task
+      qk :watch --debounce 1.0 my-task
 
 How It Works
 ------------
@@ -72,7 +79,7 @@ Declarative Watch Configuration
 --------------------------------
 
 Instead of passing the watch options on every
-invocation, you can declare them directly on the task.  When ``qk --watch``
+invocation, you can declare them directly on the task.  When ``qk :watch``
 is used, the CLI picks up these defaults automatically.
 
 **Using the ``@task`` decorator:**
@@ -96,7 +103,7 @@ Then just run:
 
 .. code-block:: bash
 
-   qk --watch lint
+   qk :watch lint
 
 **Using a task class:**
 
@@ -141,16 +148,16 @@ Examples
 
 .. code-block:: bash
 
-   qk --watch --watch-paths src/ build
+   qk :watch --paths src/ build
 
 **Watch with a longer debounce for slow operations:**
 
 .. code-block:: bash
 
-   qk --watch --watch-debounce 2.0 deploy
+   qk :watch --debounce 2.0 deploy
 
 **Watch only specific directories, excluding tests:**
 
 .. code-block:: bash
 
-   qk --watch --watch-paths src/ --watch-ignore-paths tests/ lint
+   qk :watch --paths src/ --ignore-paths tests/ lint

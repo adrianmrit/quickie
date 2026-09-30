@@ -8,6 +8,7 @@ Welcome to Quickie Runner's documentation!
 
 .. toctree::
    introduction
+   cli
    task
    command
    script

@@ -1,15 +1,65 @@
+import json
+import shlex
+import sys
+
 from quickie import script, task, command, OutputMode
 from quickie import console
 from quickie.errors import Skip, Stop
+from quickie.utils.argparser import Arg
 
 
-@task(watch_paths=["./src/quickie"])
-def hello():
-    console.print("Hello world!")
+@task(
+    args=[
+        Arg("--name", required=True),
+    ],
+    watch_paths=["./src/quickie"],
+)
+def hello(name):
+    console.print(f"Hello {name}!")
     console.print_info("This is an info message.")
     console.print_error("This is an error message.")
     console.print_warning("This is a warning message.")
     console.print_success("This is a success message.")
+
+
+@task(
+    args=[
+        Arg("target"),
+        Arg("--name", "-n", default="world"),
+        Arg("--count", "-c", type=int, default=1),
+        Arg("--tag", dest="tags", action="append", default=[]),
+        Arg("--loud", action="store_true"),
+        Arg("--mode", choices=["safe", "fast"], default="safe"),
+        Arg("--paths"),
+    ],
+    extra_args=True,
+)
+def arguments_example(*extra, **options):
+    """Print parsed options and extra arguments as JSON."""
+    print(json.dumps({**options, "extra": extra}))
+
+
+def _extra_command(extra, name):
+    return [
+        sys.executable,
+        "-c",
+        "import json, sys; "
+        "print(json.dumps({'name': sys.argv[1], 'extra': sys.argv[2:]}))",
+        name,
+        *extra,
+    ]
+
+
+@command(args=[Arg("--name", "-n", default="world")], extra_args=True)
+def extra_command_example(*extra, name):
+    """Forward extra arguments to a Python subprocess and print its JSON."""
+    return _extra_command(extra, name)
+
+
+@script(args=[Arg("--name", "-n", default="world")], extra_args=True)
+def extra_script_example(*extra, name):
+    """Forward extra arguments through a shell with safe quoting."""
+    return shlex.join(_extra_command(extra, name))
 
 
 @script(env={"OTHER": "Other"}, bind=True, wd=".", watch_paths=["./src/quickie"])

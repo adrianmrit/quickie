@@ -67,6 +67,10 @@ def identifier_to_task_name(identifier: str) -> str:
     return _UNDERSCORE_SUB_REGEX.sub("-", identifier).strip("-").lower()
 
 
+class _ArgumentSeparator(str):
+    """Identify the parsing separator separately from literal ``--`` values."""
+
+
 class Task:
     """Base class for all tasks."""
 
@@ -410,7 +414,13 @@ class Task:
             tuple.
         """
         if extra_args:
-            parsed_args, extra = parser.parse_known_args(args)
+            parser_args = list(args)
+            separator = _ArgumentSeparator("--")
+            if "--" in parser_args:
+                parser_args[parser_args.index("--")] = separator
+            parsed_args, extra = parser.parse_known_args(parser_args)
+            # argparse may consume the separator while parsing a positional.
+            extra = [arg for arg in extra if arg is not separator]
         else:
             parsed_args = parser.parse_args(args)
             extra = ()
@@ -519,12 +529,6 @@ class Task:
         extra, parsed_args = self.parse_args(
             parser=self.parser, args=args, extra_args=self.extra_args
         )
-        if extra and extra[0] == "--":
-            # -- Can be used to separate task args from extra arguments, but the parser
-            # does not remove it automatically.
-            # We only remove the first occurrence of --, so if there are multiple
-            # occurrences, the rest are passed to the task.
-            extra = extra[1:]
         return self.__call__(*extra, **parsed_args)
 
     def run(self, *args, **kwargs) -> typing.Any:

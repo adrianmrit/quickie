@@ -3,6 +3,7 @@ import re
 import json
 import subprocess
 import sys
+import shlex
 
 import pytest
 from pytest import mark, raises
@@ -10,6 +11,8 @@ from pytest import mark, raises
 from quickie import _cli
 from quickie._argparser import AppArgumentParser
 from quickie._namespace import RootNamespace
+from quickie.commands.autocomplete import _suggest_bash, _suggest_zsh
+from quickie.commands.list_ import ListCommand
 from quickie.errors import SubprocessExitCodeError
 from quickie.errors import Skip, Stop
 from quickie.factories import task
@@ -26,13 +29,26 @@ BIN_LOCATION = os.path.join(BIN_FOLDER, "qk")
     [
         [BIN_LOCATION, "-h"],
         [PYTHON_PATH, "-m", "quickie", "-h", "examples:hello"],
-        [PYTHON_PATH, "-m", "quickie", "examples:hello"],
+        [PYTHON_PATH, "-m", "quickie", "examples:hello", "--name", "alice"],
         [PYTHON_PATH, "-m", "quickie", "-h"],
     ],
 )  # yapf: disable
 def test_from_cli(argv):
     out = subprocess.check_output(argv)
     assert out
+
+
+@mark.integration
+def test_example_hello_requires_name():
+    result = subprocess.run(
+        [PYTHON_PATH, "-m", "quickie", "examples:hello"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2  # noqa: PLR2004
+    assert "the following arguments are required: --name" in result.stderr
+    assert "Hello" not in result.stdout
 
 
 @mark.integration
@@ -99,8 +115,21 @@ def test_default(capsys):
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
 
-    assert "[-h]" in out
+    assert "[OPTIONS]" in out
     assert "\x1b[" not in out
+
+
+@mark.integration
+def test_help(capsys):
+    with raises(SystemExit) as exc_info:
+        _cli.main(["-h"])
+    assert exc_info.value.code == 0
+    out, err = capsys.readouterr()
+    out = re.sub(r"\s+", " ", out)
+    assert "commands:" in out
+    assert "COMMAND" in out
+    assert "TASK" in out
+    assert "ARG" in out
 
 
 @mark.integration
@@ -119,7 +148,7 @@ def test_main_no_args(capsys):
     out = out + err
     # normalize spaces in out, as pytest might add extra spaces when running in vscode
     out = re.sub(r"\s+", " ", out)
-    assert "[-h]" in out
+    assert "[OPTIONS]" in out
 
 
 @mark.integration
@@ -134,7 +163,7 @@ def test_task_not_found(capsys):
 @mark.integration
 def test_list(capsys):
     with raises(SystemExit) as exc_info:
-        _cli.main(["-l"])
+        _cli.main([":list"])
     assert exc_info.value.code == 0, str(capsys.readouterr())
     out, err = capsys.readouterr()
     assert "hello" in out
@@ -154,7 +183,7 @@ def test_list(capsys):
 @mark.integration
 def test_suggest_autocompletion_bash(capsys):
     with raises(SystemExit) as exc_info:
-        _cli.main(["--autocomplete", "bash"])
+        _cli.main([":autocomplete", "bash"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     assert 'eval "$(register-python-argcomplete' in out
@@ -163,7 +192,7 @@ def test_suggest_autocompletion_bash(capsys):
 @mark.integration
 def test_suggest_autocompletion_zsh(capsys):
     with raises(SystemExit) as exc_info:
-        _cli.main(["--autocomplete", "zsh"])
+        _cli.main([":autocomplete", "zsh"])
     assert exc_info.value.code == 0
     out, err = capsys.readouterr()
     assert 'eval "$(register-python-argcomplete' in out
@@ -319,6 +348,92 @@ class TestAutocompletion:
         args, _ = autocomplete_mock.call_args
         assert args[0].description == "Hello world task."
 
+    @mark.integration
+    @pytest.mark.parametrize("comp_line, comp_point", [("qk exa", "6"), ("qk ", "4")])
+    def test_task_name_autocompletion(self, add_env, mocker, comp_line, comp_point):
+        add_env("_ARGCOMPLETE", "1")
+        add_env("COMP_LINE", comp_line)
+        add_env("COMP_POINT", comp_point)
+        autocomplete_mock = mocker.patch("argcomplete.autocomplete")
+        with raises(SystemExit) as exc_info:
+            _cli.main([])
+        assert exc_info.value.code == 0
+        parser = autocomplete_mock.call_args.args[0]
+        task_action = next(
+            action for action in parser._actions if action.dest == "task"
+        )
+        assert type(task_action.completer).__name__ == "TaskCompleter"
+
+    @mark.integration
+    def test_command_autocompletion(self, add_env, mocker):
+        add_env("_ARGCOMPLETE", "1")
+        add_env("COMP_LINE", "qk :")
+        add_env("COMP_POINT", "4")
+        autocomplete_mock = mocker.patch("argcomplete.autocomplete")
+        with raises(SystemExit) as exc_info:
+            _cli.main([])
+        assert exc_info.value.code == 0
+        autocomplete_mock.assert_called_once_with(_cli._parser)
+
+    @mark.integration
+    def test_root_completion_parser_includes_options_and_commands(self):
+        parser = AppArgumentParser()
+        option_strings = {
+            option for action in parser._actions for option in action.option_strings
+        }
+        assert {"-h", "--help", "-m", "--module", "-g", "--global"} <= option_strings
+        command_action = parser._subparsers._group_actions[0]
+        assert set(command_action.completer.choices) == {
+            ":list",
+            ":watch",
+            ":init",
+            ":autocomplete",
+        }
+
+    @mark.integration
+    def test_watch_completion_uses_task_parser(self, add_env, mocker):
+        add_env("_ARGCOMPLETE", "1")
+        add_env("COMP_LINE", "qk :watch hello ")
+        add_env("COMP_POINT", "16")
+        autocomplete_mock = mocker.patch("argcomplete.autocomplete")
+        with raises(SystemExit) as exc_info:
+            _cli.main([])
+        assert exc_info.value.code == 0
+        autocomplete_mock.assert_called_once()
+        assert autocomplete_mock.call_args.args[0].description == "Hello world task."
+
+    @mark.integration
+    def test_watch_completion_without_task_uses_command_parser(
+        self, add_env, mocker, capsys
+    ):
+        add_env("_ARGCOMPLETE", "1")
+        add_env("COMP_LINE", "qk :watch ")
+        add_env("COMP_POINT", "10")
+        autocomplete_mock = mocker.patch("argcomplete.autocomplete")
+        with raises(SystemExit) as exc_info:
+            _cli.main([])
+        assert exc_info.value.code == 0
+        assert not capsys.readouterr().err
+        assert (
+            autocomplete_mock.call_args.args[0]
+            is _cli._parser.command_parsers[":watch"]
+        )
+
+    @mark.integration
+    @pytest.mark.parametrize("comp_line", ["qk :autocomplete ", "qk :autocomplete b"])
+    def test_autocomplete_command_suggests_shells(self, add_env, mocker, comp_line):
+        add_env("_ARGCOMPLETE", "1")
+        add_env("COMP_LINE", comp_line)
+        add_env("COMP_POINT", str(len(comp_line)))
+        autocomplete_mock = mocker.patch("argcomplete.autocomplete")
+        with raises(SystemExit) as exc_info:
+            _cli.main([])
+        assert exc_info.value.code == 0
+        assert (
+            autocomplete_mock.call_args.args[0]
+            is _cli._parser.command_parsers[":autocomplete"]
+        )
+
 
 class TestPartitionArgs:
     def setup_method(self):
@@ -361,10 +476,151 @@ class TestPartitionArgs:
         assert ns.task == "my-task"
         assert ns.args == ["arg1", "arg2", "--extra"]
 
+    @pytest.mark.parametrize("command", [[], [":run"], [":watch"]])
+    @pytest.mark.parametrize(
+        "task_args",
+        [
+            ["--name", "alice"],
+            ["first", "--name", "alice", "last", "--name", "bob"],
+            ["--name=alice", "--count", "-2"],
+            ["--paths", "task-path", "--help", "-v", "-g"],
+            ["--", "--name", "alice"],
+        ],
+    )
+    def test_task_arguments_preserve_order(self, command, task_args):
+        ns = self.parser.parse_args([*command, "hello", *task_args])
+        assert ns.task == "hello"
+        assert ns.args == task_args
+        assert ns.verbosity == 0
+        assert not ns.use_global
+        if command == [":watch"]:
+            assert ns.paths is None
+
+    def test_watch_options_precede_task_arguments(self):
+        ns = self.parser.parse_args(
+            ["-v", ":watch", "--paths", "src", "hello", "--paths", "task-path"]
+        )
+        assert ns.verbosity == 1
+        assert ns.paths == ["src"]
+        assert ns.args == ["--paths", "task-path"]
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["--unknown", "hello"],
+            [":watch", "--unknown", "hello"],
+            [":list", "--unknown"],
+            [":watch"],
+        ],
+    )
+    def test_invalid_cli_arguments_still_fail(self, argv):
+        with raises(SystemExit) as exc_info:
+            self.parser.parse_args(argv)
+        assert exc_info.value.code == 2  # noqa: PLR2004
+
+    def test_colon_argument_is_passed_to_task(self):
+        ns = self.parser.parse_args(["my-task", ":value"])
+        assert ns.task == "my-task"
+        assert ns.args == [":value"]
+
+    def test_watch_command_has_own_options(self):
+        ns = self.parser.parse_args(
+            [":watch", "--paths", "src", "--debounce", "1.5", "my-task"]
+        )
+        assert ns.command == ":watch"
+        assert ns.paths == ["src"]
+        assert ns.debounce == 1.5
+
     def test_empty_args(self):
         ns = self.parser.parse_args([])
         assert ns.task is None
         assert ns.args == []
+
+
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize(
+    "comp_line, expected, excluded",
+    [
+        ("qk :", {":watch", ":list", ":init", ":autocomplete"}, {":run"}),
+        ("qk :watch ", {"hello", "--paths"}, {":run"}),
+        ("qk hel", {"hello"}, {":run"}),
+        ("qk :watch hel", {"hello"}, {":run"}),
+        ("qk hello --", {"--name"}, {"--debounce", "--module"}),
+        ("qk :run hello --", {"--name"}, {"--module"}),
+        ("qk :watch hello --", {"--name"}, {"--debounce", "--recursive"}),
+        ("qk hello --name a", {"alice"}, {"bob"}),
+        ("qk :watch hello --name a", {"alice"}, {"bob"}),
+        ("qk hello --name=a", {"--name=alice"}, {"--name=bob"}),
+        ("qk -v hello --", {"--name"}, {"--module"}),
+        ("qk --module=tasks hello --", {"--name"}, {"--module"}),
+        ("qk -m tasks :watch --paths src hello --", {"--name"}, {"--debounce"}),
+        ("qk :watch --paths src --debounce 1 hello --name a", {"alice"}, {"bob"}),
+        ("qk :watch --paths hello hello --name a", {"alice"}, {"bob"}),
+        ("qk :autocomplete ", {"bash", "zsh"}, {"hello"}),
+        ("qk :watch --debounce ", set(), {"hello"}),
+        ("python -m quickie hello --", {"--name"}, {"--module"}),
+        ("python -m quickie :watch hello --name a", {"alice"}, {"bob"}),
+        ("python qk hello --", {"--name"}, {"--module"}),
+    ],
+)
+def test_real_shell_completion(tmp_path, cached, comp_line, expected, excluded):
+    project = tmp_path / "_qk"
+    project.mkdir()
+    (project / "__init__.py").write_text(
+        "import os\n"
+        "from quickie import task\n"
+        "from quickie.utils.argparser import Arg\n"
+        "if os.environ.get('FAIL_TASK_IMPORT'):\n"
+        "    raise RuntimeError('Cached completion must not import tasks')\n"
+        "@task(args=[Arg('--name', choices=['alice', 'bob'])])\n"
+        "def hello(name=None):\n"
+        "    print(name)\n"
+    )
+    env = dict(os.environ, QK_LAUNCHER_RUNNING="true")
+    if cached:
+        subprocess.run(
+            [PYTHON_PATH, "-m", "quickie", "-m", str(project), ":list", "--json"],
+            env=env,
+            check=True,
+            capture_output=True,
+            cwd=tmp_path,
+        )
+        env["FAIL_TASK_IMPORT"] = "true"
+
+    # Use an absolute module path while retaining real shell argument boundaries.
+    words = shlex.split(comp_line)
+    if words[:3] == ["python", "-m", "quickie"]:
+        module_start = 3
+    elif words[:2] == ["python", "qk"]:
+        module_start = 2
+    else:
+        module_start = 1
+    if "-m" in words[module_start:]:
+        words[words.index("-m", module_start) + 1] = str(project)
+    elif "--module=tasks" in words:
+        words[words.index("--module=tasks")] = f"--module={project}"
+    line = shlex.join(words) + (" " if comp_line.endswith(" ") else "")
+    output = tmp_path / "completions"
+    env.update(
+        _ARGCOMPLETE=str(module_start),
+        COMP_LINE=line,
+        COMP_POINT=str(len(line)),
+        _ARGCOMPLETE_STDOUT_FILENAME=str(output),
+        _ARGCOMPLETE_IFS="\013",
+    )
+    result = subprocess.run(
+        [PYTHON_PATH, "-m", "quickie", *words[module_start:]],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    assert not result.stderr
+    completions = {value.strip() for value in output.read_text().split("\013")}
+    assert expected <= completions
+    assert not excluded & completions
 
 
 def test_unrecognized_args(capsys):
@@ -424,7 +680,7 @@ def test_keyboard_interrupt(mocker, capsys):
 @mark.integration
 def test_init_flag(capsys, tmp_path):
     with raises(SystemExit) as exc_info:
-        _cli.main(["--init", str(tmp_path)])
+        _cli.main([":init", str(tmp_path)])
     assert exc_info.value.code == 0
     assert (tmp_path / "_qk").exists()
     assert (tmp_path / "_qk" / "__init__.py").exists()
@@ -435,7 +691,7 @@ def test_init_flag_already_initialized(capsys, tmp_path):
     existing_dir = tmp_path / "_qk"
     existing_dir.mkdir()
     with raises(SystemExit) as exc_info:
-        _cli.main(["--init", str(tmp_path)])
+        _cli.main([":init", str(tmp_path)])
     assert exc_info.value.code == 0
     out, _ = capsys.readouterr()
     assert "already initialized" in out
@@ -474,8 +730,8 @@ class TestListTasks:
         mocker.patch("quickie.app._tasks", tasks_ns)
         mocker.patch("quickie.app.load_tasks")
 
-        main_obj = _cli.Main(argv=["--list"])
-        main_obj.list_tasks()
+        main_obj = _cli.Main(argv=[":list"])
+        ListCommand._list_tasks()
 
         out, _ = capsys.readouterr()
         assert "Available tasks" in out
@@ -497,8 +753,7 @@ class TestListTasks:
         mocker.patch("quickie.app._tasks", tasks_ns)
         mocker.patch("quickie.app.load_tasks")
 
-        main_obj = _cli.Main(argv=["--list"])
-        main_obj.list_tasks()
+        ListCommand._list_tasks()
 
         out, _ = capsys.readouterr()
         # Aliases should be shown in the Aliases column
@@ -514,8 +769,7 @@ class TestListTasks:
         tasks_ns.register(test_task, namespace="ci:check")
         mocker.patch("quickie.app._tasks", tasks_ns)
 
-        main_obj = _cli.Main(argv=["--list", "--list-filter", "CHECK"])
-        main_obj.list_tasks(main_obj.namespace.list_filter)
+        ListCommand._list_tasks("CHECK")
 
         out, _ = capsys.readouterr()
         assert "test-task" in out
@@ -532,8 +786,9 @@ class TestListTasks:
         tasks_ns.register(sample_task, namespace="sample-task")
         mocker.patch("quickie.app._tasks", tasks_ns)
 
-        main_obj = _cli.Main(argv=["--list", "--list-filter"])
-        main_obj.list_tasks(main_obj.namespace.list_filter)
+        mocker.patch("quickie.app.load_tasks")
+
+        ListCommand._list_tasks("")
 
         assert "sample-task" in capsys.readouterr().out
 
@@ -554,8 +809,7 @@ class TestListTasksJson:
         mocker.patch("quickie.app._tasks", tasks_ns)
         mocker.patch("quickie.app.load_tasks")
 
-        main_obj = _cli.Main(argv=["--list-json"])
-        main_obj.list_tasks_json()
+        ListCommand._list_tasks_json()
 
         out, _ = capsys.readouterr()
         import json
@@ -575,8 +829,7 @@ class TestListTasksJson:
         tasks_ns.register(check, namespace="ci:verify")
         mocker.patch("quickie.app._tasks", tasks_ns)
 
-        main_obj = _cli.Main(argv=["--list-json"])
-        main_obj.list_tasks_json()
+        ListCommand._list_tasks_json()
 
         data = json.loads(capsys.readouterr().out)
         assert data[0]["name"] == "ci:check"
@@ -592,8 +845,7 @@ class TestListTasksJson:
         tasks_ns.register(check, namespace="ci:check")
         mocker.patch("quickie.app._tasks", tasks_ns)
 
-        main_obj = _cli.Main(argv=["--list-json"])
-        main_obj.list_tasks_json()
+        ListCommand._list_tasks_json()
 
         data = json.loads(capsys.readouterr().out)
         assert data[0]["name"] == "check"
@@ -609,8 +861,7 @@ class TestListTasksJson:
         tasks_ns.register(task_b, namespace="n:b")
         mocker.patch("quickie.app._tasks", tasks_ns)
 
-        main_obj = _cli.Main(argv=["--list-json"])
-        main_obj.list_tasks_json()
+        ListCommand._list_tasks_json()
 
         data = json.loads(capsys.readouterr().out)
         assert data[0]["name"] == "n:b"
@@ -626,8 +877,7 @@ class TestListTasksJson:
         tasks_ns.register(task_obj, namespace="n:a")
         mocker.patch("quickie.app._tasks", tasks_ns)
 
-        main_obj = _cli.Main(argv=["--list-json"])
-        main_obj.list_tasks_json()
+        ListCommand._list_tasks_json()
 
         data = json.loads(capsys.readouterr().out)
         assert data[0]["name"] == "n:a"
@@ -641,8 +891,7 @@ class TestSuggestAutocompletion:
         """Test bash autocompletion suggestion."""
         mocker.patch("sys.argv", ["qk"])
 
-        main_obj = _cli.Main(argv=[])
-        main_obj.suggest_autocompletion_bash()
+        _suggest_bash()
 
         out, _ = capsys.readouterr()
         assert "bashrc" in out or "bash_profile" in out
@@ -652,8 +901,7 @@ class TestSuggestAutocompletion:
         """Test zsh autocompletion suggestion."""
         mocker.patch("sys.argv", ["qk"])
 
-        main_obj = _cli.Main(argv=[])
-        main_obj.suggest_autocompletion_zsh()
+        _suggest_zsh()
 
         out, _ = capsys.readouterr()
         assert "zshrc" in out
@@ -742,7 +990,7 @@ class TestMainErrorHandling:
     def test_main_with_init_flag(self, capsys, tmp_path):
         """Test main() with --init flag."""
         with raises(SystemExit) as exc_info:
-            _cli.main(["--init", str(tmp_path)])
+            _cli.main([":init", str(tmp_path)])
         assert exc_info.value.code == 0
         assert (tmp_path / "_qk").exists()
 
@@ -763,7 +1011,7 @@ class TestMainErrorHandling:
         mocker.patch("quickie.app._tasks", tasks_ns)
 
         with raises(SystemExit):
-            _cli.main(["--global", "--list"])
+            _cli.main(["--global", ":list"])
 
         out, _ = capsys.readouterr()
         assert "Available tasks" in out
@@ -780,6 +1028,22 @@ class TestWatchTask:
         mocker.patch("quickie.app._tasks", ns)
         mocker.patch("quickie.app.load_tasks")
 
+    @pytest.mark.parametrize("command", [[], [":watch", "--paths", "src"]])
+    def test_task_options_reach_each_execution(self, mocker, command):
+        watcher = mocker.patch("quickie._watcher.FileWatcher").return_value
+        watcher.wait_for_changes.side_effect = [True, False]
+        names = []
+
+        @task(args=["--name"])
+        def hello(name):
+            names.append(name)
+
+        self._register_task(mocker, hello, name="hello")
+        with raises(SystemExit) as exc_info:
+            _cli.main([*command, "hello", "--name", "alice"])
+        assert exc_info.value.code == 0
+        assert names == (["alice", "alice"] if command else ["alice"])
+
     def test_watch_task_runs_task_once(self, mocker, capsys):
         """watch_task runs the task immediately on start."""
         mock_watcher_class = mocker.patch("quickie._watcher.FileWatcher")
@@ -793,7 +1057,7 @@ class TestWatchTask:
         self._register_task(mocker, watch_me)
 
         with raises(SystemExit):
-            _cli.main(["--watch", "watch-me"])
+            _cli.main([":watch", "watch-me"])
 
         out, _ = capsys.readouterr()
         assert "Watching for changes" in out
@@ -814,7 +1078,7 @@ class TestWatchTask:
         self._register_task(mocker, watch_me)
 
         with raises(SystemExit):
-            _cli.main(["--watch", "watch-me"])
+            _cli.main([":watch", "watch-me"])
 
         assert events == ["task", "start"]
 
@@ -832,7 +1096,7 @@ class TestWatchTask:
         self._register_task(mocker, watch_me)
 
         with raises(SystemExit):
-            _cli.main(["--watch", "watch-me"])
+            _cli.main([":watch", "watch-me"])
 
         out, _ = capsys.readouterr()
         assert "Changes detected" in out
@@ -853,8 +1117,8 @@ class TestWatchTask:
         with raises(SystemExit):
             _cli.main(
                 [
-                    "--watch",
-                    "--watch-ignore-patterns",
+                    ":watch",
+                    "--ignore-patterns",
                     "build/",
                     "watch-me",
                 ]
@@ -878,8 +1142,8 @@ class TestWatchTask:
         with raises(SystemExit):
             _cli.main(
                 [
-                    "--watch",
-                    "--watch-debounce",
+                    ":watch",
+                    "--debounce",
                     "2.0",
                     "watch-me",
                 ]
@@ -901,7 +1165,7 @@ class TestWatchTask:
         self._register_task(mocker, watch_me)
 
         with raises(SystemExit):
-            _cli.main(["--watch", "watch-me"])
+            _cli.main([":watch", "watch-me"])
 
         _, kwargs = mock_watcher_class.call_args
         assert kwargs["watch_paths"] == ["src/"]
@@ -922,8 +1186,8 @@ class TestWatchTask:
         with raises(SystemExit):
             _cli.main(
                 [
-                    "--watch",
-                    "--watch-paths",
+                    ":watch",
+                    "--paths",
                     "lib/",
                     "watch-me",
                 ]
@@ -947,12 +1211,12 @@ class TestWatchTask:
         with raises(SystemExit):
             _cli.main(
                 [
-                    "--watch",
-                    "--watch-paths",
+                    ":watch",
+                    "--paths",
                     "src",
-                    "--watch-patterns",
+                    "--patterns",
                     "*.py;*.pyi",
-                    "--watch-recursive",
+                    "--recursive",
                     "watch-me",
                 ]
             )
@@ -975,7 +1239,7 @@ class TestWatchTask:
         self._register_task(mocker, watch_me)
 
         with raises(SystemExit):
-            _cli.main(["--watch", "watch-me"])
+            _cli.main([":watch", "watch-me"])
 
         out, _ = capsys.readouterr()
         assert "Watching stopped" in out
@@ -983,8 +1247,8 @@ class TestWatchTask:
     def test_watch_without_task_exits_with_error(self, capsys):
         """--watch without a task exits with error."""
         with raises(SystemExit) as exc_info:
-            _cli.main(["--watch"])
-        assert exc_info.value.code == 1
+            _cli.main([":watch"])
+        assert exc_info.value.code == 2
 
     def test_watch_task_default_watch_paths(self, mocker):
         """watch_task defaults to ['.'] when no paths given."""
@@ -999,7 +1263,7 @@ class TestWatchTask:
         self._register_task(mocker, watch_me)
 
         with raises(SystemExit):
-            _cli.main(["--watch", "watch-me"])
+            _cli.main([":watch", "watch-me"])
 
         _, kwargs = mock_watcher_class.call_args
         assert kwargs["watch_paths"] == ["."]
@@ -1017,6 +1281,6 @@ class TestWatchTask:
         self._register_task(mocker, watch_me)
 
         with raises(SystemExit):
-            _cli.main(["--watch", "watch-me"])
+            _cli.main([":watch", "watch-me"])
 
         instance.stop.assert_called_once()

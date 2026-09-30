@@ -14,6 +14,11 @@ In addition, you can pass ``extra_args=True`` to the task decorator to allow unk
 Arguments will be automatically parsed when the task is run, and passed as keyword arguments to the task function. If
 ``extra_args=True`` is set, the unknown arguments will be passed as positional arguments.
 
+Options such as ``--name`` are optional unless declared with
+``Arg("--name", required=True)``. A plain positional argument such as ``"name"``
+is required by default. Requirements come from the argument declarations, not
+the task function's signature.
+
 .. code-block:: python
 
     from quickie import Arg, task
@@ -54,6 +59,24 @@ For example, if you have a task defined as:
 If you try to get the help message from ``git commit``, you might try running ``qk commit --help``, however this will
 will show the help message from our task instead. So what you want to do is run ``qk commit -- --help``, which will
 result in ``--help`` being passed as a positional argument to the task.
+
+The first ``--`` stops option parsing and is not forwarded as an extra argument.
+Subsequent ``--`` tokens are literal arguments and are preserved. Known task
+options before the separator still become keyword arguments.
+
+The repository includes examples that print their received arguments as JSON:
+
+.. code-block:: bash
+
+    qk examples:arguments-example target --name alice --tag one --tag two extra
+    qk examples:arguments-example target -- --name alice -- last
+    qk examples:extra-command-example --name alice --foreign value
+    qk examples:extra-script-example -- "two words" "it's literal"
+
+``arguments-example`` combines a required positional argument, optional typed
+options, repeated tags, and extra arguments. The command and script examples
+forward extra arguments to a subprocess; the script uses shell quoting to
+preserve each value.
 
 
 Auto completion

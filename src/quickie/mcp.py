@@ -122,9 +122,9 @@ async def _fetch_tasks(project: _Project, filter_text: str | None = None) -> lis
         cmd_prefix = [sys.executable, "-m", "quickie"]
         cwd_for_proc = str(project.project_root) if project.project_root else None
 
-    list_args = [*project.extra_args, "-qqqqqqqqqqq", "--list-json"]
+    list_args = [*project.extra_args, "-qqqqqqqqqqq", ":list", "--json"]
     if filter_text:
-        list_args.extend(["--list-filter", filter_text])
+        list_args.extend(["--filter", filter_text])
     proc = await asyncio.create_subprocess_exec(
         *cmd_prefix,
         *list_args,

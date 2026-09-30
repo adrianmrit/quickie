@@ -250,7 +250,8 @@ async def test_list_tasks_delegates_to_local_exe():
         async with Client(mcp) as client:
             result = await client.call_tool("list_tasks", {})
 
-    assert "--list-json" in captured_cmd["cmd"]
+    assert ":list" in captured_cmd["cmd"]
+    assert "--json" in captured_cmd["cmd"]
     assert captured_cmd["cmd"][0] == "/project/.venv/bin/qk"
     assert result.data[0]["project"] == "myproject"
     assert result.data[0]["project_root"] == "/project"
@@ -271,8 +272,8 @@ async def test_list_tasks_forwards_filter():
         async with Client(mcp) as client:
             await client.call_tool("list_tasks", {"filter": "deploy"})
 
-    assert "--list-filter" in captured_cmd["cmd"]
-    index = captured_cmd["cmd"].index("--list-filter")
+    assert "--filter" in captured_cmd["cmd"]
+    index = captured_cmd["cmd"].index("--filter")
     assert captured_cmd["cmd"][index + 1] == "deploy"
 
 

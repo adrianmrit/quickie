@@ -114,7 +114,7 @@ class RootNamespace(collections.abc.Mapping[str, "Task"]):
 
     def _scan_obj(self, obj, path: str) -> None:
         """Register tasks and defer namespaces found directly on *obj.__dict__*."""
-        for v in obj.__dict__.values():
+        for v in list(obj.__dict__.values()):
             if is_task_instance(v):
                 self._register_task(path, v)
             elif isinstance(v, Namespace):

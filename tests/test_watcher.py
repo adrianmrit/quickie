@@ -3,7 +3,7 @@
 import time
 import threading
 
-from pytest import mark
+from pytest import mark, raises
 
 from quickie._watcher import FileWatcher, _DEFAULT_EXCLUDE
 from quickie._argparser import AppArgumentParser
@@ -507,71 +507,67 @@ class TestWatchModeCLI:
     def test_watch_flag_parsed(self):
         """--watch flag is parsed correctly."""
         parser = AppArgumentParser()
-        namespace, _ = parser.parse_known_args(["--watch", "my-task"])
-        assert namespace.watch is True
+        namespace, _ = parser.parse_known_args([":watch", "my-task"])
+        assert namespace.command == ":watch"
         assert namespace.task == "my-task"
 
     def test_watch_short_flag(self):
         """-w flag is parsed correctly."""
         parser = AppArgumentParser()
-        namespace, _ = parser.parse_known_args(["-w", "my-task"])
-        assert namespace.watch is True
+        namespace, _ = parser.parse_known_args([":watch", "my-task"])
+        assert namespace.command == ":watch"
         assert namespace.task == "my-task"
 
     def test_watch_paths_parsed(self):
         """--watch-paths is parsed as a list."""
         parser = AppArgumentParser()
         namespace, _ = parser.parse_known_args(
-            ["--watch", "--watch-paths", "src/", "--watch-paths", "lib/", "my-task"]
+            [":watch", "--paths", "src/", "--paths", "lib/", "my-task"]
         )
-        assert namespace.watch_paths == ["src/", "lib/"]
+        assert namespace.paths == ["src/", "lib/"]
 
     def test_watch_paths_split_by_cli(self):
         """Semicolon-separated watch paths remain one parser value."""
         parser = AppArgumentParser()
         namespace, _ = parser.parse_known_args(
-            ["--watch", "--watch-paths", "src;*.py", "my-task"]
+            [":watch", "--paths", "src;*.py", "my-task"]
         )
-        assert namespace.watch_paths == ["src;*.py"]
+        assert namespace.paths == ["src;*.py"]
 
     def test_watch_recursive_parsed(self):
         """--watch-recursive enables recursive watching."""
         parser = AppArgumentParser()
-        namespace, _ = parser.parse_known_args(
-            ["--watch", "--watch-recursive", "my-task"]
-        )
-        assert namespace.watch_recursive is True
+        namespace, _ = parser.parse_known_args([":watch", "--recursive", "my-task"])
+        assert namespace.recursive is True
 
     def test_watch_ignore_options_parsed(self):
         """Watch ignore paths and patterns are parsed as lists."""
         parser = AppArgumentParser()
         namespace, _ = parser.parse_known_args(
             [
-                "--watch",
-                "--watch-ignore-paths",
+                ":watch",
+                "--ignore-paths",
                 "build/",
-                "--watch-ignore-patterns",
+                "--ignore-patterns",
                 "*.pyc;*.pyo",
                 "my-task",
             ]
         )
-        assert namespace.watch_ignore_paths == ["build/"]
-        assert namespace.watch_ignore_patterns == ["*.pyc;*.pyo"]
+        assert namespace.ignore_paths == ["build/"]
+        assert namespace.ignore_patterns == ["*.pyc;*.pyo"]
 
     def test_watch_without_task(self):
         """--watch without a task leaves task as None."""
         parser = AppArgumentParser()
-        namespace, _ = parser.parse_known_args(["--watch"])
-        assert namespace.watch is True
-        assert namespace.task is None
+        with raises(SystemExit):
+            parser.parse_known_args([":watch"])
 
     def test_watch_with_task_args(self):
         """--watch with task and task args."""
         parser = AppArgumentParser()
         namespace, _ = parser.parse_known_args(
-            ["--watch", "--watch-paths", "src/", "my-task", "--", "extra", "args"]
+            [":watch", "--paths", "src/", "my-task", "--", "extra", "args"]
         )
-        assert namespace.watch is True
         assert namespace.task == "my-task"
         assert namespace.args == ["--", "extra", "args"]
 
@@ -579,12 +575,12 @@ class TestWatchModeCLI:
         """--watch-debounce is parsed as a float."""
         parser = AppArgumentParser()
         namespace, _ = parser.parse_known_args(
-            ["--watch", "--watch-debounce", "1.5", "my-task"]
+            [":watch", "--debounce", "1.5", "my-task"]
         )
-        assert namespace.watch_debounce == 1.5
+        assert namespace.debounce == 1.5
 
     def test_watch_defaults_are_none(self):
         """--watch-debounce defaults to None."""
         parser = AppArgumentParser()
-        namespace, _ = parser.parse_known_args(["--watch", "my-task"])
-        assert namespace.watch_debounce is None
+        namespace, _ = parser.parse_known_args([":watch", "my-task"])
+        assert namespace.debounce is None

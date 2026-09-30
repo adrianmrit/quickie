@@ -1,11 +1,13 @@
 """Custom argument parser for quickie."""
 
+import sys
 import typing
-from argparse import SUPPRESS, ArgumentParser
+from argparse import SUPPRESS, ArgumentParser, RawDescriptionHelpFormatter
 
 import argcomplete
 
 from quickie._meta import __version__ as version
+from quickie.commands import COMMANDS
 from quickie.completion._internal import TaskCompleter
 
 
@@ -52,7 +54,18 @@ class AppArgumentParser(BaseArgumentParser):
 
     @typing.override
     def __init__(self):
-        super().__init__(description="A CLI tool for quick tasks.")
+        super().__init__(
+            usage="qk [OPTIONS] COMMAND ... | qk [OPTIONS] TASK [ARGS ...]",
+            description="A CLI tool for quick tasks.",
+            epilog=(
+                "Examples:\n"
+                "  qk build\n"
+                "  qk test unit --fast\n"
+                "  qk :list\n"
+                "  qk :watch --paths src build"
+            ),
+            formatter_class=RawDescriptionHelpFormatter,
+        )
         self._add_app_arguments()
 
     def _add_app_arguments(self) -> None:
@@ -67,136 +80,116 @@ class AppArgumentParser(BaseArgumentParser):
             dest="use_global",
             help="Use global tasks from ~/_qkg instead of project tasks",
         )
-        self.add_argument("-l", "--list", action="store_true", help="List tasks")
-        self.add_argument(
-            "-lf",
-            "--list-filter",
-            nargs="?",
-            const="",
-            metavar="TEXT",
-            help="Filter listed tasks by invocation name or alias",
+        self.set_defaults(task=None, args=[])
+        commands = self.add_subparsers(
+            dest="command",
+            title="commands",
+            description="Built in commands.",
+            metavar="COMMAND",
+            parser_class=ArgumentParser,
+        )
+        self.commands_action = commands
+        self.command_parsers: dict[str, ArgumentParser] = {}
+        # Register each command, letting it configure its own parser
+        public_command_names: list[str] = []
+        for name, command in COMMANDS.items():
+            if name == ":run":
+                # :run is hidden from help; kept as the default runner for
+                # bare task names via _normalize_args.
+                run = commands.add_parser(":run", help=SUPPRESS, add_help=False)
+                commands._choices_actions.pop()
+                self.run_parser = run
+                self.command_parsers[":run"] = run
+            else:
+                parser = commands.add_parser(
+                    name,
+                    help=command.__doc__,
+                    usage=f"qk {name} [OPTIONS]",
+                    description=command.__doc__,
+                )
+                public_command_names.append(name)
+                self.command_parsers[name] = parser
+            command.configure_parser(run if name == ":run" else parser)  # type: ignore[possibly-undefined]
+        commands.completer = argcomplete.completers.ChoicesCompleter(  # type: ignore
+            public_command_names  # type: ignore[arg-type]
         )
         self.add_argument(
-            "--list-json",
-            action="store_true",
-            dest="list_json",
+            "task_name",
+            nargs="?",
+            metavar="TASK",
+            help="Name of the task to run",
+        ).completer = TaskCompleter()  # type: ignore
+        self.add_argument(
+            "task_args",
+            nargs="*",
+            metavar="ARGS",
+            help="Arguments passed to the task",
+        )
+        self.task_completion_parser = BaseArgumentParser(
+            prog=self.prog,
+            description=self.description,
+            add_help=False,
+        )
+        self.task_completion_parser.add_argument(
+            "-m", "--module", type=str, help=SUPPRESS
+        )
+        self.task_completion_parser.add_argument(
+            "-g", "--global", action="store_true", dest="use_global", help=SUPPRESS
+        )
+        self.task_completion_parser.add_argument(
+            "-h", "--help", action="help", help="Show this help message and exit"
+        )
+        self.task_completion_parser.add_argument(
+            "task",
+            nargs="?",
             help=SUPPRESS,
+        ).completer = TaskCompleter(  # type: ignore
+            {
+                name: command.__doc__ or ""
+                for name, command in COMMANDS.items()
+                if name != ":run"
+            }
         )
-        self.add_argument(
-            "--init",
-            nargs="?",
-            help="Initialize a quickie project in the directory",
-            const=".",
-            metavar="DIR",
-        ).completer = argcomplete.completers.FilesCompleter()  # type: ignore
-        self.add_argument(
-            "--autocomplete",
-            help="Suggest autocompletion for the shell",
-            dest="suggest_auto_completion",
-            choices=["bash", "zsh"],
-        ).completer = argcomplete.completers.ChoicesCompleter(  # type: ignore
-            ["bash", "zsh"]
-        )
-        self.add_argument(
-            "-w",
-            "--watch",
-            action="store_true",
-            dest="watch",
-            help="Watch for file changes and re-run the task",
-        )
-        self.add_argument(
-            "--watch-paths",
-            action="append",
-            dest="watch_paths",
-            metavar="PATH",
-            help="Directory paths to watch (repeatable). Defaults to the task "
-            "working directory.",
-        )
-        self.add_argument(
-            "--watch-ignore-paths",
-            action="append",
-            dest="watch_ignore_paths",
-            metavar="PATH",
-            help="Directory paths to ignore (repeatable).",
-        )
-        self.add_argument(
-            "--watch-patterns",
-            action="append",
-            dest="watch_patterns",
-            metavar="PATTERN",
-            help="Patterns for changed files (repeatable; separate patterns with ';').",
-        )
-        self.add_argument(
-            "--watch-ignore-patterns",
-            action="append",
-            dest="watch_ignore_patterns",
-            metavar="PATTERN",
-            help="Patterns to ignore (repeatable; separate patterns with ';').",
-        )
-        self.add_argument(
-            "--watch-recursive",
-            action="store_true",
-            dest="watch_recursive",
-            default=None,
-            help="Watch directories recursively (default: false).",
-        )
-        self.add_argument(
-            "--watch-debounce",
-            type=float,
-            dest="watch_debounce",
-            metavar="SECS",
-            default=None,
-            help="Seconds to wait after a change before re-running (default: 0.5). "
-            "Prevents rapid re-runs when multiple files change at once.",
-        )
-        self.add_argument("task", nargs="?", help="The task to run").completer = (  # type: ignore
-            TaskCompleter()
-        )
-        # This does not need completion as it is handled by the task completer
-        self.add_argument(
-            "args", nargs="*", help="The arguments to pass to the task"
-        ).completer = argcomplete.completers.SuppressCompleter()  # type: ignore
 
-        self._value_flags: frozenset[str] = frozenset(
-            opt
-            for action in self._actions
-            for opt in action.option_strings
-            if action.nargs is None
-        )
+    def _command_index(self, args: list[str]) -> int | None:
+        """Locate the command or task after global options."""
+        value_flags = {"-m", "--module", "--log-file"}
+        iterator = iter(enumerate(args))
+        for index, arg in iterator:
+            if arg in value_flags:
+                next(iterator, None)
+            elif not arg.startswith("-"):
+                return index
+        return None
+
+    def _normalize_args(self, args: list[str]) -> list[str]:
+        """Route ordinary task invocations through the hidden run subcommand."""
+        index = self._command_index(args)
+        if index is not None and not args[index].startswith(":"):
+            return args[:index] + [":run"] + args[index:]
+        return args
+
+    @typing.override
+    def parse_args(self, args=None, namespace=None):
+        if args is None:
+            args = sys.argv[1:]
+        parsed, unknown = self.parse_known_args(args, namespace)
+        if unknown:
+            self.error(f"unrecognized arguments: {' '.join(unknown)}")
+        return parsed
 
     @typing.override
     def parse_known_args(self, args=None, namespace=None):
-        qk_args, task_args = self.partition_args(args)
-        namespace, argv = super().parse_known_args(qk_args, namespace)
-
-        if argv:
-            # Because the unknown arguments are not task arguments, we raise an error
-            msg = "unrecognized arguments: %s"
-            self.error(msg % " ".join(argv))
-
-        namespace.args = task_args
-        return namespace, []
-
-    def partition_args(self, args) -> tuple[list[str], list[str]]:
-        """Split raw argv into (qk_args, task_args).
-
-        qk_args contains all flags and values that belong to quickie itself,
-        up to and including the task name. task_args contains everything after.
-        """
-        qk_args = []
-        task_args = []
-        args = iter(args)
-        while (arg := next(args, None)) is not None:
-            if arg in self._value_flags:
-                qk_args.append(arg)
-                qk_args.append(next(args))
-            elif arg.startswith("-"):
-                qk_args.append(arg)
-            else:
-                qk_args.append(arg)
-                task_args = list(args)
-
-        return qk_args, task_args
+        if args is None:
+            args = sys.argv[1:]
+        normalized = self._normalize_args(list(args))
+        parsed, unknown = super().parse_known_args(normalized, namespace)
+        if parsed.command in (":run", ":watch") and parsed.task:
+            tail_index = len(normalized) - len(parsed.args)
+            # argparse consumes a separator immediately following the task.
+            if normalized[tail_index - 1] == "--":
+                parsed.args.insert(0, "--")
+        return parsed, unknown
 
 
 class MCPArgumentParser(BaseArgumentParser):

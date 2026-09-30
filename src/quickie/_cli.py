@@ -1,25 +1,32 @@
 """The CLI entry of quickie."""
 
-import json
 import os
 import sys
-from functools import wraps
+from contextlib import redirect_stderr
+from functools import cached_property, wraps
+from io import StringIO
 
 import argcomplete
 
 import quickie
 from quickie import app
 from quickie._argparser import AppArgumentParser
-from quickie._init import init
 from quickie._launcher import Launcher
+from quickie.commands import COMMANDS as COMMANDS_DICT
 from quickie.errors import QuickieError, Skip, Stop
 
 _parser = AppArgumentParser()
 
 
-def _split_watch_values(values: list[str]) -> list[str]:
-    """Split watchmedo-style semicolon-separated values."""
-    return [part for value in values for part in value.split(";") if part]
+def _autocomplete(parser):
+    """Run argcomplete while hiding the internal runner command."""
+    choices = _parser.commands_action.choices
+    hidden_runner = choices.pop(":run", None)
+    try:
+        argcomplete.autocomplete(parser)
+    finally:
+        if hidden_runner is not None:
+            choices[":run"] = hidden_runner
 
 
 def _clean_exit(func):
@@ -34,25 +41,10 @@ def _clean_exit(func):
     return wrapper
 
 
-@_clean_exit
-def main(argv=None, *, raise_error=False, global_=False):
-    """Run the CLI."""
-    from rich import traceback
-
-    traceback.install(suppress=[quickie])
-
-    if argv is None:
-        argv = sys.argv[1:]
-
-    main_obj = Main(argv=argv, global_=global_)
-    app.set_verbosity(main_obj.namespace.verbosity)
-
+def _launch(argv, *, global_, use_global):
+    """Delegate to the project executable when appropriate."""
     launcher = Launcher()
-    if (
-        not global_
-        and not main_obj.namespace.use_global
-        and not launcher.is_in_recursion()
-    ):
+    if not global_ and not use_global and not launcher.is_in_recursion():
         try:
             app.logger.debug("Attempting launcher discovery...")
             exit_code = launcher.launch(argv)
@@ -62,9 +54,24 @@ def main(argv=None, *, raise_error=False, global_=False):
         except Exception as e:
             app.logger.debug(f"Unexpected error in launcher: {e}")
 
+
+@_clean_exit
+def main(argv=None, *, raise_error=False, global_=False):  # noqa: PLR0912
+    """Run the CLI."""
+    from rich import traceback
+
+    traceback.install(suppress=[quickie])
+
+    if argv is None:
+        argv = sys.argv[1:]
+
+    main_obj = Main(argv=argv, global_=global_)
     if os.environ.get("_ARGCOMPLETE"):
         main_obj.handle_autocomplete()
         return  # handle_autocomplete calls sys.exit
+
+    app.set_verbosity(main_obj.namespace.verbosity)
+    _launch(argv, global_=global_, use_global=main_obj.namespace.use_global)
 
     try:
         main_obj()
@@ -95,7 +102,11 @@ class Main:
             argv = sys.argv[1:]
         self.argv = argv
         self.global_ = global_
-        self.namespace = _parser.parse_args(argv)
+
+    @cached_property
+    def namespace(self):
+        """Parse complete invocation arguments only when execution needs them."""
+        return _parser.parse_args(self.argv)
 
     def handle_autocomplete(self):
         """Handle argcomplete tab completion. Calls sys.exit."""
@@ -103,18 +114,38 @@ class Main:
         comp_line = os.environ["COMP_LINE"]
         comp_point = int(os.environ["COMP_POINT"])
 
-        (_, _, _, comp_words, _) = argcomplete.lexers.split_line(comp_line, comp_point)
-
-        # _ARGCOMPLETE is set by the shell script to tell us where comp_words
-        # should start, based on what we're completing.
-        # we ignore the program name, hence no -1
         start = int(arg_complete_val)
-        args = comp_words[start:]
-        namespace = _parser.parse_args(args)
+        split_line = argcomplete.lexers.split_line(comp_line, comp_point)
+        split_words = split_line[3]
+        prefix = split_line[1]
+        raw_args = split_words[start:]
+        normalized_args = _parser._normalize_args(list(raw_args))
+        command_index = _parser._command_index(normalized_args)
+        command_name = (
+            normalized_args[command_index] if command_index is not None else None
+        )
+        if (command_index is None and prefix.startswith(":")) or (
+            command_name is not None
+            and command_name.startswith(":")
+            and command_name not in COMMANDS_DICT
+        ):
+            _autocomplete(_parser)
+            sys.exit(0)
+        with redirect_stderr(StringIO()):
+            try:
+                namespace = _parser.task_completion_parser.parse_args(
+                    normalized_args[:command_index]
+                    if command_index is not None
+                    else normalized_args
+                )
+            except SystemExit:
+                _autocomplete(_parser.task_completion_parser)
+                sys.exit(0)
 
         app.set_verbosity(namespace.verbosity)
-        app.set_log_file(namespace.log_file)
         use_global = self.global_ or namespace.use_global
+        _launch(self.argv, global_=self.global_, use_global=use_global)
+        app.set_log_file(namespace.log_file)
         if not use_global and namespace.module:
             app.set_project_path(namespace.module)
         app.set_use_global(use_global)
@@ -123,44 +154,26 @@ class Main:
         app._try_load_task_cache()
         cache_available = app.cached_task_names is not None
 
-        if not namespace.task:
+        command = COMMANDS_DICT.get(command_name) if command_name is not None else None
+        if command is None:
             # Task-name completion — cache is sufficient
             if not cache_available:
                 try:
                     app.load_tasks()
                 except QuickieError:
                     pass
-            parser = _parser
-        else:
-            # Task-argument completion — try cache first
-            task_cache_entry = (
-                app.cached_task_names.get(namespace.task) if cache_available else None
-            )
-            cached_args = task_cache_entry.get("args") if task_cache_entry else None
-
-            if cached_args is not None and not cached_args.get(
-                "has_unknown_completers", True
-            ):
-                # Rebuild a lightweight parser from cached metadata
-                from quickie._cache import rebuild_parser
-
-                os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
-                parser = rebuild_parser(namespace.task, cached_args)
-            else:
-                # Fall back to full import
-                try:
-                    app.load_tasks()
-                except QuickieError:
-                    pass
-                try:
-                    task = self.get_task(namespace.task)
-                except (QuickieError, KeyError):
-                    parser = _parser
-                else:
-                    os.environ["_ARGCOMPLETE"] = str(args.index(namespace.task))
-                    parser = task.parser
-
-        argcomplete.autocomplete(parser)
+            _autocomplete(_parser.task_completion_parser)
+            sys.exit(0)
+        assert command_index is not None and command_name is not None
+        # Normalization inserts :run for bare tasks, but not into the shell line.
+        inserted_runner = normalized_args != list(raw_args)
+        os.environ["_ARGCOMPLETE"] = str(
+            start + command_index + (0 if inserted_runner else 1)
+        )
+        command.autocomplete(
+            _parser.command_parsers[command_name],
+            normalized_args[command_index + 1 :],
+        )
         sys.exit(0)
 
     def __call__(self):
@@ -173,135 +186,17 @@ class Main:
             app.set_project_path(namespace.module)
         app.set_use_global(use_global)
 
-        # Handle --list-json before any Rich/logger output so that stdout
-        # contains only the raw JSON (used by qk-mcp to enumerate tasks).
-        if namespace.list_json:
-            app.load_tasks()
-            self.list_tasks_json(namespace.list_filter)
-            _parser.exit()
-            return
-
-        app.logger.info(f"Running quickie {quickie.__version__}")
-        if namespace.init:
-            init(namespace.init)
-        elif namespace.suggest_auto_completion:
-            if namespace.suggest_auto_completion == "bash":
-                self.suggest_autocompletion_bash()
-            elif namespace.suggest_auto_completion == "zsh":
-                self.suggest_autocompletion_zsh()
-        elif namespace.list:
-            app.load_tasks()
-            self.list_tasks(namespace.list_filter)
-        elif namespace.task is not None:
-            app.load_tasks()
-            if namespace.watch:
-                self.watch_task(
-                    task_name=namespace.task,
-                    args=namespace.args,
-                    watch_paths=namespace.watch_paths,
-                    watch_ignore_paths=namespace.watch_ignore_paths,
-                    watch_patterns=namespace.watch_patterns,
-                    watch_ignore_patterns=namespace.watch_ignore_patterns,
-                    debounce=namespace.watch_debounce,
-                    recursive=namespace.watch_recursive,
-                )
-            else:
-                self.run_task(
-                    task_name=namespace.task,
-                    args=namespace.args,
-                )
-        elif namespace.watch:
-            app.console.print("[error]--watch requires a task to run.[/error]")
-            _parser.exit(1)
+        command = COMMANDS_DICT.get(namespace.command)
+        if command is not None:
+            app.logger.info(f"Running quickie {quickie.__version__}")
+            if namespace.command in (":list", ":watch", ":run", ":autocomplete"):
+                app.load_tasks()
+            command.execute(namespace)
         else:
             from rich.text import Text
 
             app.console.print(Text.from_ansi(self.get_usage()))
         _parser.exit()
-
-    def suggest_autocompletion_bash(self):
-        """Suggest autocompletion for bash."""
-        program = os.path.basename(sys.argv[0])
-        app.console.print("Add the following to ~/.bashrc or ~/.bash_profile:")
-        app.console.print(
-            f'eval "$(register-python-argcomplete {program})"',
-            style="bold green",
-        )
-
-    def suggest_autocompletion_zsh(self):
-        """Suggest autocompletion for zsh."""
-        program = os.path.basename(sys.argv[0])
-        app.console.print("Add the following to ~/.zshrc:")
-        app.console.print(
-            f'eval "$(register-python-argcomplete {program})"',
-            style="bold green",
-        )
-
-    @staticmethod
-    def _task_list_entries(filter_text: str | None = None) -> list[dict]:
-        """Build task metadata grouped by the namespace they invoke from."""
-        cwd = os.getcwd()
-        grouped: dict[int, tuple[quickie.Task, list[str]]] = {}
-        for invocation_name, task in app.tasks.items():
-            grouped.setdefault(id(task), (task, []))[1].append(invocation_name)
-
-        entries = []
-        for task, invocation_names in grouped.values():
-            entry = task.to_info_dict(cwd)
-            if task.name in invocation_names:
-                entry["name"] = task.name
-            else:
-                canonical_paths = [
-                    name for name in invocation_names if name.endswith(f":{task.name}")
-                ]
-                entry["name"] = min(
-                    canonical_paths or invocation_names,
-                    key=lambda name: name.split(":"),
-                )
-            entry["aliases"] = sorted(
-                name for name in invocation_names if name != entry["name"]
-            )
-            entries.append(entry)
-
-        if filter_text:
-            needle = filter_text.casefold()
-            entries = [
-                entry
-                for entry in entries
-                if needle in entry["name"].casefold()
-                or any(needle in alias.casefold() for alias in entry["aliases"])
-            ]
-        return sorted(entries, key=lambda entry: entry["name"])
-
-    def list_tasks_json(self, filter_text: str | None = None):
-        """Output tasks as JSON for machine-readable consumption (e.g. qk-mcp)."""
-        result = self._task_list_entries(filter_text)
-        # Write directly to sys.stdout to bypass Rich and ensure clean JSON.
-        sys.stdout.write(json.dumps(result))
-        sys.stdout.write("\n")
-        sys.stdout.flush()
-
-    def list_tasks(self, filter_text: str | None = None):
-        """List the available tasks."""
-        import rich.box
-        import rich.table
-        import rich.text
-
-        table = rich.table.Table(title="Available tasks", box=rich.box.ROUNDED)
-        table.show_lines = True
-        table.add_column("Task", style="bold yellow", no_wrap=True)
-        table.add_column("Aliases", style="bold yellow", no_wrap=True)
-        table.add_column("Short Description", style="bold yellow")
-        table.add_column("Location")
-
-        for entry in self._task_list_entries(filter_text):
-            rich_task_name = rich.text.Text(entry["name"], style="bold")
-            rich_aliases = rich.text.Text("\n".join(entry["aliases"]), style="dim")
-            task_location = rich.text.Text(entry["location"] or "", style="dim")
-            short_help = rich.text.Text(entry["short_help"], style="green")
-            table.add_row(rich_task_name, rich_aliases, short_help, task_location)
-
-        app.console.print(table)
 
     def get_usage(self) -> str:
         """Get the usage message."""
@@ -310,123 +205,3 @@ class Main:
     def get_task(self, task_name: str) -> quickie.Task:
         """Get a task by name."""
         return app.tasks[task_name]
-
-    def run_task(self, task_name: str, *, args):
-        """Run a task."""
-        task = self.get_task(task_name)
-        return task.parse_and_run(args)
-
-    def watch_task(  # noqa: PLR0912 PLR0913 PLR0915
-        self,
-        task_name: str,
-        *,
-        args: list[str],
-        watch_paths: list[str] | None,
-        watch_ignore_paths: list[str] | None,
-        watch_patterns: list[str] | None,
-        watch_ignore_patterns: list[str] | None,
-        debounce: float | None = None,
-        recursive: bool | None = None,
-    ):
-        """Run a task in watch mode, re-running on file changes.
-
-        :param task_name: The name of the task to run.
-        :param args: Arguments to pass to the task.
-        :param watch_paths: Directories to watch.
-        :param watch_ignore_paths: Directory paths to ignore.
-        :param watch_patterns: Patterns for changed files.
-        :param watch_ignore_patterns: Patterns to ignore.
-        :param debounce: Seconds to wait after a change before re-running.
-        :param recursive: Whether to watch directories recursively.
-        """
-        from quickie._watcher import (
-            FileWatcher,
-            DEFAULT_DEBOUNCE,
-            _DEFAULT_EXCLUDE,
-        )
-
-        task = self.get_task(task_name)
-        extra_args, task_kwargs = task.parse_args(
-            parser=task.parser,
-            args=args,
-            extra_args=task.extra_args,
-        )
-        config = task.get_watch_config(extra_args, **task_kwargs)
-        if watch_paths is None:
-            watch_paths = config["watch_paths"] or ["."]
-        if watch_ignore_paths is None:
-            watch_ignore_paths = config["watch_ignore_paths"]
-        if watch_patterns is None:
-            watch_patterns = config["watch_patterns"]
-        else:
-            watch_patterns = _split_watch_values(watch_patterns)
-        if watch_ignore_patterns is None:
-            watch_ignore_patterns = config["watch_ignore_patterns"]
-        else:
-            watch_ignore_patterns = _split_watch_values(watch_ignore_patterns)
-        if debounce is None:
-            debounce = config["watch_debounce"]
-        if recursive is None:
-            recursive = config["watch_recursive"]
-
-        # Final fallback to module-level defaults
-        if debounce is None:
-            debounce = DEFAULT_DEBOUNCE
-
-        if recursive is None:
-            recursive = False
-        wd = config["wd"]
-
-        ignore_paths = [*(watch_ignore_paths or []), str(app.tmp_path)]
-        ignore_patterns = list(watch_ignore_patterns or _DEFAULT_EXCLUDE)
-
-        watcher = FileWatcher(
-            watch_paths=watch_paths,
-            patterns=watch_patterns,
-            ignore_paths=ignore_paths,
-            ignore_patterns=ignore_patterns,
-            wd=wd,
-            debounce=debounce,
-            recursive=recursive,
-        )
-
-        app.console.print(
-            "[bold cyan]Watching for changes...[/bold cyan] (Ctrl+C to stop)"
-        )
-        app.console.print(f"  Task: [bold yellow]{task_name}[/bold yellow]")
-        app.console.print(f"  Paths: [dim]{', '.join(watch_paths)}[/dim]")
-        if watch_ignore_paths:
-            app.console.print(
-                f"  Ignore paths: [dim]{', '.join(watch_ignore_paths)}[/dim]"
-            )
-        if watch_patterns:
-            app.console.print(f"  Patterns: [dim]{'; '.join(watch_patterns)}[/dim]")
-        if watch_ignore_patterns:
-            app.console.print(
-                f"  Ignore patterns: [dim]{'; '.join(watch_ignore_patterns)}[/dim]"
-            )
-        app.console.print()
-
-        try:
-            # Run once before observing, so task-generated file events do not
-            # become an immediate watch trigger.
-            app.console.print(f"[bold green]Running {task_name}...[/bold green]\n")
-            task.parse_and_run(args)
-            app.console.print()
-
-            watcher.start()
-
-            while watcher.wait_for_changes():
-                changed_paths = watcher.changed_paths()
-                msg = f"Changes detected, re-running {task_name}..."
-                app.console.print(f"[bold yellow]{msg}[/bold yellow]")
-                for path in changed_paths:
-                    app.console.print(f"  [dim]{path}[/dim]")
-                app.console.print()
-                watcher.reset()
-                task.parse_and_run(args)
-                app.console.print()
-        except KeyboardInterrupt:
-            app.console.print("\n[bold red]Watching stopped.[/bold red]")
-        finally:
-            watcher.stop()

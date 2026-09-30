@@ -8,6 +8,17 @@
 - Task listings no longer fail when a task has no invocation path matching its
   declared name; the lexicographically first invocation path is used instead.
 
+### Changed
+
+- Replaced action flags such as `-l`, `--watch`, and `--init` with native
+  colon-prefixed subcommands: `:list`, `:watch`, `:init`, and
+  `:autocomplete`. The former flag-based forms are no longer supported.
+- Command-specific options are now scoped to their subcommands. For example,
+  watch options use `qk :watch --paths ...` instead of `--watch-paths`.
+- Improved `qk -h` with separate command and direct-task sections, clearer
+  positional argument descriptions, usage forms, and examples.
+- Improved shell completion for task names and colon-prefixed subcommands.
+
 ## Release 0.11.0
 
 ### Added
