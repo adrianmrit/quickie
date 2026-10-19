@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import typing
+from pathlib import Path
 
 from argparse import ArgumentParser, SUPPRESS
 
@@ -97,12 +98,20 @@ class ListCommand(CliCommand):
         table.add_column("Task", style="bold yellow", no_wrap=True)
         table.add_column("Aliases", style="bold yellow", no_wrap=True)
         table.add_column("Short Description", style="bold yellow")
-        table.add_column("Location")
+        table.add_column("Location", overflow="fold")
 
         for entry in ListCommand._task_list_entries(filter_text):
+            location = entry["location"] or ""
+            location_path, separator, line_number = location.rpartition(":")
+            if not separator or not line_number.isdecimal():
+                location_path = location
+            location_link = (
+                Path(location_path).resolve().as_uri() if location_path else None
+            )
             rich_task_name = rich.text.Text(entry["name"], style="bold")
             rich_aliases = rich.text.Text("\n".join(entry["aliases"]), style="dim")
-            task_location = rich.text.Text(entry["location"] or "", style="dim")
+            location_style = f"dim link {location_link}" if location_link else "dim"
+            task_location = rich.text.Text(location, style=location_style)
             short_help = rich.text.Text(entry["short_help"], style="green")
             table.add_row(rich_task_name, rich_aliases, short_help, task_location)
 

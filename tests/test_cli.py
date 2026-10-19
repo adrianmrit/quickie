@@ -777,6 +777,41 @@ class TestListTasks:
         assert "ci:test-task" in out
         assert "│" in out
 
+    def test_list_tasks_wraps_long_locations(self, mocker):
+        import io
+        from pathlib import Path
+
+        import rich.console
+
+        location = f"src/{'nested/' * 12}task.py:123"
+        output = io.StringIO()
+        console = rich.console.Console(file=output, width=50, force_terminal=True)
+        mocker.patch.object(quickie_app, "console", console)
+        mocker.patch.object(
+            ListCommand,
+            "_task_list_entries",
+            return_value=[
+                {
+                    "name": "task",
+                    "aliases": [],
+                    "short_help": "",
+                    "location": location,
+                }
+            ],
+        )
+
+        ListCommand._list_tasks()
+
+        rendered_output = output.getvalue()
+        location_uri = Path(location.rsplit(":", 1)[0]).resolve().as_uri()
+        assert "\x1b]8;" in rendered_output
+        assert location_uri in rendered_output
+        rendered = re.sub(
+            r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\]8;.*?\x1b\\", "", rendered_output
+        )
+        rendered = re.sub(r"[│╭╮╰╯─┬┴┼├┤]", "", rendered)
+        assert location in "".join(rendered.split())
+
     def test_list_filter_without_value_lists_all_tasks(self, capsys, mocker):
         @task
         def sample_task():

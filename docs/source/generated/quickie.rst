@@ -10,6 +10,7 @@
    :toctree:
    :recursive:
 
+   commands
    completion
    conditions
    config
